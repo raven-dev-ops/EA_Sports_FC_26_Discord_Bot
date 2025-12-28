@@ -9,6 +9,8 @@ def _settings() -> Settings:
         discord_client_id=None,
         discord_public_key=None,
         interactions_endpoint_url=None,
+        discord_test_channel_id=None,
+        test_mode=False,
         role_broskie_id=1,
         role_super_league_coach_id=2,
         role_coach_premium_id=3,
@@ -54,3 +56,32 @@ def test_banlist_cache(monkeypatch) -> None:
     banlist_service.get_banlist(settings)
 
     assert calls["count"] == 1
+
+
+def test_missing_banlist_config_returns_none() -> None:
+    settings = Settings(
+        discord_token="token",
+        discord_application_id=1,
+        discord_client_id=None,
+        discord_public_key=None,
+        interactions_endpoint_url=None,
+        discord_test_channel_id=None,
+        test_mode=False,
+        role_broskie_id=1,
+        role_super_league_coach_id=2,
+        role_coach_premium_id=3,
+        role_coach_premium_plus_id=4,
+        channel_roster_portal_id=5,
+        channel_staff_submissions_id=6,
+        staff_role_ids=set(),
+        mongodb_uri=None,
+        mongodb_db_name=None,
+        mongodb_collection=None,
+        banlist_sheet_id=None,
+        banlist_range=None,
+        banlist_cache_ttl_seconds=300,
+        google_sheets_credentials_json=None,
+    )
+
+    reason = banlist_service.get_ban_reason(settings, 123456789)
+    assert reason is None

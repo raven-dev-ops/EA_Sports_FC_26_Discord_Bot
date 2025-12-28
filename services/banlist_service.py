@@ -23,6 +23,14 @@ def _require_setting(value: str | None, name: str) -> str:
     return value
 
 
+def _banlist_configured(settings: Settings) -> bool:
+    return bool(
+        settings.banlist_sheet_id
+        and settings.banlist_range
+        and settings.google_sheets_credentials_json
+    )
+
+
 def _fetch_rows(settings: Settings) -> list[list[str]]:
     sheet_id = _require_setting(settings.banlist_sheet_id, "BANLIST_SHEET_ID")
     sheet_range = _require_setting(settings.banlist_range, "BANLIST_RANGE")
@@ -76,6 +84,8 @@ def _cache_expired(settings: Settings) -> bool:
 
 
 def get_banlist(settings: Settings, *, force_refresh: bool = False) -> dict[int, str]:
+    if not _banlist_configured(settings):
+        return {}
     if force_refresh or _cache_expired(settings):
         rows = _fetch_rows(settings)
         entries = _parse_rows(rows)
@@ -86,5 +96,7 @@ def get_banlist(settings: Settings, *, force_refresh: bool = False) -> dict[int,
 
 
 def get_ban_reason(settings: Settings, discord_id: int) -> str | None:
+    if not _banlist_configured(settings):
+        return None
     entries = get_banlist(settings)
     return entries.get(discord_id)
