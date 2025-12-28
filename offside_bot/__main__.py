@@ -44,6 +44,13 @@ class OffsideBot(commands.Bot):
         except Exception:
             logging.exception("Failed to sync app commands.")
 
+    async def on_ready(self) -> None:
+        user = self.user
+        if user:
+            logging.info("Bot ready as %s (ID: %s).", user, user.id)
+        else:
+            logging.info("Bot ready (user not available yet).")
+
 
 def build_bot() -> OffsideBot:
     intents = discord.Intents.default()
@@ -66,7 +73,15 @@ async def ping(interaction: discord.Interaction) -> None:
 def main() -> None:
     setup_logging()
     token = get_env("DISCORD_TOKEN", required=True)
-    bot.run(token)
+    try:
+        bot.run(token)
+    except KeyboardInterrupt:
+        logging.info("Shutdown requested, exiting.")
+    except Exception:
+        logging.exception("Bot exited with an error.")
+        raise
+    finally:
+        logging.info("Bot shutdown complete.")
 
 
 if __name__ == "__main__":
