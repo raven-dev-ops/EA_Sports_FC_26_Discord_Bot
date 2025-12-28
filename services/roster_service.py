@@ -60,6 +60,13 @@ def create_roster(
     return doc
 
 
+def get_roster_by_id(
+    roster_id: Any, *, collection: Collection | None = None
+) -> dict[str, Any] | None:
+    collection = collection or get_collection()
+    return collection.find_one({"record_type": "team_roster", "_id": roster_id})
+
+
 def get_roster_players(
     roster_id: Any, *, collection: Collection | None = None
 ) -> list[dict[str, Any]]:

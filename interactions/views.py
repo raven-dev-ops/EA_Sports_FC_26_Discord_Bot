@@ -4,7 +4,7 @@ from typing import Any
 
 import discord
 
-from interactions.modals import CreateRosterModal
+from interactions.modals import AddPlayerModal, CreateRosterModal
 
 
 class RosterDashboardView(discord.ui.View):
@@ -68,9 +68,13 @@ class RosterDashboardView(discord.ui.View):
         await interaction.response.send_modal(CreateRosterModal())
 
     async def on_add_player(self, interaction: discord.Interaction) -> None:
-        await interaction.response.send_message(
-            "Add player is not configured yet.", ephemeral=True
-        )
+        if self.roster_id is None:
+            await interaction.response.send_message(
+                "Roster not found. Please open the dashboard again.",
+                ephemeral=True,
+            )
+            return
+        await interaction.response.send_modal(AddPlayerModal(roster_id=self.roster_id))
 
     async def on_remove_player(self, interaction: discord.Interaction) -> None:
         await interaction.response.send_message(
