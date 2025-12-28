@@ -15,6 +15,12 @@ All notable changes to this project will be documented in this file.
 - `/roster` opens the roster creation modal.
 - Staff review button responses are ephemeral while the staff post is updated.
 
+## [0.2.1] - 2025-12-28
+
+### Fixed
+- Avoided pymongo `Collection` truthiness checks that crash `unlock_roster`.
+- Normalized MongoDB database names with invalid characters (e.g., spaces).
+
 ## [0.1.0] - 2025-12-28
 
 ### Added
