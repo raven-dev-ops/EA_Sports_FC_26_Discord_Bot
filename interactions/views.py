@@ -41,6 +41,11 @@ class SafeView(discord.ui.View):
         log_interaction_error(error, interaction, source="view")
         await send_interaction_error(interaction)
 
+    def disable_items(self) -> None:
+        for child in self.children:
+            if hasattr(child, "disabled"):
+                child.disabled = True
+
 
 class RosterDashboardView(SafeView):
     def __init__(
@@ -374,7 +379,7 @@ class StaffReviewView(SafeView):
             staff_username=str(interaction.user),
         )
 
-        self.disable_all_items()
+        self.disable_items()
         await interaction.response.send_message(
             f"Roster {status_text.lower()}.", ephemeral=True
         )
