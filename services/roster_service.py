@@ -17,10 +17,15 @@ ROSTER_STATUS_UNLOCKED = "UNLOCKED"
 
 
 def get_roster_for_coach(
-    coach_discord_id: int, *, collection: Collection | None = None
+    coach_discord_id: int,
+    *,
+    cycle_id: Any | None = None,
+    collection: Collection | None = None
 ) -> dict[str, Any] | None:
     collection = collection or get_collection()
-    cycle = ensure_active_cycle(collection=collection)
+    cycle = (
+        ensure_active_cycle(collection=collection) if cycle_id is None else {"_id": cycle_id}
+    )
     return collection.find_one(
         {
             "record_type": "team_roster",
@@ -35,11 +40,16 @@ def create_roster(
     coach_discord_id: int,
     team_name: str,
     cap: int,
+    cycle_id: Any | None = None,
     collection: Collection | None = None,
 ) -> dict[str, Any]:
     collection = collection or get_collection()
-    cycle = ensure_active_cycle(collection=collection)
-    existing = get_roster_for_coach(coach_discord_id, collection=collection)
+    cycle = (
+        ensure_active_cycle(collection=collection) if cycle_id is None else {"_id": cycle_id}
+    )
+    existing = get_roster_for_coach(
+        coach_discord_id, cycle_id=cycle["_id"], collection=collection
+    )
     if existing:
         return existing
 

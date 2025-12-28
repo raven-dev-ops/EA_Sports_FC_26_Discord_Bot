@@ -1,8 +1,15 @@
 from __future__ import annotations
 
+from typing import Any
+
 import discord
 
 from interactions.views import RosterDashboardView
+from repositories.tournament_repo import (
+    ensure_active_cycle,
+    ensure_cycle_by_name,
+    get_cycle_by_id,
+)
 from services.permission_service import resolve_roster_cap_from_settings
 from services.roster_service import (
     count_roster_players,
@@ -13,6 +20,9 @@ from services.roster_service import (
 
 def build_roster_dashboard(
     interaction: discord.Interaction,
+    *,
+    cycle_name: str | None = None,
+    cycle_id: Any | None = None,
 ) -> tuple[discord.Embed, discord.ui.View]:
     settings = getattr(interaction.client, "settings", None)
     if settings is None:
@@ -22,7 +32,16 @@ def build_roster_dashboard(
     role_ids = [role.id for role in roles]
     cap = resolve_roster_cap_from_settings(role_ids, settings)
 
-    roster = get_roster_for_coach(interaction.user.id)
+    normalized_cycle_name = cycle_name.strip() if cycle_name else None
+    cycle = get_cycle_by_id(cycle_id) if cycle_id is not None else None
+    if cycle is None:
+        cycle = (
+            ensure_active_cycle()
+            if normalized_cycle_name is None
+            else ensure_cycle_by_name(normalized_cycle_name)
+        )
+
+    roster = get_roster_for_coach(interaction.user.id, cycle_id=cycle["_id"])
     has_roster = roster is not None
     player_count = 0
     status = "NO_ROSTER"
@@ -36,6 +55,7 @@ def build_roster_dashboard(
         is_locked = roster_is_locked(roster)
 
     embed = discord.Embed(title="Roster Dashboard")
+    embed.add_field(name="Tournament", value=cycle.get("name", "Unknown"), inline=False)
     embed.add_field(name="Team", value=team_name, inline=False)
     embed.add_field(name="Status", value=status, inline=True)
 
@@ -59,6 +79,7 @@ def build_roster_dashboard(
         has_players=player_count > 0,
         is_locked=is_locked,
         eligible=cap is not None,
+        cycle_id=cycle["_id"],
     )
 
     return embed, view

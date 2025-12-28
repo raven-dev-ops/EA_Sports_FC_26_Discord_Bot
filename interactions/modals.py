@@ -5,6 +5,7 @@ from typing import Any
 import discord
 
 from interactions.dashboard import build_roster_dashboard
+from repositories.tournament_repo import ensure_cycle_by_name
 from services.permission_service import resolve_roster_cap_from_settings
 from services.roster_service import (
     add_player,
@@ -35,6 +36,15 @@ class CreateRosterModal(SafeModal, title="Create Roster"):
         max_length=32,
         placeholder="Enter your team name",
     )
+    tournament_name = discord.ui.TextInput(
+        label="Tournament Name (optional)",
+        required=False,
+        placeholder="Leave blank for current tournament",
+    )
+
+    def __init__(self, *, cycle_id: Any | None = None) -> None:
+        super().__init__()
+        self.cycle_id = cycle_id
 
     async def on_submit(self, interaction: discord.Interaction) -> None:
         settings = getattr(interaction.client, "settings", None)
@@ -61,9 +71,19 @@ class CreateRosterModal(SafeModal, title="Create Roster"):
             )
             return
 
-        existing = get_roster_for_coach(interaction.user.id)
+        selected_cycle = (
+            self.tournament_name.value.strip()
+            if self.tournament_name.value
+            else ""
+        )
+        cycle_id = self.cycle_id
+        if selected_cycle:
+            cycle = ensure_cycle_by_name(selected_cycle)
+            cycle_id = cycle["_id"]
+
+        existing = get_roster_for_coach(interaction.user.id, cycle_id=cycle_id)
         if existing:
-            embed, view = build_roster_dashboard(interaction)
+            embed, view = build_roster_dashboard(interaction, cycle_id=cycle_id)
             await interaction.response.send_message(
                 "Roster already exists.", embed=embed, view=view, ephemeral=True
             )
@@ -73,9 +93,10 @@ class CreateRosterModal(SafeModal, title="Create Roster"):
             coach_discord_id=interaction.user.id,
             team_name=name,
             cap=cap,
+            cycle_id=cycle_id,
         )
 
-        embed, view = build_roster_dashboard(interaction)
+        embed, view = build_roster_dashboard(interaction, cycle_id=cycle_id)
         await interaction.response.send_message(
             "Roster created.", embed=embed, view=view, ephemeral=True
         )
@@ -100,6 +121,13 @@ class AddPlayerModal(SafeModal, title="Add Player"):
             await interaction.response.send_message(
                 "Roster not found. Please open the dashboard again.",
                 ephemeral=True,
+            )
+            return
+
+        settings = getattr(interaction.client, "settings", None)
+        if settings is None:
+            await interaction.response.send_message(
+                "Bot configuration is not loaded.", ephemeral=True
             )
             return
 

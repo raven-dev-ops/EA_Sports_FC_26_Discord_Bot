@@ -45,6 +45,7 @@ class RosterDashboardView(SafeView):
         has_players: bool,
         is_locked: bool,
         eligible: bool,
+        cycle_id: Any | None,
     ) -> None:
         super().__init__(timeout=300)
         self.has_roster = has_roster
@@ -52,6 +53,7 @@ class RosterDashboardView(SafeView):
         self.has_players = has_players
         self.is_locked = is_locked
         self.eligible = eligible
+        self.cycle_id = cycle_id
 
         create_button = discord.ui.Button(
             label="Create Roster",
@@ -94,7 +96,7 @@ class RosterDashboardView(SafeView):
         self.add_item(submit_button)
 
     async def on_create_roster(self, interaction: discord.Interaction) -> None:
-        await interaction.response.send_modal(CreateRosterModal())
+        await interaction.response.send_modal(CreateRosterModal(cycle_id=self.cycle_id))
 
     async def on_add_player(self, interaction: discord.Interaction) -> None:
         if self.roster_id is None:

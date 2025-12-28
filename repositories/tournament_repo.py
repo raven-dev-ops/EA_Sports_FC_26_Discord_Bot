@@ -17,12 +17,13 @@ def create_cycle(
     name: str,
     *,
     is_active: bool = True,
+    deactivate_others: bool = True,
     collection: Collection | None = None,
 ) -> dict[str, Any]:
     collection = collection or get_collection()
     now = datetime.now(timezone.utc)
 
-    if is_active:
+    if is_active and deactivate_others:
         collection.update_many(
             {"record_type": "tournament_cycle", "is_active": True},
             {"$set": {"is_active": False, "updated_at": now}},
@@ -40,6 +41,20 @@ def create_cycle(
     return doc
 
 
+def get_cycle_by_name(
+    name: str, *, collection: Collection | None = None
+) -> dict[str, Any] | None:
+    collection = collection or get_collection()
+    return collection.find_one({"record_type": "tournament_cycle", "name": name})
+
+
+def get_cycle_by_id(
+    cycle_id: Any, *, collection: Collection | None = None
+) -> dict[str, Any] | None:
+    collection = collection or get_collection()
+    return collection.find_one({"record_type": "tournament_cycle", "_id": cycle_id})
+
+
 def ensure_active_cycle(
     *,
     default_name: str = "Current Tournament",
@@ -50,3 +65,18 @@ def ensure_active_cycle(
     if cycle:
         return cycle
     return create_cycle(default_name, is_active=True, collection=collection)
+
+
+def ensure_cycle_by_name(
+    name: str, *, collection: Collection | None = None
+) -> dict[str, Any]:
+    collection = collection or get_collection()
+    cycle = get_cycle_by_name(name, collection=collection)
+    if cycle:
+        return cycle
+    return create_cycle(
+        name,
+        is_active=True,
+        deactivate_others=False,
+        collection=collection,
+    )

@@ -12,7 +12,10 @@ class RosterCog(commands.Cog):
         self.bot = bot
 
     @app_commands.command(name="roster", description="Open the roster dashboard.")
-    async def roster(self, interaction: discord.Interaction) -> None:
+    @app_commands.describe(tournament="Optional tournament cycle name.")
+    async def roster(
+        self, interaction: discord.Interaction, tournament: str | None = None
+    ) -> None:
         if interaction.guild is None:
             await interaction.response.send_message(
                 "This command must be used in a server.", ephemeral=True
@@ -25,7 +28,8 @@ class RosterCog(commands.Cog):
                 "Bot configuration is not loaded.", ephemeral=True
             )
             return
-        embed, view = build_roster_dashboard(interaction)
+        cycle_name = tournament.strip() if tournament else None
+        embed, view = build_roster_dashboard(interaction, cycle_name=cycle_name)
         await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
 
