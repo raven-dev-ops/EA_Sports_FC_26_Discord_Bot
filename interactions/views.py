@@ -4,6 +4,8 @@ from typing import Any
 
 import discord
 
+from interactions.modals import CreateRosterModal
+
 
 class RosterDashboardView(discord.ui.View):
     def __init__(
@@ -63,9 +65,7 @@ class RosterDashboardView(discord.ui.View):
         self.add_item(submit_button)
 
     async def on_create_roster(self, interaction: discord.Interaction) -> None:
-        await interaction.response.send_message(
-            "Create roster is not configured yet.", ephemeral=True
-        )
+        await interaction.response.send_modal(CreateRosterModal())
 
     async def on_add_player(self, interaction: discord.Interaction) -> None:
         await interaction.response.send_message(
