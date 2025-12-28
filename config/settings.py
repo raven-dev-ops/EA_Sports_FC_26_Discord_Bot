@@ -24,6 +24,10 @@ class Settings:
     mongodb_uri: str | None
     mongodb_db_name: str | None
     mongodb_collection: str | None
+    banlist_sheet_id: str | None
+    banlist_range: str | None
+    banlist_cache_ttl_seconds: int
+    google_sheets_credentials_json: str | None
 
 
 def _required_str(name: str, missing: list[str]) -> str:
@@ -74,6 +78,16 @@ def _optional_int_set(name: str) -> set[int]:
         except ValueError:
             raise RuntimeError(f"{name} must be a comma-separated list of integers.") from None
     return set(values)
+
+
+def _optional_int(name: str, default: int) -> int:
+    raw = os.getenv(name, "").strip()
+    if not raw:
+        return default
+    try:
+        return int(raw)
+    except ValueError:
+        raise RuntimeError(f"{name} must be an integer.") from None
 
 
 def _format_list(values: Iterable[str]) -> str:
@@ -127,4 +141,12 @@ def load_settings() -> Settings:
         mongodb_uri=_optional_str(constants.MONGODB_URI_ENV),
         mongodb_db_name=_optional_str(constants.MONGODB_DB_NAME_ENV),
         mongodb_collection=_optional_str(constants.MONGODB_COLLECTION_ENV),
+        banlist_sheet_id=_optional_str(constants.BANLIST_SHEET_ID_ENV),
+        banlist_range=_optional_str(constants.BANLIST_RANGE_ENV),
+        banlist_cache_ttl_seconds=_optional_int(
+            constants.BANLIST_CACHE_TTL_SECONDS_ENV, default=300
+        ),
+        google_sheets_credentials_json=_optional_str(
+            constants.GOOGLE_SHEETS_CREDENTIALS_JSON_ENV
+        ),
     )

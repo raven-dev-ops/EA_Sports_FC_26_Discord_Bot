@@ -15,6 +15,7 @@ from services.roster_service import (
     remove_player,
     roster_is_locked,
 )
+from services.banlist_service import get_ban_reason
 from utils.validation import normalize_console, parse_discord_id, validate_team_name
 from utils.errors import log_interaction_error, send_interaction_error
 
@@ -113,6 +114,18 @@ class AddPlayerModal(SafeModal, title="Add Player"):
         if player_id is None:
             await interaction.response.send_message(
                 "Enter a valid Discord mention or ID for the player.",
+                ephemeral=True,
+            )
+            return
+
+        try:
+            ban_reason = get_ban_reason(settings, player_id)
+        except RuntimeError as exc:
+            await interaction.response.send_message(str(exc), ephemeral=True)
+            return
+        if ban_reason:
+            await interaction.response.send_message(
+                f"Player is banned: {ban_reason}",
                 ephemeral=True,
             )
             return
