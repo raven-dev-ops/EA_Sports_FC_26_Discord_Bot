@@ -14,7 +14,7 @@ Roster management and staff review bot for Discord tournaments.
 ## Commands
 
 - `/roster [tournament]` - Opens the roster creation modal (uses tournament if provided).
-- `/unlock_roster <coach>` - Staff-only unlock command.
+- `/unlock_roster <coach> [tournament]` - Staff-only unlock command (optional tournament).
 - `/dev_on` / `/dev_off` - Staff-only toggle for test mode routing.
 - `/ping` - Health check.
 
