@@ -27,6 +27,7 @@ Roster management and staff review bot for Discord tournaments.
 - `/ping` - Health check. How it works: replies with `pong`. Example: `/ping`.
 
 - `/help` - Command list and examples. How it works: shows step-by-step roster submission guidance and command usage. Example: `/help`.
+- Portals post automatically on startup to the configured channels (admin portal, coach roster portal).
 
 ## Configuration
 

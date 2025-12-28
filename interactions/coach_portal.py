@@ -5,6 +5,7 @@ import discord
 from interactions.dashboard import build_roster_dashboard
 from interactions.views import SafeView
 from utils.channel_routing import resolve_channel_id
+from discord.ext import commands
 
 
 def build_coach_help_embed() -> discord.Embed:
@@ -129,3 +130,39 @@ async def send_coach_portal_message(
         f"Posted coach portal to <#{target_channel_id}>.",
         ephemeral=True,
     )
+
+
+async def post_coach_portal(bot: commands.Bot) -> None:
+    settings = getattr(bot, "settings", None)
+    if settings is None:
+        return
+
+    test_mode = bool(getattr(bot, "test_mode", False))
+    target_channel_id = resolve_channel_id(
+        settings, settings.channel_roster_portal_id, test_mode=test_mode
+    )
+
+    channel = bot.get_channel(target_channel_id)
+    if channel is None:
+        try:
+            channel = await bot.fetch_channel(target_channel_id)
+        except discord.DiscordException:
+            return
+
+    try:
+        async for message in channel.history(limit=20):
+            if message.author.id == bot.user.id:
+                if message.embeds and message.embeds[0].title == "Coach Roster Portal":
+                    try:
+                        await message.delete()
+                    except discord.DiscordException:
+                        pass
+    except discord.DiscordException:
+        pass
+
+    embed = build_coach_portal_embed()
+    view = CoachPortalView()
+    try:
+        await channel.send(embed=embed, view=view)
+    except discord.DiscordException:
+        return

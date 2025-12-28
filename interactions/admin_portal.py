@@ -5,6 +5,7 @@ import discord
 from utils.channel_routing import resolve_channel_id
 from utils.errors import send_interaction_error
 from interactions.views import SafeView
+from discord.ext import commands
 
 
 def _coach_help_embed() -> discord.Embed:
@@ -505,3 +506,39 @@ async def send_admin_portal_message(
         f"Posted admin control panel to <#{target_channel_id}>.",
         ephemeral=True,
     )
+
+
+async def post_admin_portal(bot: commands.Bot) -> None:
+    settings = getattr(bot, "settings", None)
+    if settings is None:
+        return
+
+    test_mode = bool(getattr(bot, "test_mode", False))
+    target_channel_id = resolve_channel_id(
+        settings, settings.channel_admin_portal_id, test_mode=test_mode
+    )
+
+    channel = bot.get_channel(target_channel_id)
+    if channel is None:
+        try:
+            channel = await bot.fetch_channel(target_channel_id)
+        except discord.DiscordException:
+            return
+
+    try:
+        async for message in channel.history(limit=20):
+            if message.author.id == bot.user.id:
+                if message.embeds and message.embeds[0].title == "Admin Control Panel":
+                    try:
+                        await message.delete()
+                    except discord.DiscordException:
+                        pass
+    except discord.DiscordException:
+        pass
+
+    embed = build_admin_embed()
+    view = AdminPortalView()
+    try:
+        await channel.send(embed=embed, view=view)
+    except discord.DiscordException:
+        return

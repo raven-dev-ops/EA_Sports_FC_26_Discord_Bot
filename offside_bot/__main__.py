@@ -7,6 +7,8 @@ from discord.ext import commands
 
 from config import Settings, load_settings
 from utils.errors import log_interaction_error, send_interaction_error
+from interactions.admin_portal import post_admin_portal
+from interactions.coach_portal import post_coach_portal
 
 LOG_FORMAT = "%(asctime)s | %(levelname)s | %(name)s | %(message)s"
 LOG_CHANNEL_FORMAT = "%(levelname)s %(name)s: %(message)s"
@@ -90,6 +92,16 @@ async def load_cogs(bot: commands.Bot) -> None:
 
 
 class OffsideBot(commands.Bot):
+    async def post_portals(self) -> None:
+        try:
+            await post_admin_portal(self)
+        except Exception:
+            logging.exception("Failed to post admin portal.")
+        try:
+            await post_coach_portal(self)
+        except Exception:
+            logging.exception("Failed to post coach portal.")
+
     async def setup_hook(self) -> None:
         await load_cogs(self)
         attach_discord_log_handler(self)
@@ -105,6 +117,9 @@ class OffsideBot(commands.Bot):
             logging.info("Bot ready as %s (ID: %s).", user, user.id)
         else:
             logging.info("Bot ready (user not available yet).")
+        if not getattr(self, "_portals_posted", False):
+            await self.post_portals()
+            self._portals_posted = True
 
     async def on_app_command_error(
         self, interaction: discord.Interaction, error: Exception
