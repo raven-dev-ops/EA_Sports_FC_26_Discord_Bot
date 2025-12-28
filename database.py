@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from typing import Iterable
+import logging
+import re
 
 from pymongo import MongoClient
 from pymongo.collection import Collection
@@ -9,10 +11,28 @@ from pymongo.database import Database
 from config import Settings, load_settings
 
 
+INVALID_DB_NAME_PATTERN = re.compile(r'[\\/\.\s"$\x00]')
+
+
 def _require_value(value: str | None, name: str) -> str:
     if not value:
         raise RuntimeError(f"{name} is required for database access.")
     return value
+
+
+def _normalize_db_name(name: str) -> str:
+    normalized = INVALID_DB_NAME_PATTERN.sub("_", name.strip())
+    if not normalized:
+        raise RuntimeError("MONGODB_DB_NAME resolved to empty after sanitization.")
+    if len(normalized.encode("utf-8")) > 63:
+        raise RuntimeError("MONGODB_DB_NAME exceeds MongoDB length limits.")
+    if normalized != name:
+        logging.warning(
+            "Normalized MONGODB_DB_NAME from %r to %r to satisfy MongoDB naming rules.",
+            name,
+            normalized,
+        )
+    return normalized
 
 
 def _settings_or_default(settings: Settings | None) -> Settings:
@@ -28,6 +48,7 @@ def get_client(settings: Settings | None = None) -> MongoClient:
 def get_database(settings: Settings | None = None) -> Database:
     settings = _settings_or_default(settings)
     db_name = _require_value(settings.mongodb_db_name, "MONGODB_DB_NAME")
+    db_name = _normalize_db_name(db_name)
     return get_client(settings)[db_name]
 
 
