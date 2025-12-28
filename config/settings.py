@@ -20,6 +20,7 @@ class Settings:
     role_coach_premium_plus_id: int
     channel_roster_portal_id: int
     channel_staff_submissions_id: int
+    staff_role_ids: set[int]
     mongodb_uri: str | None
     mongodb_db_name: str | None
     mongodb_collection: str | None
@@ -57,6 +58,22 @@ def _optional_int(name: str) -> int | None:
 def _optional_str(name: str) -> str | None:
     raw = os.getenv(name, "").strip()
     return raw or None
+
+
+def _optional_int_set(name: str) -> set[int]:
+    raw = os.getenv(name, "").strip()
+    if not raw:
+        return set()
+    values = []
+    for part in raw.split(","):
+        value = part.strip()
+        if not value:
+            continue
+        try:
+            values.append(int(value))
+        except ValueError:
+            raise RuntimeError(f"{name} must be a comma-separated list of integers.") from None
+    return set(values)
 
 
 def _format_list(values: Iterable[str]) -> str:
@@ -106,6 +123,7 @@ def load_settings() -> Settings:
         role_coach_premium_plus_id=role_coach_premium_plus_id,
         channel_roster_portal_id=channel_roster_portal_id,
         channel_staff_submissions_id=channel_staff_submissions_id,
+        staff_role_ids=_optional_int_set(constants.STAFF_ROLE_IDS_ENV),
         mongodb_uri=_optional_str(constants.MONGODB_URI_ENV),
         mongodb_db_name=_optional_str(constants.MONGODB_DB_NAME_ENV),
         mongodb_collection=_optional_str(constants.MONGODB_COLLECTION_ENV),

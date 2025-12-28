@@ -7,13 +7,19 @@ import discord
 from interactions.modals import AddPlayerModal, CreateRosterModal, RemovePlayerModal
 from services.roster_service import (
     ROSTER_STATUS_SUBMITTED,
+    ROSTER_STATUS_APPROVED,
+    ROSTER_STATUS_REJECTED,
     count_roster_players,
     get_roster_by_id,
     get_roster_players,
     roster_is_locked,
     set_roster_status,
 )
-from services.submission_service import create_submission_record, get_submission_by_roster
+from services.submission_service import (
+    create_submission_record,
+    get_submission_by_roster,
+    update_submission_status,
+)
 from utils.formatting import format_submission_message
 from utils.formatting import format_roster_line
 
@@ -238,7 +244,9 @@ class SubmitRosterConfirmView(discord.ui.View):
             status_text=status_text,
         )
 
-        staff_message = await channel.send(message_content)
+        staff_message = await channel.send(
+            message_content, view=StaffReviewView(roster_id=self.roster_id)
+        )
 
         create_submission_record(
             roster_id=self.roster_id,
@@ -254,3 +262,87 @@ class SubmitRosterConfirmView(discord.ui.View):
 
     async def on_cancel(self, interaction: discord.Interaction) -> None:
         await interaction.response.edit_message(content="Submission canceled.", view=None)
+
+
+class StaffReviewView(discord.ui.View):
+    def __init__(self, *, roster_id: Any) -> None:
+        super().__init__(timeout=86400)
+        self.roster_id = roster_id
+
+        approve_button = discord.ui.Button(
+            label="Approve", style=discord.ButtonStyle.success
+        )
+        approve_button.callback = self.on_approve
+        self.add_item(approve_button)
+
+        reject_button = discord.ui.Button(
+            label="Reject", style=discord.ButtonStyle.danger
+        )
+        reject_button.callback = self.on_reject
+        self.add_item(reject_button)
+
+    async def on_approve(self, interaction: discord.Interaction) -> None:
+        await self._handle_decision(interaction, approved=True)
+
+    async def on_reject(self, interaction: discord.Interaction) -> None:
+        await self._handle_decision(interaction, approved=False)
+
+    def _is_staff(self, interaction: discord.Interaction) -> bool:
+        settings = getattr(interaction.client, "settings", None)
+        if settings is None:
+            return False
+        role_ids = {role.id for role in getattr(interaction.user, "roles", [])}
+        if settings.staff_role_ids:
+            return bool(role_ids.intersection(settings.staff_role_ids))
+        return bool(getattr(interaction.user, "guild_permissions", None).manage_guild)
+
+    async def _handle_decision(
+        self, interaction: discord.Interaction, *, approved: bool
+    ) -> None:
+        if not self._is_staff(interaction):
+            await interaction.response.send_message(
+                "You do not have permission to review this roster.",
+                ephemeral=True,
+            )
+            return
+
+        roster = get_roster_by_id(self.roster_id)
+        if roster is None:
+            await interaction.response.send_message(
+                "Roster not found.", ephemeral=True
+            )
+            return
+
+        players = get_roster_players(self.roster_id)
+        roster_lines = [
+            format_roster_line(
+                discord_mention=f"<@{player['player_discord_id']}>",
+                gamertag=player.get("gamertag", ""),
+                ea_id=player.get("ea_id", ""),
+                console=player.get("console", ""),
+            )
+            for player in players
+        ]
+
+        count = len(players)
+        cap = int(roster.get("cap", 0))
+        status_text = "Approved" if approved else "Rejected"
+        roster_status = ROSTER_STATUS_APPROVED if approved else ROSTER_STATUS_REJECTED
+
+        message_content = format_submission_message(
+            team_name=roster.get("team_name", "Unnamed Team"),
+            coach_mention=f"<@{roster.get('coach_discord_id')}>",
+            roster_count=count,
+            cap=cap,
+            roster_lines=roster_lines,
+            status_text=status_text,
+        )
+
+        update_submission_status(
+            roster_id=self.roster_id,
+            status=status_text.upper(),
+        )
+        set_roster_status(self.roster_id, roster_status)
+
+        self.disable_all_items()
+        await interaction.response.edit_message(content=message_content, view=self)
