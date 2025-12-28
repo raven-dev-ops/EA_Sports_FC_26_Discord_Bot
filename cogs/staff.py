@@ -4,7 +4,12 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-from services.roster_service import ROSTER_STATUS_UNLOCKED, get_roster_for_coach, set_roster_status
+from services.audit_service import AUDIT_ACTION_UNLOCKED, record_staff_action
+from services.roster_service import (
+    ROSTER_STATUS_UNLOCKED,
+    get_roster_for_coach,
+    set_roster_status,
+)
 
 
 class StaffCog(commands.Cog):
@@ -41,6 +46,13 @@ class StaffCog(commands.Cog):
             return
 
         set_roster_status(roster["_id"], ROSTER_STATUS_UNLOCKED)
+        record_staff_action(
+            roster_id=roster["_id"],
+            action=AUDIT_ACTION_UNLOCKED,
+            staff_discord_id=interaction.user.id,
+            staff_display_name=getattr(interaction.user, "display_name", None),
+            staff_username=str(interaction.user),
+        )
         await interaction.response.send_message(
             f"Roster unlocked for {coach.mention}.",
             ephemeral=True,

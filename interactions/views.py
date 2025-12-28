@@ -5,6 +5,11 @@ from typing import Any
 import discord
 
 from interactions.modals import AddPlayerModal, CreateRosterModal, RemovePlayerModal
+from services.audit_service import (
+    AUDIT_ACTION_APPROVED,
+    AUDIT_ACTION_REJECTED,
+    record_staff_action,
+)
 from services.roster_service import (
     ROSTER_STATUS_SUBMITTED,
     ROSTER_STATUS_APPROVED,
@@ -357,6 +362,13 @@ class StaffReviewView(SafeView):
             status=status_text.upper(),
         )
         set_roster_status(self.roster_id, roster_status)
+        record_staff_action(
+            roster_id=self.roster_id,
+            action=AUDIT_ACTION_APPROVED if approved else AUDIT_ACTION_REJECTED,
+            staff_discord_id=interaction.user.id,
+            staff_display_name=getattr(interaction.user, "display_name", None),
+            staff_username=str(interaction.user),
+        )
 
         self.disable_all_items()
         await interaction.response.edit_message(content=message_content, view=self)

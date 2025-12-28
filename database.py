@@ -70,6 +70,13 @@ def ensure_indexes(collection: Collection) -> list[str]:
             partialFilterExpression={"record_type": "submission_message"},
         )
     )
+    indexes.append(
+        collection.create_index(
+            [("record_type", 1), ("roster_id", 1), ("created_at", -1)],
+            name="idx_roster_audit",
+            partialFilterExpression={"record_type": "roster_audit"},
+        )
+    )
 
     return indexes
 
@@ -80,4 +87,5 @@ def list_record_types() -> Iterable[str]:
         "team_roster",
         "roster_player",
         "submission_message",
+        "roster_audit",
     )
