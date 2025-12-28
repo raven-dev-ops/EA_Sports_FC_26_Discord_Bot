@@ -47,7 +47,7 @@ class OffsideBot(commands.Bot):
 
 def build_bot() -> OffsideBot:
     intents = discord.Intents.default()
-    intents.members = True
+    # Keep privileged intents disabled until explicitly needed.
 
     application_id_raw = get_env("DISCORD_APPLICATION_ID")
     application_id = int(application_id_raw) if application_id_raw else None
