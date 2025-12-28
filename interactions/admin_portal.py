@@ -7,16 +7,13 @@ from utils.errors import send_interaction_error
 from interactions.views import SafeView
 
 
-ADMIN_EMBED_DESCRIPTION = (
-    "Admin controls for the tournament bot. Use the buttons below to view quick actions "
-    "and command references. All responses are ephemeral to you."
-)
-
-
 def build_admin_embed() -> discord.Embed:
     embed = discord.Embed(
         title="Admin Control Panel",
-        description=ADMIN_EMBED_DESCRIPTION,
+        description=(
+            "Admin controls for the tournament bot. Use the buttons below to view quick actions "
+            "and command references. All responses are ephemeral to you."
+        ),
         color=discord.Color.blue(),
     )
     embed.add_field(
@@ -44,6 +41,151 @@ def build_admin_embed() -> discord.Embed:
         value="Data checks, health, and exports.",
         inline=False,
     )
+    return embed
+
+
+def bot_controls_embed() -> discord.Embed:
+    embed = discord.Embed(
+        title="Bot Controls",
+        description="Test mode, health, and diagnostics.",
+        color=discord.Color.blurple(),
+    )
+    embed.add_field(
+        name="Commands",
+        value=(
+            "- `/dev_on` — route staff submissions + logs to test channel.\n"
+            "- `/dev_off` — return routing to normal channels.\n"
+            "- `/ping` — health check."
+        ),
+        inline=False,
+    )
+    embed.set_footer(text="Ephemeral responses only.")
+    return embed
+
+
+def tournaments_embed() -> discord.Embed:
+    embed = discord.Embed(
+        title="Tournaments",
+        description="Multi-cycle roster selection and staff review.",
+        color=discord.Color.dark_blue(),
+    )
+    embed.add_field(
+        name="Usage",
+        value=(
+            "- Coaches: `/roster [tournament:\"Name\"]` to open roster modal/dashboard.\n"
+            "- Staff: approve/reject via buttons on submission posts.\n"
+            "- Staff: `/unlock_roster @Coach [tournament:\"Name\"]` to unlock."
+        ),
+        inline=False,
+    )
+    embed.add_field(
+        name="Notes",
+        value=(
+            "- Tournament name is optional; only use staff-provided names.\n"
+            "- Roster caps are based on coach roles."
+        ),
+        inline=False,
+    )
+    embed.set_footer(text="Ephemeral responses only.")
+    return embed
+
+
+def coaches_embed() -> discord.Embed:
+    embed = discord.Embed(
+        title="Coaches & Rosters",
+        description="Coach eligibility, help, and unlocks.",
+        color=discord.Color.dark_teal(),
+    )
+    embed.add_field(
+        name="Commands",
+        value=(
+            "- `/roster [tournament]` — coach dashboard (create/add/remove/view/submit).\n"
+            "- `/help` — coach-facing instructions.\n"
+            "- `/unlock_roster @Coach [tournament]` — staff unlock."
+        ),
+        inline=False,
+    )
+    embed.add_field(
+        name="Caps & Roles",
+        value="Caps resolved from coach roles; ineligible coaches cannot create rosters.",
+        inline=False,
+    )
+    embed.set_footer(text="Ephemeral responses only.")
+    return embed
+
+
+def rosters_embed() -> discord.Embed:
+    embed = discord.Embed(
+        title="Rosters",
+        description="Submission flow and audit trail.",
+        color=discord.Color.dark_purple(),
+    )
+    embed.add_field(
+        name="Flow",
+        value=(
+            "1) Coach opens `/roster` and creates roster.\n"
+            "2) Coach adds players, then submits (locks roster).\n"
+            "3) Staff approve/reject via submission buttons.\n"
+            "4) Staff can unlock via `/unlock_roster`."
+        ),
+        inline=False,
+    )
+    embed.add_field(
+        name="Audit",
+        value="Approvals/rejections/unlocks are logged to the audit collection.",
+        inline=False,
+    )
+    embed.set_footer(text="Ephemeral responses only.")
+    return embed
+
+
+def players_embed() -> discord.Embed:
+    embed = discord.Embed(
+        title="Players",
+        description="Add/remove validation and ban checks.",
+        color=discord.Color.dark_green(),
+    )
+    embed.add_field(
+        name="Add Player modal fields",
+        value="Discord ID/mention, Gamertag/PSN, EA ID, Console (PS/XBOX/PC/SWITCH).",
+        inline=False,
+    )
+    embed.add_field(
+        name="Ban list (optional)",
+        value="Enabled when BANLIST_* and GOOGLE_SHEETS_CREDENTIALS_JSON are set.",
+        inline=False,
+    )
+    embed.add_field(
+        name="Common errors",
+        value="- Duplicate player, cap reached, invalid console, banned player.",
+        inline=False,
+    )
+    embed.set_footer(text="Ephemeral responses only.")
+    return embed
+
+
+def db_embed() -> discord.Embed:
+    embed = discord.Embed(
+        title="DB & Analytics",
+        description="MongoDB storage and future metrics/exports.",
+        color=discord.Color.dark_gold(),
+    )
+    embed.add_field(
+        name="Collections",
+        value="tournament_cycle, team_roster, roster_player, submission_message, roster_audit.",
+        inline=False,
+    )
+    embed.add_field(
+        name="Indexes",
+        value="Uniq roster per coach/cycle, roster player, submission message, audit idx.",
+        inline=False,
+    )
+    embed.add_field(
+        name="Future hooks",
+        value="Health checks, exports, analytics dashboards.",
+        inline=False,
+    )
+    embed.set_footer(text="Ephemeral responses only.")
     return embed
 
 
@@ -85,10 +227,7 @@ class AdminPortalView(SafeView):
         if not await self._ensure_staff(interaction):
             return
         await interaction.response.send_message(
-            "**Bot Controls**\n"
-            "- `/dev_on` / `/dev_off` toggle test-mode routing.\n"
-            "- `/ping` health check.\n"
-            "- Logs route to test channel when test mode is on.\n",
+            embed=bot_controls_embed(),
             ephemeral=True,
         )
 
@@ -96,10 +235,7 @@ class AdminPortalView(SafeView):
         if not await self._ensure_staff(interaction):
             return
         await interaction.response.send_message(
-            "**Tournaments**\n"
-            "- Use `/roster tournament:\"Name\"` for multi-cycle support.\n"
-            "- Staff review happens in the submissions channel with buttons.\n"
-            "- Future: add lifecycle and fixtures commands here.\n",
+            embed=tournaments_embed(),
             ephemeral=True,
         )
 
@@ -107,10 +243,7 @@ class AdminPortalView(SafeView):
         if not await self._ensure_staff(interaction):
             return
         await interaction.response.send_message(
-            "**Coaches**\n"
-            "- `/unlock_roster @Coach [tournament]` to unlock.\n"
-            "- `/help` shows coach-facing instructions.\n"
-            "- Roster caps based on coach roles.\n",
+            embed=coaches_embed(),
             ephemeral=True,
         )
 
@@ -118,10 +251,7 @@ class AdminPortalView(SafeView):
         if not await self._ensure_staff(interaction):
             return
         await interaction.response.send_message(
-            "**Rosters**\n"
-            "- Coaches use `/roster` for create/add/remove/view/submit.\n"
-            "- Staff approve/reject via buttons on the submission message.\n"
-            "- Audit trail records approvals, rejections, unlocks.\n",
+            embed=rosters_embed(),
             ephemeral=True,
         )
 
@@ -129,9 +259,7 @@ class AdminPortalView(SafeView):
         if not await self._ensure_staff(interaction):
             return
         await interaction.response.send_message(
-            "**Players**\n"
-            "- Add via dashboard → Add Player modal (Discord ID, Gamertag/PSN, EA ID, Console).\n"
-            "- Ban list checks are optional and configured via Google Sheets settings.\n",
+            embed=players_embed(),
             ephemeral=True,
         )
 
@@ -139,9 +267,7 @@ class AdminPortalView(SafeView):
         if not await self._ensure_staff(interaction):
             return
         await interaction.response.send_message(
-            "**DB & Analytics**\n"
-            "- MongoDB used for rosters/cycles/submissions/audit.\n"
-            "- Future: add health/metrics/export commands.\n",
+            embed=db_embed(),
             ephemeral=True,
         )
 
