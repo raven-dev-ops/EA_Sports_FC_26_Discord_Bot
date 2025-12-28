@@ -1,23 +1,16 @@
 import logging
-import os
 import pkgutil
 
 import discord
 from discord.ext import commands
 
+from config import Settings, load_settings
 
 LOG_FORMAT = "%(asctime)s | %(levelname)s | %(name)s | %(message)s"
 
 
 def setup_logging() -> None:
     logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
-
-
-def get_env(name: str, *, required: bool = False, default: str | None = None) -> str | None:
-    value = os.getenv(name, default)
-    if required and not value:
-        raise RuntimeError(f"{name} is required.")
-    return value
 
 
 async def load_cogs(bot: commands.Bot) -> None:
@@ -52,29 +45,39 @@ class OffsideBot(commands.Bot):
             logging.info("Bot ready (user not available yet).")
 
 
-def build_bot() -> OffsideBot:
+def build_bot(settings: Settings) -> OffsideBot:
     intents = discord.Intents.default()
     # Keep privileged intents disabled until explicitly needed.
 
-    application_id_raw = get_env("DISCORD_APPLICATION_ID")
-    application_id = int(application_id_raw) if application_id_raw else None
+    bot = OffsideBot(
+        command_prefix="!",
+        intents=intents,
+        application_id=settings.discord_application_id,
+    )
+    bot.settings = settings
+    return bot
 
-    return OffsideBot(command_prefix="!", intents=intents, application_id=application_id)
 
-
-bot = build_bot()
-
-
-@bot.tree.command(name="ping", description="Check bot responsiveness.")
-async def ping(interaction: discord.Interaction) -> None:
-    await interaction.response.send_message("pong", ephemeral=True)
+def register_commands(bot: OffsideBot) -> None:
+    @bot.tree.command(name="ping", description="Check bot responsiveness.")
+    async def ping(interaction: discord.Interaction) -> None:
+        await interaction.response.send_message("pong", ephemeral=True)
 
 
 def main() -> None:
     setup_logging()
-    token = get_env("DISCORD_TOKEN", required=True)
+    settings: Settings
     try:
-        bot.run(token)
+        settings = load_settings()
+    except RuntimeError as exc:
+        logging.error("Configuration error: %s", exc)
+        raise
+
+    bot = build_bot(settings)
+    register_commands(bot)
+
+    try:
+        bot.run(settings.discord_token)
     except KeyboardInterrupt:
         logging.info("Shutdown requested, exiting.")
     except Exception:
