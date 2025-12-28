@@ -4,7 +4,6 @@ from typing import Any
 
 import discord
 
-from interactions.dashboard import build_roster_dashboard
 from repositories.tournament_repo import ensure_cycle_by_name
 from services.permission_service import resolve_roster_cap_from_settings
 from services.roster_service import (
@@ -70,6 +69,8 @@ class CreateRosterModal(SafeModal, title="Create Roster"):
                 ephemeral=True,
             )
             return
+
+        from interactions.dashboard import build_roster_dashboard
 
         selected_cycle = (
             self.tournament_name.value.strip()
