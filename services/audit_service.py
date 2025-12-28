@@ -22,7 +22,8 @@ def record_staff_action(
     staff_username: str | None = None,
     collection: Collection | None = None,
 ) -> dict[str, Any]:
-    collection = collection or get_collection()
+    if collection is None:
+        collection = get_collection()
     now = datetime.now(timezone.utc)
     doc = {
         "record_type": "roster_audit",

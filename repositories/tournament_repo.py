@@ -9,7 +9,8 @@ from database import get_collection
 
 
 def get_active_cycle(collection: Collection | None = None) -> dict[str, Any] | None:
-    collection = collection or get_collection()
+    if collection is None:
+        collection = get_collection()
     return collection.find_one({"record_type": "tournament_cycle", "is_active": True})
 
 
@@ -20,7 +21,8 @@ def create_cycle(
     deactivate_others: bool = True,
     collection: Collection | None = None,
 ) -> dict[str, Any]:
-    collection = collection or get_collection()
+    if collection is None:
+        collection = get_collection()
     now = datetime.now(timezone.utc)
 
     if is_active and deactivate_others:
@@ -44,14 +46,16 @@ def create_cycle(
 def get_cycle_by_name(
     name: str, *, collection: Collection | None = None
 ) -> dict[str, Any] | None:
-    collection = collection or get_collection()
+    if collection is None:
+        collection = get_collection()
     return collection.find_one({"record_type": "tournament_cycle", "name": name})
 
 
 def get_cycle_by_id(
     cycle_id: Any, *, collection: Collection | None = None
 ) -> dict[str, Any] | None:
-    collection = collection or get_collection()
+    if collection is None:
+        collection = get_collection()
     return collection.find_one({"record_type": "tournament_cycle", "_id": cycle_id})
 
 
@@ -60,7 +64,8 @@ def ensure_active_cycle(
     default_name: str = "Current Tournament",
     collection: Collection | None = None,
 ) -> dict[str, Any]:
-    collection = collection or get_collection()
+    if collection is None:
+        collection = get_collection()
     cycle = get_active_cycle(collection)
     if cycle:
         return cycle
@@ -70,7 +75,8 @@ def ensure_active_cycle(
 def ensure_cycle_by_name(
     name: str, *, collection: Collection | None = None
 ) -> dict[str, Any]:
-    collection = collection or get_collection()
+    if collection is None:
+        collection = get_collection()
     cycle = get_cycle_by_name(name, collection=collection)
     if cycle:
         return cycle

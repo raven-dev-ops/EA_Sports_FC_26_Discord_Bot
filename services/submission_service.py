@@ -16,7 +16,8 @@ def create_submission_record(
     status: str,
     collection: Collection | None = None,
 ) -> dict[str, Any]:
-    collection = collection or get_collection()
+    if collection is None:
+        collection = get_collection()
     now = datetime.now(timezone.utc)
     doc = {
         "record_type": "submission_message",
@@ -35,7 +36,8 @@ def create_submission_record(
 def get_submission_by_roster(
     roster_id: Any, *, collection: Collection | None = None
 ) -> dict[str, Any] | None:
-    collection = collection or get_collection()
+    if collection is None:
+        collection = get_collection()
     return collection.find_one({"record_type": "submission_message", "roster_id": roster_id})
 
 
@@ -45,7 +47,8 @@ def update_submission_status(
     status: str,
     collection: Collection | None = None,
 ) -> None:
-    collection = collection or get_collection()
+    if collection is None:
+        collection = get_collection()
     collection.update_one(
         {"record_type": "submission_message", "roster_id": roster_id},
         {"$set": {"status": status, "updated_at": datetime.now(timezone.utc)}},

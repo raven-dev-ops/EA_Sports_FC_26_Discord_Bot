@@ -22,7 +22,8 @@ def get_roster_for_coach(
     cycle_id: Any | None = None,
     collection: Collection | None = None
 ) -> dict[str, Any] | None:
-    collection = collection or get_collection()
+    if collection is None:
+        collection = get_collection()
     cycle = (
         ensure_active_cycle(collection=collection) if cycle_id is None else {"_id": cycle_id}
     )
@@ -43,7 +44,8 @@ def create_roster(
     cycle_id: Any | None = None,
     collection: Collection | None = None,
 ) -> dict[str, Any]:
-    collection = collection or get_collection()
+    if collection is None:
+        collection = get_collection()
     cycle = (
         ensure_active_cycle(collection=collection) if cycle_id is None else {"_id": cycle_id}
     )
@@ -73,14 +75,16 @@ def create_roster(
 def get_roster_by_id(
     roster_id: Any, *, collection: Collection | None = None
 ) -> dict[str, Any] | None:
-    collection = collection or get_collection()
+    if collection is None:
+        collection = get_collection()
     return collection.find_one({"record_type": "team_roster", "_id": roster_id})
 
 
 def get_roster_players(
     roster_id: Any, *, collection: Collection | None = None
 ) -> list[dict[str, Any]]:
-    collection = collection or get_collection()
+    if collection is None:
+        collection = get_collection()
     return list(
         collection.find(
             {"record_type": "roster_player", "roster_id": roster_id},
@@ -92,7 +96,8 @@ def get_roster_players(
 def count_roster_players(
     roster_id: Any, *, collection: Collection | None = None
 ) -> int:
-    collection = collection or get_collection()
+    if collection is None:
+        collection = get_collection()
     return collection.count_documents(
         {"record_type": "roster_player", "roster_id": roster_id}
     )
@@ -108,7 +113,8 @@ def add_player(
     cap: int,
     collection: Collection | None = None,
 ) -> dict[str, Any]:
-    collection = collection or get_collection()
+    if collection is None:
+        collection = get_collection()
     now = datetime.now(timezone.utc)
 
     existing = collection.find_one(
@@ -145,7 +151,8 @@ def remove_player(
     player_discord_id: int,
     collection: Collection | None = None,
 ) -> bool:
-    collection = collection or get_collection()
+    if collection is None:
+        collection = get_collection()
     result = collection.delete_one(
         {
             "record_type": "roster_player",
@@ -159,7 +166,8 @@ def remove_player(
 def set_roster_status(
     roster_id: Any, status: str, *, collection: Collection | None = None
 ) -> None:
-    collection = collection or get_collection()
+    if collection is None:
+        collection = get_collection()
     now = datetime.now(timezone.utc)
     updates: dict[str, Any] = {"status": status, "updated_at": now}
     if status == ROSTER_STATUS_SUBMITTED:
