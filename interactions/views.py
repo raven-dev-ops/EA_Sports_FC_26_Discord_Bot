@@ -20,11 +20,23 @@ from services.submission_service import (
     get_submission_by_roster,
     update_submission_status,
 )
+from utils.errors import log_interaction_error, send_interaction_error
 from utils.formatting import format_submission_message
 from utils.formatting import format_roster_line
 
 
-class RosterDashboardView(discord.ui.View):
+class SafeView(discord.ui.View):
+    async def on_error(
+        self,
+        interaction: discord.Interaction,
+        error: Exception,
+        item: discord.ui.Item[discord.ui.View],
+    ) -> None:
+        log_interaction_error(error, interaction, source="view")
+        await send_interaction_error(interaction)
+
+
+class RosterDashboardView(SafeView):
     def __init__(
         self,
         *,
@@ -164,7 +176,7 @@ class RosterDashboardView(discord.ui.View):
         )
 
 
-class SubmitRosterConfirmView(discord.ui.View):
+class SubmitRosterConfirmView(SafeView):
     def __init__(self, *, roster_id: Any) -> None:
         super().__init__(timeout=120)
         self.roster_id = roster_id
@@ -264,7 +276,7 @@ class SubmitRosterConfirmView(discord.ui.View):
         await interaction.response.edit_message(content="Submission canceled.", view=None)
 
 
-class StaffReviewView(discord.ui.View):
+class StaffReviewView(SafeView):
     def __init__(self, *, roster_id: Any) -> None:
         super().__init__(timeout=86400)
         self.roster_id = roster_id

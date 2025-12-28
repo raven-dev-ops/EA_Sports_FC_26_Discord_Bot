@@ -5,6 +5,7 @@ import discord
 from discord.ext import commands
 
 from config import Settings, load_settings
+from utils.errors import log_interaction_error, send_interaction_error
 
 LOG_FORMAT = "%(asctime)s | %(levelname)s | %(name)s | %(message)s"
 
@@ -43,6 +44,12 @@ class OffsideBot(commands.Bot):
             logging.info("Bot ready as %s (ID: %s).", user, user.id)
         else:
             logging.info("Bot ready (user not available yet).")
+
+    async def on_app_command_error(
+        self, interaction: discord.Interaction, error: Exception
+    ) -> None:
+        log_interaction_error(error, interaction, source="app_command")
+        await send_interaction_error(interaction)
 
 
 def build_bot(settings: Settings) -> OffsideBot:

@@ -16,9 +16,18 @@ from services.roster_service import (
     roster_is_locked,
 )
 from utils.validation import normalize_console, parse_discord_id, validate_team_name
+from utils.errors import log_interaction_error, send_interaction_error
 
 
-class CreateRosterModal(discord.ui.Modal, title="Create Roster"):
+class SafeModal(discord.ui.Modal):
+    async def on_error(
+        self, interaction: discord.Interaction, error: Exception
+    ) -> None:
+        log_interaction_error(error, interaction, source="modal")
+        await send_interaction_error(interaction)
+
+
+class CreateRosterModal(SafeModal, title="Create Roster"):
     team_name = discord.ui.TextInput(
         label="Team Name",
         min_length=2,
@@ -71,7 +80,7 @@ class CreateRosterModal(discord.ui.Modal, title="Create Roster"):
         )
 
 
-class AddPlayerModal(discord.ui.Modal, title="Add Player"):
+class AddPlayerModal(SafeModal, title="Add Player"):
     def __init__(self, *, roster_id: Any) -> None:
         super().__init__()
         self.roster_id = roster_id
@@ -137,7 +146,7 @@ class AddPlayerModal(discord.ui.Modal, title="Add Player"):
         )
 
 
-class RemovePlayerModal(discord.ui.Modal, title="Remove Player"):
+class RemovePlayerModal(SafeModal, title="Remove Player"):
     def __init__(self, *, roster_id: Any) -> None:
         super().__init__()
         self.roster_id = roster_id
