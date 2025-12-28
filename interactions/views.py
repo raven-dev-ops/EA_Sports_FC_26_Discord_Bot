@@ -5,6 +5,8 @@ from typing import Any
 import discord
 
 from interactions.modals import AddPlayerModal, CreateRosterModal, RemovePlayerModal
+from services.roster_service import get_roster_by_id, get_roster_players, roster_is_locked
+from utils.formatting import format_roster_line
 
 
 class RosterDashboardView(discord.ui.View):
@@ -86,9 +88,52 @@ class RosterDashboardView(discord.ui.View):
         await interaction.response.send_modal(RemovePlayerModal(roster_id=self.roster_id))
 
     async def on_view_roster(self, interaction: discord.Interaction) -> None:
-        await interaction.response.send_message(
-            "View roster is not configured yet.", ephemeral=True
+        if self.roster_id is None:
+            await interaction.response.send_message(
+                "Roster not found. Please open the dashboard again.",
+                ephemeral=True,
+            )
+            return
+
+        roster = get_roster_by_id(self.roster_id)
+        if roster is None:
+            await interaction.response.send_message(
+                "Roster not found. Please open the dashboard again.",
+                ephemeral=True,
+            )
+            return
+
+        players = get_roster_players(self.roster_id)
+        lines = [
+            f"{idx}. "
+            + format_roster_line(
+                discord_mention=f"<@{player['player_discord_id']}>",
+                gamertag=player.get("gamertag", ""),
+                ea_id=player.get("ea_id", ""),
+                console=player.get("console", ""),
+            )
+            for idx, player in enumerate(players, start=1)
+        ]
+
+        embed = discord.Embed(title="Roster Preview")
+        status = roster.get("status", "UNKNOWN")
+        if roster_is_locked(roster):
+            status = f"{status} (LOCKED)"
+
+        embed.add_field(name="Team", value=roster.get("team_name", "Unnamed Team"), inline=False)
+        embed.add_field(
+            name="Status",
+            value=status,
+            inline=True,
         )
+        embed.add_field(
+            name="Players",
+            value=f"{len(players)}/{roster.get('cap', 'N/A')}",
+            inline=True,
+        )
+        embed.description = "\n".join(lines) if lines else "No players added."
+
+        await interaction.response.send_message(embed=embed, ephemeral=True)
 
     async def on_submit_roster(self, interaction: discord.Interaction) -> None:
         await interaction.response.send_message(
