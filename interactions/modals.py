@@ -12,6 +12,7 @@ from services.roster_service import (
     create_roster,
     get_roster_by_id,
     get_roster_for_coach,
+    remove_player,
     roster_is_locked,
 )
 from utils.validation import normalize_console, parse_discord_id, validate_team_name
@@ -132,5 +133,58 @@ class AddPlayerModal(discord.ui.Modal, title="Add Player"):
         cap = roster.get("cap", "N/A")
         await interaction.response.send_message(
             f"Player added. Roster now {count}/{cap}.",
+            ephemeral=True,
+        )
+
+
+class RemovePlayerModal(discord.ui.Modal, title="Remove Player"):
+    def __init__(self, *, roster_id: Any) -> None:
+        super().__init__()
+        self.roster_id = roster_id
+
+    discord_id = discord.ui.TextInput(
+        label="Player Discord ID or mention",
+        placeholder="@Player or 1234567890",
+    )
+
+    async def on_submit(self, interaction: discord.Interaction) -> None:
+        roster = get_roster_by_id(self.roster_id)
+        if roster is None:
+            await interaction.response.send_message(
+                "Roster not found. Please open the dashboard again.",
+                ephemeral=True,
+            )
+            return
+
+        if roster_is_locked(roster):
+            await interaction.response.send_message(
+                "This roster is locked and cannot be edited.",
+                ephemeral=True,
+            )
+            return
+
+        player_id = parse_discord_id(self.discord_id.value)
+        if player_id is None:
+            await interaction.response.send_message(
+                "Enter a valid Discord mention or ID for the player.",
+                ephemeral=True,
+            )
+            return
+
+        removed = remove_player(
+            roster_id=self.roster_id,
+            player_discord_id=player_id,
+        )
+        if not removed:
+            await interaction.response.send_message(
+                "Player not found on this roster.",
+                ephemeral=True,
+            )
+            return
+
+        count = count_roster_players(self.roster_id)
+        cap = roster.get("cap", "N/A")
+        await interaction.response.send_message(
+            f"Player removed. Roster now {count}/{cap}.",
             ephemeral=True,
         )
