@@ -7,6 +7,33 @@ from utils.errors import send_interaction_error
 from interactions.views import SafeView
 
 
+def _coach_help_embed() -> discord.Embed:
+    embed = discord.Embed(
+        title="Coach Guide",
+        description="How coaches create and submit rosters.",
+        color=discord.Color.green(),
+    )
+    embed.add_field(
+        name="Create & Manage",
+        value=(
+            "1) Open the roster dashboard and create your roster.\n"
+            "2) Use the buttons to add/remove players and view the roster.\n"
+            "3) Submit the roster to staff; it locks until staff acts."
+        ),
+        inline=False,
+    )
+    embed.add_field(
+        name="Player details",
+        value="Discord mention/ID, Gamertag/PSN, EA ID, Console (PS/XBOX/PC/SWITCH).",
+        inline=False,
+    )
+    embed.add_field(
+        name="After submit",
+        value="Roster is locked; staff can unlock for edits.",
+        inline=False,
+    )
+    return embed
+
 def build_admin_embed() -> discord.Embed:
     embed = discord.Embed(
         title="Admin Control Panel",
@@ -47,16 +74,12 @@ def build_admin_embed() -> discord.Embed:
 def bot_controls_embed() -> discord.Embed:
     embed = discord.Embed(
         title="Bot Controls",
-        description="Test mode, health, and diagnostics.",
+        description="Test mode, health, and diagnostics (staff only).",
         color=discord.Color.blurple(),
     )
     embed.add_field(
-        name="Commands",
-        value=(
-            "- `/dev_on` — route staff submissions + logs to test channel.\n"
-            "- `/dev_off` — return routing to normal channels.\n"
-            "- `/ping` — health check."
-        ),
+        name="Actions",
+        value="Toggle test-mode routing and check bot health.",
         inline=False,
     )
     embed.set_footer(text="Ephemeral responses only.")
@@ -72,18 +95,15 @@ def tournaments_embed() -> discord.Embed:
     embed.add_field(
         name="Usage",
         value=(
-            "- Coaches: `/roster [tournament:\"Name\"]` to open roster modal/dashboard.\n"
-            "- Staff: approve/reject via buttons on submission posts.\n"
-            "- Staff: `/unlock_roster @Coach [tournament:\"Name\"]` to unlock."
+            "- Coaches open the roster dashboard from the portal.\n"
+            "- Staff approve/reject via buttons on submission posts.\n"
+            "- Staff can unlock locked rosters from this portal."
         ),
         inline=False,
     )
     embed.add_field(
         name="Notes",
-        value=(
-            "- Tournament name is optional; only use staff-provided names.\n"
-            "- Roster caps are based on coach roles."
-        ),
+        value="- Tournament name is optional; only use staff-provided names.\n- Roster caps are based on coach roles.",
         inline=False,
     )
     embed.set_footer(text="Ephemeral responses only.")
@@ -97,11 +117,11 @@ def coaches_embed() -> discord.Embed:
         color=discord.Color.dark_teal(),
     )
     embed.add_field(
-        name="Commands",
+        name="Actions",
         value=(
-            "- `/roster [tournament]` — coach dashboard (create/add/remove/view/submit).\n"
-            "- `/help` — coach-facing instructions.\n"
-            "- `/unlock_roster @Coach [tournament]` — staff unlock."
+            "- Open coach dashboard for create/add/remove/view/submit.\n"
+            "- Show coach instructions.\n"
+            "- Unlock a roster for edits."
         ),
         inline=False,
     )
@@ -229,6 +249,7 @@ class AdminPortalView(SafeView):
         await interaction.response.send_message(
             embed=bot_controls_embed(),
             ephemeral=True,
+            view=BotControlsView(),
         )
 
     async def on_tournaments(self, interaction: discord.Interaction) -> None:
@@ -237,6 +258,7 @@ class AdminPortalView(SafeView):
         await interaction.response.send_message(
             embed=tournaments_embed(),
             ephemeral=True,
+            view=TournamentsView(),
         )
 
     async def on_coaches(self, interaction: discord.Interaction) -> None:
@@ -245,6 +267,7 @@ class AdminPortalView(SafeView):
         await interaction.response.send_message(
             embed=coaches_embed(),
             ephemeral=True,
+            view=CoachesView(),
         )
 
     async def on_rosters(self, interaction: discord.Interaction) -> None:
@@ -253,6 +276,7 @@ class AdminPortalView(SafeView):
         await interaction.response.send_message(
             embed=rosters_embed(),
             ephemeral=True,
+            view=RostersView(),
         )
 
     async def on_players(self, interaction: discord.Interaction) -> None:
@@ -261,6 +285,7 @@ class AdminPortalView(SafeView):
         await interaction.response.send_message(
             embed=players_embed(),
             ephemeral=True,
+            view=PlayersView(),
         )
 
     async def on_db(self, interaction: discord.Interaction) -> None:
@@ -268,6 +293,171 @@ class AdminPortalView(SafeView):
             return
         await interaction.response.send_message(
             embed=db_embed(),
+            ephemeral=True,
+            view=DBView(),
+        )
+
+
+class BotControlsView(SafeView):
+    def __init__(self) -> None:
+        super().__init__(timeout=300)
+        btn_on = discord.ui.Button(label="Test Mode On", style=discord.ButtonStyle.success)
+        btn_off = discord.ui.Button(label="Test Mode Off", style=discord.ButtonStyle.danger)
+        btn_ping = discord.ui.Button(label="Health Check", style=discord.ButtonStyle.primary)
+        btn_on.callback = self.on_enable
+        btn_off.callback = self.on_disable
+        btn_ping.callback = self.on_ping
+        self.add_item(btn_on)
+        self.add_item(btn_off)
+        self.add_item(btn_ping)
+
+    async def on_enable(self, interaction: discord.Interaction) -> None:
+        interaction.client.test_mode = True
+        await interaction.response.send_message("Test mode enabled for this session.", ephemeral=True)
+
+    async def on_disable(self, interaction: discord.Interaction) -> None:
+        interaction.client.test_mode = False
+        await interaction.response.send_message("Test mode disabled for this session.", ephemeral=True)
+
+    async def on_ping(self, interaction: discord.Interaction) -> None:
+        await interaction.response.send_message("pong", ephemeral=True)
+
+
+class TournamentsView(SafeView):
+    def __init__(self) -> None:
+        super().__init__(timeout=300)
+        btn_dashboard = discord.ui.Button(label="Coach Dashboard", style=discord.ButtonStyle.primary)
+        btn_staff = discord.ui.Button(label="Staff Review Tips", style=discord.ButtonStyle.secondary)
+        btn_unlock = discord.ui.Button(label="Unlock Guidance", style=discord.ButtonStyle.secondary)
+        btn_dashboard.callback = self.on_dashboard
+        btn_staff.callback = self.on_staff
+        btn_unlock.callback = self.on_unlock
+        self.add_item(btn_dashboard)
+        self.add_item(btn_staff)
+        self.add_item(btn_unlock)
+
+    async def on_dashboard(self, interaction: discord.Interaction) -> None:
+        await interaction.response.send_message(
+            "Coaches open the roster dashboard from the portal; choose the correct tournament when prompted.",
+            ephemeral=True,
+        )
+
+    async def on_staff(self, interaction: discord.Interaction) -> None:
+        await interaction.response.send_message(
+            "Staff approve/reject from the submission message buttons; keep submissions channel tidy.",
+            ephemeral=True,
+        )
+
+    async def on_unlock(self, interaction: discord.Interaction) -> None:
+        await interaction.response.send_message(
+            "Unlock rosters from this portal after verifying coach intent; locked rosters cannot be edited by coaches.",
+            ephemeral=True,
+        )
+
+
+class CoachesView(SafeView):
+    def __init__(self) -> None:
+        super().__init__(timeout=300)
+        btn_help = discord.ui.Button(label="Coach Help", style=discord.ButtonStyle.primary)
+        btn_unlock = discord.ui.Button(label="Unlock Roster", style=discord.ButtonStyle.secondary)
+        btn_help.callback = self.on_help
+        btn_unlock.callback = self.on_unlock
+        self.add_item(btn_help)
+        self.add_item(btn_unlock)
+
+    async def on_help(self, interaction: discord.Interaction) -> None:
+        await interaction.response.send_message(embed=_coach_help_embed(), ephemeral=True)
+
+    async def on_unlock(self, interaction: discord.Interaction) -> None:
+        await interaction.response.send_message(
+            "To unlock, confirm the coach and tournament cycle, then use the portal unlock action.",
+            ephemeral=True,
+        )
+
+
+class RostersView(SafeView):
+    def __init__(self) -> None:
+        super().__init__(timeout=300)
+        btn_flow = discord.ui.Button(label="Submission Flow", style=discord.ButtonStyle.primary)
+        btn_audit = discord.ui.Button(label="Audit Info", style=discord.ButtonStyle.secondary)
+        btn_flow.callback = self.on_flow
+        btn_audit.callback = self.on_audit
+        self.add_item(btn_flow)
+        self.add_item(btn_audit)
+
+    async def on_flow(self, interaction: discord.Interaction) -> None:
+        await interaction.response.send_message(
+            "Flow: create roster → add players → submit (locks) → staff approve/reject → unlock if needed.",
+            ephemeral=True,
+        )
+
+    async def on_audit(self, interaction: discord.Interaction) -> None:
+        await interaction.response.send_message(
+            "Approvals, rejections, and unlocks are recorded in the audit collection.",
+            ephemeral=True,
+        )
+
+
+class PlayersView(SafeView):
+    def __init__(self) -> None:
+        super().__init__(timeout=300)
+        btn_fields = discord.ui.Button(label="Player Fields", style=discord.ButtonStyle.primary)
+        btn_ban = discord.ui.Button(label="Ban Checks", style=discord.ButtonStyle.secondary)
+        btn_errors = discord.ui.Button(label="Common Errors", style=discord.ButtonStyle.secondary)
+        btn_fields.callback = self.on_fields
+        btn_ban.callback = self.on_ban
+        btn_errors.callback = self.on_errors
+        self.add_item(btn_fields)
+        self.add_item(btn_ban)
+        self.add_item(btn_errors)
+
+    async def on_fields(self, interaction: discord.Interaction) -> None:
+        await interaction.response.send_message(
+            "Player fields: Discord mention/ID, Gamertag/PSN, EA ID, Console (PS/XBOX/PC/SWITCH).",
+            ephemeral=True,
+        )
+
+    async def on_ban(self, interaction: discord.Interaction) -> None:
+        await interaction.response.send_message(
+            "Ban checks run when configured with BANLIST_* and Google Sheets credentials; blocked players are rejected.",
+            ephemeral=True,
+        )
+
+    async def on_errors(self, interaction: discord.Interaction) -> None:
+        await interaction.response.send_message(
+            "Common errors: duplicate player, cap reached, invalid console, banned player.",
+            ephemeral=True,
+        )
+
+
+class DBView(SafeView):
+    def __init__(self) -> None:
+        super().__init__(timeout=300)
+        btn_schema = discord.ui.Button(label="Schema", style=discord.ButtonStyle.primary)
+        btn_indexes = discord.ui.Button(label="Indexes", style=discord.ButtonStyle.secondary)
+        btn_future = discord.ui.Button(label="Future", style=discord.ButtonStyle.secondary)
+        btn_schema.callback = self.on_schema
+        btn_indexes.callback = self.on_indexes
+        btn_future.callback = self.on_future
+        self.add_item(btn_schema)
+        self.add_item(btn_indexes)
+        self.add_item(btn_future)
+
+    async def on_schema(self, interaction: discord.Interaction) -> None:
+        await interaction.response.send_message(
+            "Collections: tournament_cycle, team_roster, roster_player, submission_message, roster_audit.",
+            ephemeral=True,
+        )
+
+    async def on_indexes(self, interaction: discord.Interaction) -> None:
+        await interaction.response.send_message(
+            "Indexes: unique roster per coach/cycle, roster player, submission message, audit index.",
+            ephemeral=True,
+        )
+
+    async def on_future(self, interaction: discord.Interaction) -> None:
+        await interaction.response.send_message(
+            "Future: health checks, exports, analytics dashboards.",
             ephemeral=True,
         )
 
@@ -295,6 +485,18 @@ async def send_admin_portal_message(
                 ephemeral=True,
             )
             return
+
+    # Delete prior portal embeds posted by the bot to keep the channel tidy.
+    try:
+        async for message in channel.history(limit=20):
+            if message.author.id == interaction.client.user.id:
+                if message.embeds and message.embeds[0].title == "Admin Control Panel":
+                    try:
+                        await message.delete()
+                    except discord.DiscordException:
+                        pass
+    except discord.DiscordException:
+        pass
 
     embed = build_admin_embed()
     view = AdminPortalView()
