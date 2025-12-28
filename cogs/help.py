@@ -13,7 +13,27 @@ class HelpCog(commands.Cog):
     async def help_command(self, interaction: discord.Interaction) -> None:
         embed = discord.Embed(
             title="Offside Bot Help",
-            description="Command list with examples.",
+            description="Command list with examples and roster submission steps.",
+        )
+        embed.add_field(
+            name="Coach: submit roster (players + coach)",
+            value=(
+                "1) Run `/roster` (optionally add `tournament`).\n"
+                "2) Fill Team Name (and Tournament Name if needed).\n"
+                "3) Use **Add Player** to add each player.\n"
+                "4) Use **Submit Roster** and confirm.\n"
+                "5) Wait for staff approval/rejection."
+            ),
+            inline=False,
+        )
+        embed.add_field(
+            name="Staff: review submission",
+            value=(
+                "1) Open the staff submission post.\n"
+                "2) Click **Approve** or **Reject**.\n"
+                "3) Use `/unlock_roster @Coach` if edits are needed."
+            ),
+            inline=False,
         )
         embed.add_field(
             name="/roster [tournament]",
