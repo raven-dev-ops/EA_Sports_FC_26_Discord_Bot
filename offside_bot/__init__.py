@@ -1,0 +1,1 @@
+"""Offside Discord Bot package."""
