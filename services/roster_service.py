@@ -36,6 +36,29 @@ def get_roster_for_coach(
     )
 
 
+def get_rosters_for_coach(
+    coach_discord_id: int, *, collection: Collection | None = None
+) -> list[dict[str, Any]]:
+    if collection is None:
+        collection = get_collection()
+    return list(
+        collection.find(
+            {
+                "record_type": "team_roster",
+                "coach_discord_id": coach_discord_id,
+            },
+            sort=[("created_at", -1)],
+        )
+    )
+
+
+def get_latest_roster_for_coach(
+    coach_discord_id: int, *, collection: Collection | None = None
+) -> dict[str, Any] | None:
+    rosters = get_rosters_for_coach(coach_discord_id, collection=collection)
+    return rosters[0] if rosters else None
+
+
 def create_roster(
     *,
     coach_discord_id: int,

@@ -5,8 +5,10 @@ from discord import app_commands
 from discord.ext import commands
 
 from services.audit_service import AUDIT_ACTION_UNLOCKED, record_staff_action
+from repositories.tournament_repo import ensure_cycle_by_name, get_cycle_by_id
 from services.roster_service import (
     ROSTER_STATUS_UNLOCKED,
+    get_latest_roster_for_coach,
     get_roster_for_coach,
     set_roster_status,
 )
@@ -26,9 +28,15 @@ class StaffCog(commands.Cog):
         return bool(getattr(interaction.user, "guild_permissions", None).manage_guild)
 
     @app_commands.command(name="unlock_roster", description="Unlock a roster for edits.")
-    @app_commands.describe(coach="Coach whose roster should be unlocked")
+    @app_commands.describe(
+        coach="Coach whose roster should be unlocked",
+        tournament="Optional tournament cycle name",
+    )
     async def unlock_roster(
-        self, interaction: discord.Interaction, coach: discord.Member
+        self,
+        interaction: discord.Interaction,
+        coach: discord.Member,
+        tournament: str | None = None,
     ) -> None:
         if not self._is_staff(interaction):
             await interaction.response.send_message(
@@ -37,7 +45,21 @@ class StaffCog(commands.Cog):
             )
             return
 
-        roster = get_roster_for_coach(coach.id)
+        roster = None
+        cycle_name = None
+        if tournament:
+            cycle = ensure_cycle_by_name(tournament.strip())
+            roster = get_roster_for_coach(coach.id, cycle_id=cycle["_id"])
+            cycle_name = cycle.get("name")
+        else:
+            roster = get_roster_for_coach(coach.id)
+
+        if roster is None and tournament is None:
+            roster = get_latest_roster_for_coach(coach.id)
+            if roster:
+                cycle = get_cycle_by_id(roster.get("cycle_id"))
+                cycle_name = cycle.get("name") if cycle else None
+
         if roster is None:
             await interaction.response.send_message(
                 "Roster not found for that coach.",
@@ -53,8 +75,9 @@ class StaffCog(commands.Cog):
             staff_display_name=getattr(interaction.user, "display_name", None),
             staff_username=str(interaction.user),
         )
+        suffix = f" (Tournament: {cycle_name})" if cycle_name else ""
         await interaction.response.send_message(
-            f"Roster unlocked for {coach.mention}.",
+            f"Roster unlocked for {coach.mention}.{suffix}",
             ephemeral=True,
         )
 
