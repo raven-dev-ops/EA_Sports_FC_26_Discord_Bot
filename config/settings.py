@@ -22,6 +22,7 @@ class Settings:
     role_coach_premium_plus_id: int
     channel_roster_portal_id: int
     channel_staff_submissions_id: int
+    channel_admin_portal_id: int
     staff_role_ids: set[int]
     mongodb_uri: str | None
     mongodb_db_name: str | None
@@ -129,6 +130,9 @@ def load_settings() -> Settings:
     channel_staff_submissions_id = _required_int(
         constants.CHANNEL_STAFF_SUBMISSIONS_ID_ENV, missing, invalid
     )
+    channel_admin_portal_id = _required_int(
+        constants.CHANNEL_ADMIN_PORTAL_ID_ENV, missing, invalid
+    )
 
     if missing or invalid:
         details = []
@@ -160,6 +164,7 @@ def load_settings() -> Settings:
         role_coach_premium_plus_id=role_coach_premium_plus_id,
         channel_roster_portal_id=channel_roster_portal_id,
         channel_staff_submissions_id=channel_staff_submissions_id,
+        channel_admin_portal_id=channel_admin_portal_id,
         staff_role_ids=_optional_int_set(constants.STAFF_ROLE_IDS_ENV),
         mongodb_uri=_optional_str(constants.MONGODB_URI_ENV),
         mongodb_db_name=_optional_str(constants.MONGODB_DB_NAME_ENV),

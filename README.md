@@ -13,11 +13,19 @@ Roster management and staff review bot for Discord tournaments.
 
 ## Commands
 
-- `/roster [tournament]` - Opens the roster creation modal (uses tournament if provided). How it works: prompts for team name and optional tournament name, then shows the roster dashboard buttons for add/remove/view/submit. Example: `/roster` or `/roster tournament:"Summer Cup"`.
-- `/unlock_roster <coach> [tournament]` - Staff-only unlock command (optional tournament). How it works: unlocks the coach's roster for edits; uses the latest roster if no tournament is provided. Example: `/unlock_roster @Coach` or `/unlock_roster @Coach tournament:"Summer Cup"`.
-- `/dev_on` - Staff-only toggle to force test-mode routing. How it works: routes staff submissions and bot logs to `DISCORD_TEST_CHANNEL` for this session. Example: `/dev_on`.
+- `/roster [tournament]` - Opens the roster creation modal (uses tournament if provided). How it works: prompts for team name and optional tournament name, then shows the roster dashboard buttons for add/remove/view/submit.
+   *Example*: `/roster` or `/roster tournament:"Summer Cup"`.
+
+- `/unlock_roster <coach> [tournament]` - Staff-only unlock command (optional tournament). How it works: unlocks the coach's roster for edits; uses the latest roster if no tournament is provided.
+   *Example*: `/unlock_roster @Coach` or `/unlock_roster @Coach tournament:"Summer Cup"`.
+
+- `/dev_on` - Staff-only toggle to force test-mode routing. How it works: routes staff submissions and bot logs to `DISCORD_TEST_CHANNEL` for this session.
+   *Example*: `/dev_on`.
+
 - `/dev_off` - Staff-only toggle to disable test-mode routing. How it works: routes messages back to configured channels for this session. Example: `/dev_off`.
+
 - `/ping` - Health check. How it works: replies with `pong`. Example: `/ping`.
+
 - `/help` - Command list and examples. How it works: shows step-by-step roster submission guidance and command usage. Example: `/help`.
 
 ## Configuration
@@ -31,6 +39,7 @@ Required (startup):
 - `ROLE_COACH_PREMIUM_PLUS_ID`
 - `CHANNEL_ROSTER_PORTAL_ID`
 - `CHANNEL_STAFF_SUBMISSIONS_ID`
+- `CHANNEL_ADMIN_PORTAL_ID`
 
 Required when `TEST_MODE=true`:
 - `DISCORD_TEST_CHANNEL`
