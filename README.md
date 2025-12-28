@@ -17,6 +17,7 @@ Roster management and staff review bot for Discord tournaments.
 - `/unlock_roster <coach> [tournament]` - Staff-only unlock command (optional tournament).
 - `/dev_on` / `/dev_off` - Staff-only toggle for test mode routing.
 - `/ping` - Health check.
+- `/help` - Command list and examples.
 
 ## Configuration
 
