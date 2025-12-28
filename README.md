@@ -11,23 +11,18 @@ Roster management and staff review bot for Discord tournaments.
 - Optional Google Sheets ban list checks.
 - Test mode routing with Discord log forwarding.
 
-## Commands
+## Portals (auto-posted on startup)
 
-- `/roster [tournament]` - Opens the roster creation modal (uses tournament if provided). How it works: prompts for team name and optional tournament name, then shows the roster dashboard buttons for add/remove/view/submit.
-   *Example*: `/roster` or `/roster tournament:"Summer Cup"`.
+- **Coach Roster Portal** (channel `CHANNEL_ROSTER_PORTAL_ID`): embed with buttons to open the roster dashboard (create/add/remove/view/submit) and to show the coach help guide. Responses are ephemeral.
+- **Admin Control Panel** (channel `CHANNEL_ADMIN_PORTAL_ID`): embed with buttons for Bot Controls, Tournaments, Coaches, Rosters, Players, DB/Analytics. Each button opens an ephemeral embed and action buttons (e.g., test-mode toggle, health check, roster unlock guidance). The bot deletes the previous portal embed before posting a new one.
 
-- `/unlock_roster <coach> [tournament]` - Staff-only unlock command (optional tournament). How it works: unlocks the coach's roster for edits; uses the latest roster if no tournament is provided.
-   *Example*: `/unlock_roster @Coach` or `/unlock_roster @Coach tournament:"Summer Cup"`.
+## Commands (still available)
 
-- `/dev_on` - Staff-only toggle to force test-mode routing. How it works: routes staff submissions and bot logs to `DISCORD_TEST_CHANNEL` for this session.
-   *Example*: `/dev_on`.
-
-- `/dev_off` - Staff-only toggle to disable test-mode routing. How it works: routes messages back to configured channels for this session. Example: `/dev_off`.
-
-- `/ping` - Health check. How it works: replies with `pong`. Example: `/ping`.
-
-- `/help` - Command list and examples. How it works: shows step-by-step roster submission guidance and command usage. Example: `/help`.
-- Portals post automatically on startup to the configured channels (admin portal, coach roster portal).
+- `/roster [tournament]` — Opens the roster creation modal and dashboard (create/add/remove/view/submit). Example: `/roster` or `/roster tournament:"Summer Cup"`.
+- `/unlock_roster <coach> [tournament]` — Staff-only unlock; uses latest roster if tournament is omitted. Example: `/unlock_roster @Coach` or `/unlock_roster @Coach tournament:"Summer Cup"`.
+- `/dev_on` / `/dev_off` — Staff-only test-mode routing toggle (staff submissions + logs to test channel). Examples: `/dev_on`, `/dev_off`.
+- `/ping` — Health check. Example: `/ping`.
+- `/help` — Command list and coach instructions. Example: `/help`.
 
 ## Configuration
 
