@@ -28,6 +28,7 @@ from services.submission_service import (
 from utils.errors import log_interaction_error, send_interaction_error
 from utils.formatting import format_submission_message
 from utils.formatting import format_roster_line
+from utils.channel_routing import resolve_channel_id
 
 
 class SafeView(discord.ui.View):
@@ -228,7 +229,10 @@ class SubmitRosterConfirmView(SafeView):
             )
             return
 
-        staff_channel_id = settings.channel_staff_submissions_id
+        test_mode = bool(getattr(interaction.client, "test_mode", False))
+        staff_channel_id = resolve_channel_id(
+            settings, settings.channel_staff_submissions_id, test_mode=test_mode
+        )
         channel = interaction.client.get_channel(staff_channel_id)
         if channel is None:
             try:
@@ -371,4 +375,12 @@ class StaffReviewView(SafeView):
         )
 
         self.disable_all_items()
-        await interaction.response.edit_message(content=message_content, view=self)
+        await interaction.response.send_message(
+            f"Roster {status_text.lower()}.", ephemeral=True
+        )
+        if interaction.message is None:
+            return
+        try:
+            await interaction.message.edit(content=message_content, view=self)
+        except discord.DiscordException:
+            return

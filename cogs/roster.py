@@ -4,7 +4,8 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-from interactions.dashboard import build_roster_dashboard
+from interactions.modals import CreateRosterModal
+from repositories.tournament_repo import ensure_cycle_by_name
 
 
 class RosterCog(commands.Cog):
@@ -28,9 +29,11 @@ class RosterCog(commands.Cog):
                 "Bot configuration is not loaded.", ephemeral=True
             )
             return
-        cycle_name = tournament.strip() if tournament else None
-        embed, view = build_roster_dashboard(interaction, cycle_name=cycle_name)
-        await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+        cycle_id = None
+        if tournament:
+            cycle = ensure_cycle_by_name(tournament.strip())
+            cycle_id = cycle["_id"]
+        await interaction.response.send_modal(CreateRosterModal(cycle_id=cycle_id))
 
 
 async def setup(bot: commands.Bot) -> None:

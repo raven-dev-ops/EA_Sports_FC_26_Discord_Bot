@@ -14,6 +14,8 @@ class Settings:
     discord_client_id: int | None
     discord_public_key: str | None
     interactions_endpoint_url: str | None
+    discord_test_channel_id: int | None
+    test_mode: bool
     role_broskie_id: int
     role_super_league_coach_id: int
     role_coach_premium_id: int
@@ -59,11 +61,6 @@ def _optional_int(name: str) -> int | None:
         raise RuntimeError(f"{name} must be an integer.") from None
 
 
-def _optional_str(name: str) -> str | None:
-    raw = os.getenv(name, "").strip()
-    return raw or None
-
-
 def _optional_int_set(name: str) -> set[int]:
     raw = os.getenv(name, "").strip()
     if not raw:
@@ -80,7 +77,7 @@ def _optional_int_set(name: str) -> set[int]:
     return set(values)
 
 
-def _optional_int(name: str, default: int) -> int:
+def _optional_int_default(name: str, default: int) -> int:
     raw = os.getenv(name, "").strip()
     if not raw:
         return default
@@ -88,6 +85,22 @@ def _optional_int(name: str, default: int) -> int:
         return int(raw)
     except ValueError:
         raise RuntimeError(f"{name} must be an integer.") from None
+
+
+def _optional_str(name: str) -> str | None:
+    raw = os.getenv(name, "").strip()
+    return raw or None
+
+
+def _optional_bool(name: str, default: bool) -> bool:
+    raw = os.getenv(name, "").strip().lower()
+    if not raw:
+        return default
+    if raw in {"1", "true", "yes", "on"}:
+        return True
+    if raw in {"0", "false", "no", "off"}:
+        return False
+    raise RuntimeError(f"{name} must be a boolean (true/false).")
 
 
 def _format_list(values: Iterable[str]) -> str:
@@ -125,12 +138,22 @@ def load_settings() -> Settings:
             details.append(f"Invalid integer config: {_format_list(invalid)}")
         raise RuntimeError("; ".join(details))
 
+    discord_test_channel_id = _optional_int(constants.DISCORD_TEST_CHANNEL_ENV)
+    test_mode = _optional_bool(constants.TEST_MODE_ENV, default=True)
+
+    if test_mode and discord_test_channel_id is None:
+        raise RuntimeError(
+            "DISCORD_TEST_CHANNEL is required when TEST_MODE is enabled."
+        )
+
     return Settings(
         discord_token=discord_token,
         discord_application_id=discord_application_id,
         discord_client_id=_optional_int(constants.DISCORD_CLIENT_ID_ENV),
         discord_public_key=_optional_str(constants.DISCORD_PUBLIC_KEY_ENV),
         interactions_endpoint_url=_optional_str(constants.DISCORD_INTERACTIONS_ENDPOINT_URL_ENV),
+        discord_test_channel_id=discord_test_channel_id,
+        test_mode=test_mode,
         role_broskie_id=role_broskie_id,
         role_super_league_coach_id=role_super_league_coach_id,
         role_coach_premium_id=role_coach_premium_id,
@@ -143,7 +166,7 @@ def load_settings() -> Settings:
         mongodb_collection=_optional_str(constants.MONGODB_COLLECTION_ENV),
         banlist_sheet_id=_optional_str(constants.BANLIST_SHEET_ID_ENV),
         banlist_range=_optional_str(constants.BANLIST_RANGE_ENV),
-        banlist_cache_ttl_seconds=_optional_int(
+        banlist_cache_ttl_seconds=_optional_int_default(
             constants.BANLIST_CACHE_TTL_SECONDS_ENV, default=300
         ),
         google_sheets_credentials_json=_optional_str(

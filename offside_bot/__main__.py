@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import pkgutil
 
@@ -8,10 +9,69 @@ from config import Settings, load_settings
 from utils.errors import log_interaction_error, send_interaction_error
 
 LOG_FORMAT = "%(asctime)s | %(levelname)s | %(name)s | %(message)s"
+LOG_CHANNEL_FORMAT = "%(levelname)s %(name)s: %(message)s"
+MAX_LOG_MESSAGE_LENGTH = 1800
 
 
 def setup_logging() -> None:
     logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
+
+
+class DiscordLogFilter(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool:
+        return not record.name.startswith(("discord", "asyncio"))
+
+
+class DiscordLogHandler(logging.Handler):
+    def __init__(self, bot: commands.Bot) -> None:
+        super().__init__(level=logging.INFO)
+        self.bot = bot
+        self._channel: discord.abc.Messageable | None = None
+
+    def emit(self, record: logging.LogRecord) -> None:
+        if not getattr(self.bot, "test_mode", False):
+            return
+        channel_id = getattr(self.bot, "test_channel_id", None)
+        if not channel_id:
+            return
+        try:
+            message = self.format(record)
+        except Exception:
+            return
+        if len(message) > MAX_LOG_MESSAGE_LENGTH:
+            message = f"{message[:MAX_LOG_MESSAGE_LENGTH]}..."
+        loop = self.bot.loop
+        if loop.is_closed():
+            return
+        asyncio.run_coroutine_threadsafe(self._send(message), loop)
+
+    async def _send(self, message: str) -> None:
+        if not getattr(self.bot, "test_mode", False):
+            return
+        channel_id = getattr(self.bot, "test_channel_id", None)
+        if not channel_id:
+            return
+        channel = self._channel
+        if channel is None or getattr(channel, "id", None) != channel_id:
+            channel = self.bot.get_channel(channel_id)
+            if channel is None:
+                try:
+                    channel = await self.bot.fetch_channel(channel_id)
+                except discord.DiscordException:
+                    return
+            self._channel = channel
+        await channel.send(f"```{message}```")
+
+
+def attach_discord_log_handler(bot: commands.Bot) -> None:
+    root_logger = logging.getLogger()
+    for handler in root_logger.handlers:
+        if isinstance(handler, DiscordLogHandler):
+            return
+    handler = DiscordLogHandler(bot)
+    handler.setFormatter(logging.Formatter(LOG_CHANNEL_FORMAT))
+    handler.addFilter(DiscordLogFilter())
+    root_logger.addHandler(handler)
 
 
 async def load_cogs(bot: commands.Bot) -> None:
@@ -32,6 +92,7 @@ async def load_cogs(bot: commands.Bot) -> None:
 class OffsideBot(commands.Bot):
     async def setup_hook(self) -> None:
         await load_cogs(self)
+        attach_discord_log_handler(self)
         try:
             await self.tree.sync()
             logging.info("Synced app commands.")
@@ -62,6 +123,8 @@ def build_bot(settings: Settings) -> OffsideBot:
         application_id=settings.discord_application_id,
     )
     bot.settings = settings
+    bot.test_mode = settings.test_mode
+    bot.test_channel_id = settings.discord_test_channel_id
     return bot
 
 
