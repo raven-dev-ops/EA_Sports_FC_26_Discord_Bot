@@ -13,8 +13,9 @@ Roster management and staff review bot for Discord tournaments.
 
 ## Portals (auto-posted on startup)
 
-- **Coach Roster Portal** (channel `CHANNEL_ROSTER_PORTAL_ID`): embed with buttons to open the roster dashboard (create/add/remove/view/submit) and to show the coach help guide. Responses are ephemeral.
+- **Coach Roster Portal** (channel `CHANNEL_COACH_PORTAL_ID`): embed with buttons to open the roster dashboard (create/add/remove/view/submit) and to show the coach help guide. Responses are ephemeral.
 - **Admin/Staff Control Panel** (channel `CHANNEL_STAFF_PORTAL_ID`): embed with buttons for Bot Controls, Tournaments, Coaches, Rosters, Players, DB/Analytics. Each button opens an ephemeral embed and action buttons (e.g., test-mode toggle, health check, roster unlock guidance). The bot deletes the previous portal embed before posting a new one.
+- **Approved Roster Posts** (channel `CHANNEL_ROSTER_PORTAL_ID`): only approved rosters are reposted here after staff approval; submission reviews happen in the staff portal.
 
 ## Commands (still available)
 
@@ -33,9 +34,9 @@ Required (startup):
 - `ROLE_SUPER_LEAGUE_COACH_ID`
 - `ROLE_COACH_PREMIUM_ID`
 - `ROLE_COACH_PREMIUM_PLUS_ID`
-- `CHANNEL_ROSTER_PORTAL_ID`
-- `CHANNEL_COACH_PORTAL_ID`
-- `CHANNEL_STAFF_PORTAL_ID`
+- `CHANNEL_COACH_PORTAL_ID` (coach portal/dashboard)
+- `CHANNEL_STAFF_PORTAL_ID` (admin/staff portal and submission reviews)
+- `CHANNEL_ROSTER_PORTAL_ID` (approved roster posts)
 
 Required when `TEST_MODE=true`:
 - `DISCORD_TEST_CHANNEL`
@@ -61,6 +62,11 @@ Optional:
 When `TEST_MODE=true`, staff portal messages and log messages are routed to
 `DISCORD_TEST_CHANNEL`. Use `/dev_on` and `/dev_off` to toggle routing
 at runtime (session-scoped).
+
+## Roster rules
+
+- Minimum 8 players required to submit a roster.
+- Rosters lock on submit/approve/reject; staff can unlock from the admin portal.
 
 ## Local run
 
