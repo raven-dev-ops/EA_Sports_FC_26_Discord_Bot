@@ -442,21 +442,28 @@ class StaffReviewView(SafeView):
         )
 
         submission = get_submission_by_roster(self.roster_id)
+        staff_channel = None
+        staff_message = None
         if submission:
-            channel = interaction.client.get_channel(submission.get("staff_channel_id"))
-            if channel is None:
+            staff_channel = interaction.client.get_channel(submission.get("staff_channel_id"))
+            if staff_channel is None:
                 try:
-                    channel = await interaction.client.fetch_channel(
+                    staff_channel = await interaction.client.fetch_channel(
                         submission.get("staff_channel_id")
                     )
                 except discord.DiscordException:
-                    channel = None
-            if channel:
+                    staff_channel = None
+            if staff_channel:
                 try:
-                    msg = await channel.fetch_message(submission.get("staff_message_id"))
-                    await msg.edit(content=message_content, view=None)
+                    staff_message = await staff_channel.fetch_message(
+                        submission.get("staff_message_id")
+                    )
+                    await staff_message.edit(content=message_content, view=None)
                 except discord.DiscordException:
-                    pass
+                    staff_message = None
+            update_submission_status(
+                roster_id=self.roster_id, status=status_text.upper()
+            )
 
         if approved:
             settings = getattr(interaction.client, "settings", None)
@@ -486,6 +493,13 @@ class StaffReviewView(SafeView):
                     f"Reason: {reason}"
                 )
             except Exception:
+                pass
+
+        # Clean up the staff portal message after a decision to avoid duplicates.
+        if staff_message:
+            try:
+                await staff_message.delete()
+            except discord.DiscordException:
                 pass
 
 
