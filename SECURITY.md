@@ -15,6 +15,12 @@ Please report security issues using GitHub's private security advisories:
 If private reporting is not available, contact the maintainers directly and
 avoid filing a public issue.
 
+## Secrets and Deployments
+
+- Keep `.env` and Heroku config vars private; rotate Discord tokens and API keys immediately if exposed.
+- Do not post tokens, MongoDB URIs, or Google credentials in issues, logs, or screenshots.
+- If a secret leak is suspected, revoke the credential and open a private advisory with the timestamp and impacted environment.
+
 ## Response Targets
 
 - Acknowledgement: within 3 business days.

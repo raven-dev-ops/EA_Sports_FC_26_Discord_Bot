@@ -9,6 +9,7 @@ Roster management and staff review bot for Discord tournaments.
 - Multi-tournament cycle selection for rosters.
 - Audit trail for staff actions.
 - Optional Google Sheets ban list checks.
+- Approved rosters auto-posted to the roster portal; staff review cards are removed after a decision.
 - Test mode routing with Discord log forwarding.
 
 ## Portals (auto-posted on startup)
@@ -66,7 +67,8 @@ at runtime (session-scoped).
 ## Roster rules
 
 - Minimum 8 players required to submit a roster.
-- Rosters lock on submit/approve/reject; staff can unlock from the admin portal.
+- Rosters lock on submit/approve/reject; staff can unlock from the admin portal. Unlocking clears stale submissions so the coach can resubmit.
+- Staff review occurs in the staff portal; approved rosters are reposted to the roster portal only, and the staff review message is cleaned up after a decision.
 
 ## Local run
 
@@ -75,6 +77,11 @@ at runtime (session-scoped).
    - `python -m pip install -r requirements.txt`
 3. Start the bot:
    - `python -m offside_bot`
+
+## Testing
+
+- Run the full suite: `python -m pytest` (or `py -3.12 -m pytest` on Windows).
+- Tests use `mongomock` and do not hit live services.
 
 ## Heroku deploy
 

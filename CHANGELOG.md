@@ -33,6 +33,15 @@ All notable changes to this project will be documented in this file.
 - Routing uses new channel envs: `CHANNEL_STAFF_PORTAL_ID` (staff portal), `CHANNEL_COACH_PORTAL_ID` (coach portal), `CHANNEL_ROSTER_PORTAL_ID` (approved roster embeds).
 - Reduced Discord rate-limit risk by spacing portal posts on startup.
 
+## [0.2.3] - 2025-12-29
+
+### Fixed
+- Approved rosters now post only to the roster portal; staff review messages are removed after a decision to avoid duplicates in the admin channel.
+- Unlocked rosters clean up stale submission records, allowing resubmission without "already submitted" errors.
+
+### Added
+- Test suite coverage for submission lifecycle and roster status transitions; `python -m pytest` runs the suite.
+
 ## [0.1.0] - 2025-12-28
 
 ### Added
