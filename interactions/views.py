@@ -269,6 +269,12 @@ class SubmitRosterConfirmView(SafeView):
                 return
 
         players = get_roster_players(self.roster_id)
+        if len(players) < 8:
+            await interaction.response.edit_message(
+                content="You need at least 8 players before submitting.",
+                view=None,
+            )
+            return
         roster_lines = [
             format_roster_line(
                 discord_mention=f"<@{player['player_discord_id']}>",
@@ -433,6 +439,25 @@ class StaffReviewView(SafeView):
                 except discord.DiscordException:
                     pass
 
+        if approved:
+            settings = getattr(interaction.client, "settings", None)
+            if settings:
+                test_mode = bool(getattr(interaction.client, "test_mode", False))
+                roster_channel_id = resolve_channel_id(
+                    settings, settings.channel_roster_portal_id, test_mode=test_mode
+                )
+                channel = interaction.client.get_channel(roster_channel_id)
+                if channel is None:
+                    try:
+                        channel = await interaction.client.fetch_channel(roster_channel_id)
+                    except discord.DiscordException:
+                        channel = None
+                if channel:
+                    try:
+                        await channel.send(message_content)
+                    except discord.DiscordException:
+                        pass
+
         if reason:
             try:
                 user = await interaction.client.fetch_user(roster.get("coach_discord_id"))
@@ -457,6 +482,9 @@ class StaffDecisionModal(discord.ui.Modal, title="Decision"):
         super().__init__()
         self.roster_id = roster_id
         self.approved = approved
+        if not approved:
+            self.reason.required = True
+            self.reason.label = "Reason (required for rejection)"
 
     async def on_submit(self, interaction: discord.Interaction) -> None:
         parent = StaffReviewView(roster_id=self.roster_id)

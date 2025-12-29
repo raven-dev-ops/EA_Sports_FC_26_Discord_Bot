@@ -7,7 +7,12 @@ from utils.errors import send_interaction_error
 from interactions.views import SafeView
 from discord.ext import commands
 from services.submission_service import delete_submission_by_roster
-from services.roster_service import delete_roster, get_roster_for_coach
+from services.roster_service import (
+    delete_roster,
+    get_roster_for_coach,
+    set_roster_status,
+    ROSTER_STATUS_UNLOCKED,
+)
 from repositories.tournament_repo import ensure_cycle_by_name
 from services.roster_service import roster_is_locked
 from interactions.modals import RenameRosterModal
