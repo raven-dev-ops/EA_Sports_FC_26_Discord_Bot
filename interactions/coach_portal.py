@@ -130,16 +130,22 @@ async def send_coach_portal_message(
     test_mode = bool(getattr(interaction.client, "test_mode", False))
     target_channel_id = settings.channel_coach_portal_id
 
-    channel = interaction.client.get_channel(target_channel_id)
-    if channel is None:
+    async def _fetch_channel() -> discord.abc.Messageable | None:
+        ch = interaction.client.get_channel(target_channel_id)
+        if ch is not None:
+            return ch
         try:
-            channel = await interaction.client.fetch_channel(target_channel_id)
+            return await interaction.client.fetch_channel(target_channel_id)
         except discord.DiscordException:
-            await interaction.response.send_message(
-                "Coach portal channel not found.",
-                ephemeral=True,
-            )
-            return
+            return None
+
+    channel = await _fetch_channel()
+    if channel is None:
+        await interaction.response.send_message(
+            "Coach portal channel not found.",
+            ephemeral=True,
+        )
+        return
 
     try:
         async for message in channel.history(limit=20):
@@ -182,12 +188,18 @@ async def post_coach_portal(bot: commands.Bot) -> None:
     test_mode = bool(getattr(bot, "test_mode", False))
     target_channel_id = settings.channel_coach_portal_id
 
-    channel = bot.get_channel(target_channel_id)
-    if channel is None:
+    async def _fetch_channel() -> discord.abc.Messageable | None:
+        ch = bot.get_channel(target_channel_id)
+        if ch is not None:
+            return ch
         try:
-            channel = await bot.fetch_channel(target_channel_id)
+            return await bot.fetch_channel(target_channel_id)
         except discord.DiscordException:
-            return
+            return None
+
+    channel = await _fetch_channel()
+    if channel is None:
+        return
 
     try:
         async for message in channel.history(limit=20):

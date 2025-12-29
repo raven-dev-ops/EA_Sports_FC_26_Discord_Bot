@@ -445,14 +445,18 @@ class StaffReviewView(SafeView):
         staff_channel = None
         staff_message = None
         if submission:
-            staff_channel = interaction.client.get_channel(submission.get("staff_channel_id"))
-            if staff_channel is None:
+            async def _fetch_staff_channel() -> discord.abc.Messageable | None:
+                ch = interaction.client.get_channel(submission.get("staff_channel_id"))
+                if ch is not None:
+                    return ch
                 try:
-                    staff_channel = await interaction.client.fetch_channel(
+                    return await interaction.client.fetch_channel(
                         submission.get("staff_channel_id")
                     )
                 except discord.DiscordException:
-                    staff_channel = None
+                    return None
+
+            staff_channel = await _fetch_staff_channel()
             if staff_channel:
                 try:
                     staff_message = await staff_channel.fetch_message(
@@ -496,12 +500,18 @@ class StaffReviewView(SafeView):
         if submission:
             target_staff_channel = staff_channel
             if target_staff_channel is None:
-                try:
-                    target_staff_channel = await interaction.client.fetch_channel(
-                        submission.get("staff_channel_id")
-                    )
-                except discord.DiscordException:
-                    target_staff_channel = None
+                async def _fetch() -> discord.abc.Messageable | None:
+                    ch = interaction.client.get_channel(submission.get("staff_channel_id"))
+                    if ch is not None:
+                        return ch
+                    try:
+                        return await interaction.client.fetch_channel(
+                            submission.get("staff_channel_id")
+                        )
+                    except discord.DiscordException:
+                        return None
+
+                target_staff_channel = await _fetch()
             if target_staff_channel:
                 try:
                     msg = await target_staff_channel.fetch_message(
