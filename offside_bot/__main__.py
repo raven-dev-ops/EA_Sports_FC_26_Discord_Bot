@@ -1,6 +1,5 @@
 import asyncio
 import logging
-import logging.config
 import os
 import pkgutil
 import sys
@@ -9,10 +8,10 @@ import discord
 from discord.ext import commands
 
 from config import Settings, load_settings
+from utils.discord_wrappers import fetch_channel
 from utils.errors import log_interaction_error, send_interaction_error
 from interactions.admin_portal import post_admin_portal
 from interactions.coach_portal import post_coach_portal
-from utils.async_utils import with_backoff
 
 LOG_FORMAT = "%(asctime)s level=%(levelname)s name=%(name)s msg=\"%(message)s\""
 LOG_CHANNEL_FORMAT = "%(levelname)s %(name)s: %(message)s"
@@ -21,27 +20,7 @@ MAX_LOG_MESSAGE_LENGTH = 1800
 
 def setup_logging() -> None:
     level = os.getenv("LOG_LEVEL", "INFO").upper()
-    logging.config.dictConfig(
-        {
-            "version": 1,
-            "formatters": {
-                "structured": {"format": LOG_FORMAT},
-                "discord_channel": {"format": LOG_CHANNEL_FORMAT},
-            },
-            "handlers": {
-                "console": {
-                    "class": "logging.StreamHandler",
-                    "level": level,
-                    "formatter": "structured",
-                }
-            },
-            "root": {"level": level, "handlers": ["console"]},
-            "loggers": {
-                "discord": {"level": "WARNING"},
-                "asyncio": {"level": "WARNING"},
-            },
-        }
-    )
+    logging.basicConfig(level=level, format=LOG_FORMAT)
     logging.captureWarnings(True)
 
 
@@ -90,16 +69,7 @@ class DiscordLogHandler(logging.Handler):
             return
         channel = self._channel
         if channel is None or getattr(channel, "id", None) != channel_id:
-            async def _fetch():
-                ch = self.bot.get_channel(channel_id)
-                if ch is not None:
-                    return ch
-                return await self.bot.fetch_channel(channel_id)
-
-            try:
-                channel = await with_backoff(_fetch)
-            except discord.DiscordException:
-                return
+            channel = await fetch_channel(self.bot, channel_id)
             self._channel = channel
         await channel.send(f"```{message}```")
 

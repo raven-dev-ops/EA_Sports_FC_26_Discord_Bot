@@ -445,18 +445,18 @@ class StaffReviewView(SafeView):
         staff_channel = None
         staff_message = None
         if submission:
-            async def _fetch_staff_channel() -> discord.abc.Messageable | None:
-                ch = interaction.client.get_channel(submission.get("staff_channel_id"))
-                if ch is not None:
-                    return ch
-                try:
-                    return await interaction.client.fetch_channel(
-                        submission.get("staff_channel_id")
-                    )
-                except discord.DiscordException:
-                    return None
+        async def _fetch_staff_channel() -> discord.abc.Messageable | None:
+            ch = interaction.client.get_channel(submission.get("staff_channel_id"))
+            if ch is not None:
+                return ch
+            try:
+                return await interaction.client.fetch_channel(
+                    submission.get("staff_channel_id")
+                )
+            except discord.DiscordException:
+                return None
 
-            staff_channel = await _fetch_staff_channel()
+        staff_channel = await _fetch_staff_channel()
             if staff_channel:
                 try:
                     staff_message = await staff_channel.fetch_message(
