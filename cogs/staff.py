@@ -12,6 +12,7 @@ from services.roster_service import (
     get_roster_for_coach,
     set_roster_status,
 )
+from services.submission_service import delete_submission_by_roster
 
 
 class StaffCog(commands.Cog):
@@ -68,6 +69,21 @@ class StaffCog(commands.Cog):
             return
 
         set_roster_status(roster["_id"], ROSTER_STATUS_UNLOCKED)
+        submission = delete_submission_by_roster(roster["_id"])
+        if submission:
+            channel_id = submission.get("staff_channel_id")
+            channel = self.bot.get_channel(channel_id)
+            if channel is None:
+                try:
+                    channel = await self.bot.fetch_channel(channel_id)
+                except discord.DiscordException:
+                    channel = None
+            if channel:
+                try:
+                    msg = await channel.fetch_message(submission.get("staff_message_id"))
+                    await msg.delete()
+                except discord.DiscordException:
+                    pass
         record_staff_action(
             roster_id=roster["_id"],
             action=AUDIT_ACTION_UNLOCKED,
