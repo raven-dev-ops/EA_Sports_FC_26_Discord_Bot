@@ -245,6 +245,121 @@ class TournamentCog(commands.Cog):
             ephemeral=True,
         )
 
+    @app_commands.command(name="group_create", description="Create a group within a tournament")
+    async def group_create(
+        self,
+        interaction: discord.Interaction,
+        tournament: str,
+        group_name: str,
+    ) -> None:
+        try:
+            gs.ensure_group(tournament_name=tournament.strip(), group_name=group_name.strip())
+        except RuntimeError as exc:
+            await interaction.response.send_message(str(exc), ephemeral=True)
+            return
+        await interaction.response.send_message(
+            f"Group `{group_name}` ensured for tournament `{tournament}`.", ephemeral=True
+        )
+
+    @app_commands.command(name="group_register", description="Add a team to a group")
+    async def group_register(
+        self,
+        interaction: discord.Interaction,
+        tournament: str,
+        group_name: str,
+        team_name: str,
+        coach_id: str,
+    ) -> None:
+        try:
+            coach_int = int(coach_id.replace("<@", "").replace(">", "").replace("!", ""))
+        except ValueError:
+            await interaction.response.send_message("Invalid coach ID.", ephemeral=True)
+            return
+        try:
+            gs.add_group_team(
+                tournament_name=tournament.strip(),
+                group_name=group_name.strip(),
+                team_name=team_name.strip(),
+                coach_id=coach_int,
+            )
+        except RuntimeError as exc:
+            await interaction.response.send_message(str(exc), ephemeral=True)
+            return
+        await interaction.response.send_message(
+            f"Team `{team_name}` registered to group `{group_name}`.", ephemeral=True
+        )
+
+    @app_commands.command(name="group_match_report", description="Report a group stage match score")
+    async def group_match_report(
+        self,
+        interaction: discord.Interaction,
+        tournament: str,
+        group_name: str,
+        team_a: str,
+        team_b: str,
+        score_a: int,
+        score_b: int,
+    ) -> None:
+        try:
+            gs.record_group_match(
+                tournament_name=tournament.strip(),
+                group_name=group_name.strip(),
+                team_a=team_a.strip(),
+                team_b=team_b.strip(),
+                score_a=score_a,
+                score_b=score_b,
+            )
+        except RuntimeError as exc:
+            await interaction.response.send_message(str(exc), ephemeral=True)
+            return
+        await interaction.response.send_message(
+            f"Recorded {team_a} {score_a}-{score_b} {team_b} in group {group_name}.", ephemeral=True
+        )
+
+    @app_commands.command(name="group_standings", description="Show group standings")
+    async def group_standings(
+        self,
+        interaction: discord.Interaction,
+        tournament: str,
+        group_name: str,
+    ) -> None:
+        try:
+            teams = gs.get_standings(
+                tournament_name=tournament.strip(), group_name=group_name.strip()
+            )
+        except RuntimeError as exc:
+            await interaction.response.send_message(str(exc), ephemeral=True)
+            return
+        lines = [
+            f"{idx+1}. {t['team_name']} - {t['points']} pts (GD {t['gf']-t['ga']}, GF {t['gf']})"
+            for idx, t in enumerate(teams)
+        ]
+        await interaction.response.send_message(
+            "Standings:\n" + "\n".join(lines), ephemeral=True
+        )
+
+    @app_commands.command(name="group_advance", description="Advance top N from group into bracket")
+    async def group_advance(
+        self,
+        interaction: discord.Interaction,
+        tournament: str,
+        group_name: str,
+        top_n: int,
+    ) -> None:
+        try:
+            advanced = gs.advance_top(
+                tournament_name=tournament.strip(),
+                group_name=group_name.strip(),
+                top_n=top_n,
+            )
+        except RuntimeError as exc:
+            await interaction.response.send_message(str(exc), ephemeral=True)
+            return
+        names = [p["team_name"] for p in advanced]
+        await interaction.response.send_message(
+            f"Advanced: {', '.join(names)}", ephemeral=True
+        )
+
 
 async def setup(bot: commands.Bot) -> None:
     await bot.add_cog(TournamentCog(bot))
