@@ -26,6 +26,7 @@ import argparse
 import asyncio
 import logging
 import os
+from pathlib import Path
 from datetime import datetime, timezone
 from typing import Any
 
@@ -36,6 +37,7 @@ from pymongo.collection import Collection
 
 DEFAULT_COLLECTION = "FIFADiscordMemberList"
 ALT_COLLECTION_ENV = "MONGODB_COLLECTION2"
+DOTENV_FILE = ".env"
 
 
 def _mongo_collection(collection_name: str) -> Collection:
@@ -101,6 +103,8 @@ class ExportClient(discord.Client):
             count += 1
             if count % 500 == 0:
                 logging.info("Processed %s members (inserted %s, updated %s)", count, self.inserted, self.updated)
+                # Gentle pacing to avoid hitting global REST limits on large guilds.
+                await asyncio.sleep(0.25)
 
         logging.info(
             "Done. Processed %s members (inserted %s, updated %s).",
@@ -112,6 +116,19 @@ class ExportClient(discord.Client):
 
 
 def main() -> None:
+    # Lightweight .env loader (no external dependency)
+    dotenv_path = Path(DOTENV_FILE)
+    if dotenv_path.exists():
+        for line in dotenv_path.read_text().splitlines():
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            value = value.strip()
+            if (value.startswith('"') and value.endswith('"')) or (value.startswith("'") and value.endswith("'")):
+                value = value[1:-1]
+            if key not in os.environ:
+                os.environ[key] = value
+
     parser = argparse.ArgumentParser(description="Export Discord guild members to MongoDB.")
     parser.add_argument(
         "--guild-id",
