@@ -641,6 +641,47 @@ class TournamentCog(commands.Cog):
             "Fixtures:\n" + "\n".join(lines), ephemeral=True
         )
 
+    @app_commands.command(name="tournament_dashboard", description="Show tournament command quick reference.")
+    async def tournament_dashboard(self, interaction: discord.Interaction) -> None:
+        if not self._require_staff(interaction):
+            await interaction.response.send_message("Not authorized.", ephemeral=True)
+            return
+        embed = make_embed(
+            title="Tournament Dashboard",
+            description="Staff-only quick actions and references.",
+            color=DEFAULT_COLOR,
+        )
+        embed.add_field(
+            name="Setup",
+            value="`/tournament_create`, `/tournament_state`, `/tournament_register`",
+            inline=False,
+        )
+        embed.add_field(
+            name="Bracket & Matches",
+            value=(
+                "`/tournament_bracket` (publish), `/tournament_bracket_preview` (dry-run), "
+                "`/advance_round`, `/match_report`, `/match_confirm`, `/match_deadline`, `/match_forfeit`"
+            ),
+            inline=False,
+        )
+        embed.add_field(
+            name="Scheduling",
+            value="`/match_reschedule`, `/dispute_add`, `/dispute_resolve`",
+            inline=False,
+        )
+        embed.add_field(
+            name="Groups",
+            value="`/group_create`, `/group_register`, `/group_generate_fixtures`, `/group_match_report`, `/group_standings`, `/group_advance`",
+            inline=False,
+        )
+        embed.add_field(
+            name="Stats",
+            value="`/tournament_stats` for wins/loss/GD leaderboard.",
+            inline=False,
+        )
+        embed.set_footer(text="Responses are ephemeral to staff.")
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
     @app_commands.command(name="tournament_stats", description="Show wins/losses and GD for a tournament.")
     async def tournament_stats(self, interaction: discord.Interaction, tournament: str) -> None:
         if not self._require_staff(interaction):
