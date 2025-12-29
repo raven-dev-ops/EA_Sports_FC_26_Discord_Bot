@@ -45,6 +45,34 @@ def _coach_help_embed() -> discord.Embed:
     )
     return embed
 
+
+def build_admin_intro_embed() -> discord.Embed:
+    embed = discord.Embed(
+        title="Staff Portal Overview",
+        description=(
+            "Staff, welcome to the Offside Bot Portal\n\n"
+            "This portal allows you to navigate and manage all roster submissions. In this channel, coaches will submit their team rosters. "
+            "Your responsibility is to locate the roster submitted by the coach assigned to you, carefully review it, and either approve or reject it based on league requirements.\n\n"
+            "**Review, Approval & Rejection Process**\n"
+            "When reviewing a roster, ensure all information is accurate and follows the rules. If approving a roster, you must include your name when submitting the approval. "
+            "If rejecting a roster, you must include your name along with a clear and specific reason explaining what needs to be fixed. "
+            "Clear feedback is required so the coach understands exactly what must be corrected.\n\n"
+            "After rejecting a roster, you must run the `/unlock_roster` command on the coach’s roster. This will unlock the roster so the coach can edit it and submit it again. "
+            "Do not unlock rosters unless a rejection has been issued.\n\n"
+            "**Roster Deletion & Final Submissions**\n"
+            "Only Administrator+ staff members have permission to delete rosters, and this should be used as a last resort only. "
+            "If a roster must be deleted (which should be extremely rare), tag one of the higher-ups or primarily the bot developer so they can run the necessary command.\n\n"
+            "Once a roster is approved, it will be automatically sent to the official roster logs channel. "
+            "Rosters posted in that channel are considered final submissions and cannot be edited or revised under any circumstances.\n\n"
+            "**Final Checks**\n"
+            "Before approving any roster, make sure you carefully review it and confirm that all players are properly tagged and that all required sections are completed. "
+            "Accuracy is critical, as approved rosters are final."
+        ),
+        color=discord.Color.orange(),
+    )
+    return embed
+
+
 def build_admin_embed() -> discord.Embed:
     embed = discord.Embed(
         title="Admin Control Panel",
@@ -656,7 +684,10 @@ async def send_admin_portal_message(
     try:
         async for message in channel.history(limit=20):
             if message.author.id == interaction.client.user.id:
-                if message.embeds and message.embeds[0].title == "Admin Control Panel":
+                if message.embeds and message.embeds[0].title in {
+                    "Admin Control Panel",
+                    "Staff Portal Overview",
+                }:
                     try:
                         await message.delete()
                     except discord.DiscordException:
@@ -664,9 +695,11 @@ async def send_admin_portal_message(
     except discord.DiscordException:
         pass
 
+    intro_embed = build_admin_intro_embed()
     embed = build_admin_embed()
     view = AdminPortalView()
     try:
+        await channel.send(embed=intro_embed)
         await channel.send(embed=embed, view=view)
     except discord.DiscordException as exc:
         logging.warning("Failed to post admin portal to channel %s: %s", target_channel_id, exc)
@@ -698,7 +731,10 @@ async def post_admin_portal(bot: commands.Bot) -> None:
     try:
         async for message in channel.history(limit=20):
             if message.author.id == bot.user.id:
-                if message.embeds and message.embeds[0].title == "Admin Control Panel":
+                if message.embeds and message.embeds[0].title in {
+                    "Admin Control Panel",
+                    "Staff Portal Overview",
+                }:
                     try:
                         await message.delete()
                     except discord.DiscordException:
@@ -706,9 +742,11 @@ async def post_admin_portal(bot: commands.Bot) -> None:
     except discord.DiscordException:
         pass
 
+    intro_embed = build_admin_intro_embed()
     embed = build_admin_embed()
     view = AdminPortalView()
     try:
+        await channel.send(embed=intro_embed)
         await channel.send(embed=embed, view=view)
         logging.info("Posted admin/staff portal embed.")
     except discord.DiscordException as exc:
