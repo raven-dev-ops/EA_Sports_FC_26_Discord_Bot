@@ -95,10 +95,12 @@ class OffsideBot(commands.Bot):
     async def post_portals(self) -> None:
         try:
             await post_admin_portal(self)
+            logging.info("Posted admin/staff portal embed.")
         except Exception:
             logging.exception("Failed to post admin portal.")
         try:
             await post_coach_portal(self)
+            logging.info("Posted coach portal embed.")
         except Exception:
             logging.exception("Failed to post coach portal.")
 
