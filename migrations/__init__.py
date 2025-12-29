@@ -4,7 +4,7 @@ import logging
 from datetime import datetime, timezone
 from typing import Callable
 
-from database import get_collection, get_database, ensure_indexes
+from database import ensure_indexes, get_collection, get_database
 
 MigrationFunc = Callable[[dict], None]
 

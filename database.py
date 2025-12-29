@@ -1,15 +1,14 @@
 from __future__ import annotations
 
-from typing import Iterable
 import logging
 import re
+from typing import Iterable
 
 from pymongo import MongoClient
 from pymongo.collection import Collection
 from pymongo.database import Database
 
 from config import Settings, load_settings
-
 
 INVALID_DB_NAME_PATTERN = re.compile(r'[\\/\.\s"$\x00]')
 

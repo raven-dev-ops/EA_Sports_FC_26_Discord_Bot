@@ -6,7 +6,6 @@ from discord.ext import commands
 
 from utils.permissions import is_staff_user
 
-
 SAFE_CONFIG_FIELDS = {
     "discord_application_id",
     "discord_client_id",

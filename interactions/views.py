@@ -4,26 +4,27 @@ from typing import Any
 
 import discord
 
-from utils.discord_wrappers import delete_message, fetch_channel, send_message
-
-from interactions.modals import AddPlayerModal, CreateRosterModal, RemovePlayerModal
+from interactions.modals import (
+    AddPlayerModal,
+    CreateRosterModal,
+    RemovePlayerModal,
+    RenameRosterModal,
+)
 from services.audit_service import (
     AUDIT_ACTION_APPROVED,
     AUDIT_ACTION_REJECTED,
     record_staff_action,
 )
 from services.roster_service import (
-    ROSTER_STATUS_UNLOCKED,
-    ROSTER_STATUS_SUBMITTED,
     ROSTER_STATUS_APPROVED,
     ROSTER_STATUS_REJECTED,
+    ROSTER_STATUS_SUBMITTED,
+    ROSTER_STATUS_UNLOCKED,
     count_roster_players,
     get_roster_by_id,
     get_roster_players,
     roster_is_locked,
     set_roster_status,
-    delete_roster,
-    update_roster_name,
     validate_roster_identity,
 )
 from services.submission_service import (
@@ -32,11 +33,10 @@ from services.submission_service import (
     get_submission_by_roster,
     update_submission_status,
 )
-from utils.errors import log_interaction_error, send_interaction_error
-from utils.formatting import format_submission_message
-from utils.formatting import format_roster_line
-from utils.validation import validate_team_name
 from utils.channel_routing import resolve_channel_id
+from utils.discord_wrappers import delete_message, fetch_channel, send_message
+from utils.errors import log_interaction_error, send_interaction_error
+from utils.formatting import format_roster_line, format_submission_message
 
 
 class SafeView(discord.ui.View):

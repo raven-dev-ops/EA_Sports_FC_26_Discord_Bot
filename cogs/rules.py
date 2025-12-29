@@ -6,7 +6,6 @@ from discord.ext import commands
 
 from utils.embeds import DEFAULT_COLOR, make_embed
 
-
 RULES_TEMPLATE = """\
 **Competition Name**: <Enter tournament name>
 **Game/Platform**: EA Sports FC 26, platform(s) allowed

@@ -3,20 +3,19 @@ from __future__ import annotations
 import logging
 
 import discord
-from utils.errors import send_interaction_error
-from interactions.views import SafeView
 from discord.ext import commands
-from utils.discord_wrappers import send_message
-from services.submission_service import delete_submission_by_roster
+
+from interactions.views import SafeView
+from repositories.tournament_repo import ensure_cycle_by_name
 from services.roster_service import (
+    ROSTER_STATUS_UNLOCKED,
     delete_roster,
     get_roster_for_coach,
     set_roster_status,
-    ROSTER_STATUS_UNLOCKED,
 )
-from repositories.tournament_repo import ensure_cycle_by_name
-from services.roster_service import roster_is_locked
-from interactions.modals import RenameRosterModal
+from services.submission_service import delete_submission_by_roster
+from utils.discord_wrappers import send_message
+from utils.errors import send_interaction_error
 
 
 def _coach_help_embed() -> discord.Embed:

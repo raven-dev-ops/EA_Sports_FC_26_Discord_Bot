@@ -8,7 +8,6 @@ from pymongo.collection import Collection
 from database import get_collection
 from repositories.tournament_repo import ensure_active_cycle
 
-
 ROSTER_STATUS_DRAFT = "DRAFT"
 ROSTER_STATUS_SUBMITTED = "SUBMITTED"
 ROSTER_STATUS_APPROVED = "APPROVED"

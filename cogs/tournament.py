@@ -4,13 +4,13 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-from services import tournament_service as ts
 from services import group_service as gs
-from utils.discord_wrappers import fetch_channel, send_message, edit_message
-from utils.embeds import DEFAULT_COLOR, SUCCESS_COLOR, WARNING_COLOR, make_embed
-from utils.validation import sanitize_text
-from utils.permissions import is_staff_user
 from services import stats_service
+from services import tournament_service as ts
+from utils.discord_wrappers import edit_message, fetch_channel, send_message
+from utils.embeds import DEFAULT_COLOR, SUCCESS_COLOR, WARNING_COLOR, make_embed
+from utils.permissions import is_staff_user
+from utils.validation import sanitize_text
 
 
 class TournamentCog(commands.Cog):

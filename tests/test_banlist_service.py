@@ -1,5 +1,5 @@
-from services import banlist_service
 from config.settings import Settings
+from services import banlist_service
 
 
 def _settings() -> Settings:

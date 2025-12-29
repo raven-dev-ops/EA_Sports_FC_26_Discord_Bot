@@ -8,12 +8,12 @@ import discord
 from discord.ext import commands
 
 from config import Settings, load_settings
-from utils.discord_wrappers import fetch_channel, send_message
-from utils.errors import log_interaction_error, send_interaction_error
 from interactions.admin_portal import post_admin_portal
 from interactions.coach_portal import post_coach_portal
 from migrations import apply_migrations
 from services.recovery_service import run_startup_recovery
+from utils.discord_wrappers import fetch_channel, send_message
+from utils.errors import log_interaction_error, send_interaction_error
 
 LOG_FORMAT = "%(asctime)s level=%(levelname)s name=%(name)s msg=\"%(message)s\""
 LOG_CHANNEL_FORMAT = "%(levelname)s %(name)s: %(message)s"

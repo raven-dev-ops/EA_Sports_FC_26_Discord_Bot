@@ -6,9 +6,9 @@ from pymongo.collection import Collection
 
 from database import get_collection
 from services.tournament_service import (
+    MATCH_STATUS_COMPLETED,
     list_matches,
     list_participants,
-    MATCH_STATUS_COMPLETED,
 )
 
 

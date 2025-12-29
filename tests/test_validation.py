@@ -1,4 +1,4 @@
-from utils.validation import normalize_console, validate_team_name, sanitize_text
+from utils.validation import normalize_console, sanitize_text, validate_team_name
 
 
 def test_validate_team_name_accepts_valid_values() -> None:

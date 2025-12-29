@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-import discord
-
 import logging
+
+import discord
+from discord.ext import commands
 
 from interactions.dashboard import build_roster_dashboard
 from interactions.views import SafeView
-from discord.ext import commands
+from utils.discord_wrappers import send_message
 
 
 def build_coach_help_embed() -> discord.Embed:
@@ -127,7 +128,6 @@ async def send_coach_portal_message(
         )
         return
 
-    test_mode = bool(getattr(interaction.client, "test_mode", False))
     target_channel_id = settings.channel_coach_portal_id
 
     async def _fetch_channel() -> discord.abc.Messageable | None:
@@ -185,7 +185,6 @@ async def post_coach_portal(bot: commands.Bot) -> None:
     if settings is None:
         return
 
-    test_mode = bool(getattr(bot, "test_mode", False))
     target_channel_id = settings.channel_coach_portal_id
 
     async def _fetch_channel() -> discord.abc.Messageable | None:

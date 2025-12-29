@@ -7,7 +7,6 @@ from pymongo.collection import Collection
 
 from database import get_collection
 
-
 AUDIT_ACTION_APPROVED = "APPROVED"
 AUDIT_ACTION_REJECTED = "REJECTED"
 AUDIT_ACTION_UNLOCKED = "UNLOCKED"

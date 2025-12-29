@@ -5,6 +5,7 @@ from typing import Any
 import discord
 
 from repositories.tournament_repo import ensure_cycle_by_name
+from services.banlist_service import get_ban_reason
 from services.permission_service import resolve_roster_cap_from_settings
 from services.roster_service import (
     add_player,
@@ -16,9 +17,8 @@ from services.roster_service import (
     roster_is_locked,
     update_roster_name,
 )
-from services.banlist_service import get_ban_reason
-from utils.validation import normalize_console, parse_discord_id, validate_team_name
 from utils.errors import log_interaction_error, send_interaction_error
+from utils.validation import normalize_console, parse_discord_id, validate_team_name
 
 
 class SafeModal(discord.ui.Modal):

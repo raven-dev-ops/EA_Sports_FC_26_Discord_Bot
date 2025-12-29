@@ -5,6 +5,7 @@ exclude = ["scripts/export_members.py"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I"]
+extend-ignore = ["E501"]
 
 [tool.mypy]
 python_version = "3.12"

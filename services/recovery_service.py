@@ -5,14 +5,14 @@ from datetime import datetime, timezone
 
 from pymongo.collection import Collection
 
-from database import get_collection, ensure_indexes
+from database import ensure_indexes, get_collection
 from services.roster_service import (
     ROSTER_STATUS_SUBMITTED,
     ROSTER_STATUS_UNLOCKED,
 )
 from services.submission_service import (
-    get_submission_by_roster,
     delete_submission_by_roster,
+    get_submission_by_roster,
 )
 
 

@@ -4,8 +4,8 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-from services.audit_service import AUDIT_ACTION_UNLOCKED, record_staff_action
 from repositories.tournament_repo import ensure_cycle_by_name, get_cycle_by_id
+from services.audit_service import AUDIT_ACTION_UNLOCKED, record_staff_action
 from services.roster_service import (
     ROSTER_STATUS_UNLOCKED,
     get_latest_roster_for_coach,

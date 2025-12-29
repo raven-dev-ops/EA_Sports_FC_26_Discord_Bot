@@ -1,6 +1,5 @@
 import re
 
-
 TEAM_NAME_PATTERN = re.compile(r"^[A-Za-z0-9 _-]{2,32}$")
 DISCORD_ID_PATTERN = re.compile(r"\d+")
 

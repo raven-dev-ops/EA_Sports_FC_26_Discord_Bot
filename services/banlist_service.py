@@ -10,7 +10,6 @@ from google.oauth2.service_account import Credentials
 from config import Settings
 from utils.validation import parse_discord_id
 
-
 _BANLIST_CACHE: dict[str, Any] = {
     "fetched_at": None,
     "entries": {},
