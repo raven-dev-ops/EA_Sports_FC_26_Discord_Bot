@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.11] - 2025-12-29
+
+### Added
+- Staff-only guard for all tournament/config commands using a shared permissions helper.
+- Roster submission identity checks (min 8, no duplicate players, required gamertag/EA ID) before locking.
+- `/tournament_stats` leaderboard (wins/loss/GD) and `/tournament_dashboard` quick-reference embed for staff.
+- Timezone formatter helper and guidance for rendering timestamps.
+- Integration test for tournament dashboard and an E2E validation guide.
+
+### Changed
+- Tournament flows consistently sanitize input and reuse idempotent bracket generation.
+
 ## [0.2.10] - 2025-12-29
 
 ### Added

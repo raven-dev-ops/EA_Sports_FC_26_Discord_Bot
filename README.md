@@ -17,10 +17,11 @@ Roster management and staff review bot for Discord tournaments.
 
 ## Features (current)
 
-- Ephemeral roster workflow with role-based caps and min-8 submission rule.
+- Ephemeral roster workflow with role-based caps and min-8 submission rule; identity checks enforce no duplicates and required player fields.
 - Staff review with approve/reject/unlock; decisions DM coaches with reasons; staff cards cleaned after action.
 - Portals auto-post on startup: coach portal (dashboard/help), staff portal (controls/review), roster portal (approved only).
 - Audit trail for staff actions; unlock clears stale submissions for resubmission.
+- Tournament scaffold with staff-only commands, bracket preview/publish, match/dispute flows, and leaderboard stats.
 - Optional Google Sheets ban list checks.
 - Test mode routing with Discord log forwarding.
 
@@ -39,13 +40,15 @@ Roster & Staff
 - `/help` command catalog + coach/staff steps.
 - `/ping` health check.
 
-Tournament
+Tournament (staff-only)
+- `/tournament_dashboard` staff quick-reference embed for tournament ops.
 - `/tournament_create <name> [format] [rules]`
 - `/tournament_state <name> <DRAFT|REG_OPEN|IN_PROGRESS|COMPLETED>`
 - `/tournament_register <tournament> <team_name> <coach_id> [seed]`
 - `/tournament_bracket <tournament>` publish round-1 bracket and advance state.
 - `/tournament_bracket_preview <tournament>` dry-run preview of round-1 pairings (no DB writes).
 - `/advance_round <tournament>` create next round from winners.
+- `/tournament_stats <tournament>` leaderboard (wins/loss/GD) from completed matches.
 - `/match_report <tournament> <match_id> <reporter_team_id> <score_for> <score_against>`
 - `/match_confirm <tournament> <match_id> <confirming_team_id>`
 - `/match_deadline <tournament> <match_id> <deadline note>`
@@ -55,10 +58,10 @@ Tournament
 - `/dispute_resolve <tournament> <match_id> <resolution>`
 - Groups: `/group_create`, `/group_register`, `/group_generate_fixtures [double_round]`, `/group_match_report`, `/group_standings`, `/group_advance <top_n>`
 
-Operations
-- `/config_view` staff-only snapshot of non-secret runtime settings.
-- `/config_set <field> <value>` staff-only runtime override (no persistence; restart to reset).
-- `/rules_template` returns a starter rules template to copy/paste.
+Operations (staff-only)
+- `/config_view` snapshot of non-secret runtime settings.
+- `/config_set <field> <value>` runtime override (no persistence; restart to reset).
+- `/rules_template` starter rules template to copy/paste.
 
 ## Configuration
 
@@ -102,7 +105,8 @@ at runtime (session-scoped).
 
 ## Roster rules
 
-- Minimum 8 players required to submit a roster.
+- Minimum 8 players required to submit a roster; no duplicate players.
+- Each player must include a gamertag and EA ID; entries are validated before submission.
 - Rosters lock on submit/approve/reject; staff can unlock from the admin portal. Unlocking clears stale submissions so the coach can resubmit.
 - Staff review occurs in the staff portal; approved rosters are reposted to the roster portal only, and the staff review message is cleaned up after a decision.
 
