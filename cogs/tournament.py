@@ -6,7 +6,7 @@ from discord.ext import commands
 
 from services import tournament_service as ts
 from services import group_service as gs
-from utils.discord_wrappers import fetch_channel, send_message
+from utils.discord_wrappers import fetch_channel, send_message, edit_message
 
 
 class TournamentCog(commands.Cog):
@@ -147,11 +147,13 @@ class TournamentCog(commands.Cog):
             return
         matches_ch, _ = await self._get_channels(interaction, tour)
         if matches_ch:
-            await send_message(
+            msg = await send_message(
                 matches_ch,
                 f"[{tournament}] Match {match_id} reported: {reporter_team_id} "
                 f"{score_for}-{score_against} (status: {reported.get('status')})",
             )
+            if msg:
+                ts.set_match_message_id(match_id=match_id, field="match_message_id", message_id=msg.id)
         await interaction.response.send_message(
             f"Score recorded for match {match_id}: {score_for}-{score_against}.", ephemeral=True
         )
@@ -179,10 +181,27 @@ class TournamentCog(commands.Cog):
             return
         matches_ch, _ = await self._get_channels(interaction, tour)
         if matches_ch:
-            await send_message(
-                matches_ch,
-                f"[{tournament}] Match {match_id} confirmed. Winner: {match.get('winner')}",
-            )
+            # Edit prior match message if recorded; otherwise post a new one.
+            existing_msg_id = match.get("match_message_id")
+            if existing_msg_id:
+                try:
+                    msg = await matches_ch.fetch_message(existing_msg_id)
+                    await edit_message(
+                        msg,
+                        content=f"[{tournament}] Match {match_id} confirmed. Winner: {match.get('winner')}",
+                    )
+                except discord.DiscordException:
+                    await send_message(
+                        matches_ch,
+                        f"[{tournament}] Match {match_id} confirmed. Winner: {match.get('winner')}",
+                    )
+            else:
+                msg = await send_message(
+                    matches_ch,
+                    f"[{tournament}] Match {match_id} confirmed. Winner: {match.get('winner')}",
+                )
+                if msg:
+                    ts.set_match_message_id(match_id=match_id, field="match_message_id", message_id=msg.id)
         await interaction.response.send_message(
             f"Match {match_id} confirmed. Winner: {match.get('winner')}", ephemeral=True
         )
@@ -247,10 +266,12 @@ class TournamentCog(commands.Cog):
         matches_ch, disputes_ch = await self._get_channels(interaction, tour)
         target = disputes_ch or matches_ch
         if target:
-            await send_message(
+            msg = await send_message(
                 target,
                 f"[{tournament}] Reschedule requested for match {match_id} by <@{interaction.user.id}>: {reason}",
             )
+            if msg:
+                ts.set_match_message_id(match_id=match_id, field="dispute_message_id", message_id=msg.id)
         await interaction.response.send_message(
             f"Reschedule request noted for match {match_id}. ({len(req.get('reschedule_requests', []))} requests total)",
             ephemeral=True,
@@ -280,10 +301,12 @@ class TournamentCog(commands.Cog):
             return
         _, disputes_ch = await self._get_channels(interaction, tour)
         if disputes_ch:
-            await send_message(
+            msg = await send_message(
                 disputes_ch,
                 f"[{tournament}] Dispute filed on match {match_id} by <@{interaction.user.id}>: {reason}",
             )
+            if msg:
+                ts.set_match_message_id(match_id=match_id, field="dispute_message_id", message_id=msg.id)
         await interaction.response.send_message("Dispute recorded.", ephemeral=True)
 
     @app_commands.command(name="dispute_resolve", description="Resolve the latest dispute on a match")
@@ -309,10 +332,24 @@ class TournamentCog(commands.Cog):
             return
         _, disputes_ch = await self._get_channels(interaction, tour)
         if disputes_ch:
-            await send_message(
-                disputes_ch,
-                f"[{tournament}] Dispute resolved for match {match_id}: {resolution}",
-            )
+            existing_msg_id = ts.get_tournament(tournament.strip()).get("dispute_message_id")
+            if existing_msg_id:
+                try:
+                    msg = await disputes_ch.fetch_message(existing_msg_id)
+                    await edit_message(
+                        msg,
+                        content=f"[{tournament}] Dispute resolved for match {match_id}: {resolution}",
+                    )
+                except discord.DiscordException:
+                    await send_message(
+                        disputes_ch,
+                        f"[{tournament}] Dispute resolved for match {match_id}: {resolution}",
+                    )
+            else:
+                await send_message(
+                    disputes_ch,
+                    f"[{tournament}] Dispute resolved for match {match_id}: {resolution}",
+                )
         await interaction.response.send_message("Dispute resolved.", ephemeral=True)
 
     @app_commands.command(name="advance_round", description="Advance winners to the next round")

@@ -100,6 +100,21 @@ def update_tournament_channels(
     return result.matched_count > 0
 
 
+def set_match_message_id(
+    *,
+    match_id: Any,
+    field: str,
+    message_id: int | None,
+    collection: Collection | None = None,
+) -> None:
+    if collection is None:
+        collection = get_collection()
+    collection.update_one(
+        {"record_type": "tournament_match", "_id": ObjectId(match_id)},
+        {"$set": {field: message_id, "updated_at": _now()}},
+    )
+
+
 def add_participant(
     *,
     tournament_name: str,
