@@ -2,14 +2,13 @@
 
 Roster management and staff review bot for Discord tournaments.
 
-## Features
+## Features (current)
 
-- Ephemeral roster workflow with role-based caps.
-- Staff review with approve/reject and unlock flows.
-- Multi-tournament cycle selection for rosters.
-- Audit trail for staff actions.
+- Ephemeral roster workflow with role-based caps and min-8 submission rule.
+- Staff review with approve/reject/unlock; decisions DM coaches with reasons; staff cards cleaned after action.
+- Portals auto-post on startup: coach portal (dashboard/help), staff portal (controls/review), roster portal (approved only).
+- Audit trail for staff actions; unlock clears stale submissions for resubmission.
 - Optional Google Sheets ban list checks.
-- Approved rosters auto-posted to the roster portal; staff review cards are removed after a decision.
 - Test mode routing with Discord log forwarding.
 
 ## Portals (auto-posted on startup)
@@ -82,6 +81,10 @@ at runtime (session-scoped).
 
 - Run the full suite: `python -m pytest` (or `py -3.12 -m pytest` on Windows).
 - Tests use `mongomock` and do not hit live services.
+
+## Notes
+
+- The one-time member export helper was removed after use; current repo contains only bot/runtime code.
 
 ## Heroku deploy
 
