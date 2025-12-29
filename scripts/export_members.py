@@ -16,6 +16,7 @@ Env vars required:
     MONGODB_DB_NAME
 Optional:
     MONGODB_COLLECTION (default: from code arg/collection name)
+    MONGODB_COLLECTION2 (alt collection override)
     DISCORD_GUILD_ID (fallback if --guild-id not provided)
 """
 
@@ -34,6 +35,7 @@ from pymongo.collection import Collection
 
 
 DEFAULT_COLLECTION = "FIFADiscordMemberList"
+ALT_COLLECTION_ENV = "MONGODB_COLLECTION2"
 
 
 def _mongo_collection(collection_name: str) -> Collection:
@@ -121,7 +123,7 @@ def main() -> None:
         "--collection",
         type=str,
         default=DEFAULT_COLLECTION,
-        help=f"MongoDB collection name (default: {DEFAULT_COLLECTION}).",
+        help=f"MongoDB collection name (default: {DEFAULT_COLLECTION}; can also use env {ALT_COLLECTION_ENV}).",
     )
     args = parser.parse_args()
 
@@ -134,7 +136,8 @@ def main() -> None:
     if not token:
         raise SystemExit("DISCORD_TOKEN is required.")
 
-    collection = _mongo_collection(args.collection)
+    collection_name = os.getenv(ALT_COLLECTION_ENV, args.collection)
+    collection = _mongo_collection(collection_name)
 
     intents = discord.Intents.none()
     intents.guilds = True
