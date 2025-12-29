@@ -255,6 +255,10 @@ class AdminPortalView(SafeView):
             return False
         return True
 
+    def _is_admin(self, interaction: discord.Interaction) -> bool:
+        perms = getattr(interaction.user, "guild_permissions", None)
+        return bool(perms and perms.administrator)
+
     async def on_bot_controls(self, interaction: discord.Interaction) -> None:
         if not await self._ensure_staff(interaction):
             return
@@ -310,7 +314,11 @@ class AdminPortalView(SafeView):
         )
 
     async def on_delete_roster(self, interaction: discord.Interaction) -> None:
-        if not await self._ensure_staff(interaction):
+        if not self._is_admin(interaction):
+            await interaction.response.send_message(
+                "Only server administrators can delete rosters.",
+                ephemeral=True,
+            )
             return
         await interaction.response.send_modal(DeleteRosterModal())
 
