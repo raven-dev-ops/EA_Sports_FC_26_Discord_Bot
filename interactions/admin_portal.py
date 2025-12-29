@@ -647,12 +647,16 @@ class UnlockRosterModal(discord.ui.Modal, title="Unlock Roster"):
         submission = delete_submission_by_roster(roster["_id"])
         if submission:
             channel_id = submission.get("staff_channel_id")
-            channel = interaction.client.get_channel(channel_id)
-            if channel is None:
+            async def _fetch() -> discord.abc.Messageable | None:
+                ch = interaction.client.get_channel(channel_id)
+                if ch is not None:
+                    return ch
                 try:
-                    channel = await interaction.client.fetch_channel(channel_id)
+                    return await interaction.client.fetch_channel(channel_id)
                 except discord.DiscordException:
-                    channel = None
+                    return None
+
+            channel = await _fetch()
             if channel:
                 try:
                     msg = await channel.fetch_message(submission.get("staff_message_id"))
@@ -674,16 +678,22 @@ async def send_admin_portal_message(
 
     target_channel_id = settings.channel_staff_portal_id
 
-    channel = interaction.client.get_channel(target_channel_id)
-    if channel is None:
+    async def _fetch_channel() -> discord.abc.Messageable | None:
+        ch = interaction.client.get_channel(target_channel_id)
+        if ch is not None:
+            return ch
         try:
-            channel = await interaction.client.fetch_channel(target_channel_id)
+            return await interaction.client.fetch_channel(target_channel_id)
         except discord.DiscordException:
-            await interaction.response.send_message(
-                "Admin portal channel not found.",
-                ephemeral=True,
-            )
-            return
+            return None
+
+    channel = await _fetch_channel()
+    if channel is None:
+        await interaction.response.send_message(
+            "Admin portal channel not found.",
+            ephemeral=True,
+        )
+        return
 
     # Delete prior portal embeds posted by the bot to keep the channel tidy.
     try:
@@ -726,12 +736,18 @@ async def post_admin_portal(bot: commands.Bot) -> None:
 
     target_channel_id = settings.channel_staff_portal_id
 
-    channel = bot.get_channel(target_channel_id)
-    if channel is None:
+    async def _fetch_channel() -> discord.abc.Messageable | None:
+        ch = bot.get_channel(target_channel_id)
+        if ch is not None:
+            return ch
         try:
-            channel = await bot.fetch_channel(target_channel_id)
+            return await bot.fetch_channel(target_channel_id)
         except discord.DiscordException:
-            return
+            return None
+
+    channel = await _fetch_channel()
+    if channel is None:
+        return
 
     try:
         async for message in channel.history(limit=20):

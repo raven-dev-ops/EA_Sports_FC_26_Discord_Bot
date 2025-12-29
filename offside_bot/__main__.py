@@ -12,6 +12,7 @@ from config import Settings, load_settings
 from utils.errors import log_interaction_error, send_interaction_error
 from interactions.admin_portal import post_admin_portal
 from interactions.coach_portal import post_coach_portal
+from utils.async_utils import with_backoff
 
 LOG_FORMAT = "%(asctime)s level=%(levelname)s name=%(name)s msg=\"%(message)s\""
 LOG_CHANNEL_FORMAT = "%(levelname)s %(name)s: %(message)s"
@@ -89,12 +90,16 @@ class DiscordLogHandler(logging.Handler):
             return
         channel = self._channel
         if channel is None or getattr(channel, "id", None) != channel_id:
-            channel = self.bot.get_channel(channel_id)
-            if channel is None:
-                try:
-                    channel = await self.bot.fetch_channel(channel_id)
-                except discord.DiscordException:
-                    return
+            async def _fetch():
+                ch = self.bot.get_channel(channel_id)
+                if ch is not None:
+                    return ch
+                return await self.bot.fetch_channel(channel_id)
+
+            try:
+                channel = await with_backoff(_fetch)
+            except discord.DiscordException:
+                return
             self._channel = channel
         await channel.send(f"```{message}```")
 
