@@ -1,0 +1,25 @@
+name: Feature Request
+description: Suggest an idea or improvement
+labels: ["type:enhancement"]
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What do you want to add or change?
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: Bullet list of done conditions.
+    validations:
+      required: false
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: Links to related issues, commands, or channels.
+    validations:
+      required: false

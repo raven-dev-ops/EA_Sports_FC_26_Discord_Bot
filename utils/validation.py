@@ -2,6 +2,7 @@ import re
 
 TEAM_NAME_PATTERN = re.compile(r"^[A-Za-z0-9 _-]{2,32}$")
 DISCORD_ID_PATTERN = re.compile(r"\d+")
+MASS_MENTION_PATTERN = re.compile(r"@everyone|@here", re.IGNORECASE)
 
 CONSOLE_ALIASES = {
     "PS5": "PS",
@@ -46,4 +47,14 @@ def sanitize_text(value: str, *, max_length: int = 300, allow_newlines: bool = F
     cleaned = re.sub(r"\s+", " ", cleaned)
     if len(cleaned) > max_length:
         cleaned = cleaned[:max_length]
+    return cleaned
+
+
+def ensure_safe_text(value: str, *, max_length: int = 300) -> str:
+    """
+    Sanitize text and block mass mentions.
+    """
+    cleaned = sanitize_text(value, max_length=max_length, allow_newlines=False)
+    if MASS_MENTION_PATTERN.search(cleaned):
+        raise ValueError("Mass mentions are not allowed.")
     return cleaned

@@ -5,7 +5,11 @@ from typing import Any, Awaitable, Callable, TypeVar
 
 import discord
 
+from utils.cache import TTLCache
+
 T = TypeVar("T")
+
+_CHANNEL_CACHE = TTLCache[discord.abc.Messageable](ttl_seconds=60.0)
 
 
 async def with_backoff(
@@ -13,16 +17,18 @@ async def with_backoff(
     *,
     retries: int = 3,
     base_delay: float = 0.5,
+    timeout: float = 10.0,
 ) -> T:
     last_exc: Exception | None = None
     for attempt in range(retries):
         try:
-            return await coro_func()
+            return await asyncio.wait_for(coro_func(), timeout=timeout)
         except discord.HTTPException as exc:
             last_exc = exc
+            delay = getattr(exc, "retry_after", None) or base_delay * (2**attempt)
             if attempt == retries - 1:
                 break
-            await asyncio.sleep(base_delay * (2**attempt))
+            await asyncio.sleep(float(delay))
         except Exception as exc:
             last_exc = exc
             if attempt == retries - 1:
@@ -37,6 +43,11 @@ async def fetch_channel(
     client: discord.Client,
     channel_id: int,
 ) -> discord.abc.Messageable | None:
+    cache_key = f"channel:{channel_id}"
+    cached = _CHANNEL_CACHE.get(cache_key)
+    if cached is not None:
+        return cached
+
     async def _do() -> discord.abc.Messageable | None:
         ch = client.get_channel(channel_id)
         if ch is not None:
@@ -44,7 +55,10 @@ async def fetch_channel(
         return await client.fetch_channel(channel_id)
 
     try:
-        return await with_backoff(_do)
+        ch = await with_backoff(_do)
+        if ch:
+            _CHANNEL_CACHE.set(cache_key, ch)
+        return ch
     except discord.DiscordException:
         return None
 
@@ -54,6 +68,10 @@ async def send_message(
     content: str | None = None,
     **kwargs: Any,
 ) -> discord.Message | None:
+    if "allowed_mentions" not in kwargs:
+        kwargs["allowed_mentions"] = discord.AllowedMentions(
+            everyone=False, users=True, roles=False, replied_user=False
+        )
     async def _do() -> discord.Message:
         return await channel.send(content, **kwargs)
 

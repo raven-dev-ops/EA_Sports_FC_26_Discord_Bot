@@ -23,7 +23,14 @@ Roster management and staff review bot for Discord tournaments.
 - Audit trail for staff actions; unlock clears stale submissions for resubmission.
 - Tournament scaffold with staff-only commands, bracket preview/publish, match/dispute flows, and leaderboard stats.
 - Optional Google Sheets ban list checks.
-- Test mode routing with Discord log forwarding.
+- Test mode routing with Discord log forwarding and structured command logging (guild/channel/user/command).
+- Startup migrations + recovery run automatically; Mongo client closes cleanly on shutdown.
+- Backoff + timeouts on Discord HTTP calls to reduce rate-limit impact; retries respect `retry_after`.
+- Command registry validation prevents duplicate slash names or missing descriptions at startup.
+- Command docs are generated from shared metadata (`docs/commands.md`); CI checks they stay in sync.
+- Per-guild config overrides (staff-only) and mass-mention guard on inputs; allowed mentions restrict @everyone/@here/roles by default.
+- Optional sharding (`USE_SHARDING`, `SHARD_COUNT`) for scale-out; channel lookups cached to reduce Discord API pressure.
+- Dependabot + `pip-audit` keep dependencies healthy; release workflow builds artifacts on tags.
 
 ## Portals (auto-posted on startup)
 
@@ -67,8 +74,12 @@ Tournament (staff-only)
 Operations (staff-only)
 - `/config_view` snapshot of non-secret runtime settings.
 - `/config_set <field> <value>` runtime override (no persistence; restart to reset).
+- `/config_guild_view` / `/config_guild_set <field> <value>` per-guild overrides (staff).
 - `/rules_template` starter rules template to copy/paste.
 - `/help` command catalog (coach/staff/tournament/ops) and step-by-step submission guidance; all responses are ephemeral.
+- Command registration:
+  - `python -m scripts.register_commands --guild <id>` to sync to a dev guild.
+  - `python -m scripts.register_commands --global` to sync globally after validation.
 
 ## Configuration
 
@@ -103,6 +114,15 @@ Optional:
 - `BANLIST_RANGE`
 - `BANLIST_CACHE_TTL_SECONDS` (default 300)
 - `GOOGLE_SHEETS_CREDENTIALS_JSON`
+- `LOG_LEVEL` (default INFO)
+- `USE_SHARDING` (default false) and optional `SHARD_COUNT` for scale-out.
+- `FEATURE_FLAGS` (comma-separated; e.g., `metrics_log` for scheduler demo).
+
+## Migrations
+
+- Run automatically at startup and can be run manually: `python -m scripts.migrate`
+- Schema version stored in Mongo `_meta.schema_version`; primary indexes ensured.
+- Docs generation: `python -m scripts.generate_docs` (CI enforces freshness with `--check`).
 
 ## Test mode
 
@@ -127,8 +147,9 @@ at runtime (session-scoped).
 
 ## Docker
 
-- Build: `docker build -t offside-bot .`
-- Run: `docker run --env-file .env offside-bot`
+- Build: `docker build -t offside-bot .` (or `docker build --platform linux/amd64 -t offside-bot .`)
+- Run: `docker run --env-file .env --restart unless-stopped offside-bot`
+- Compose: `docker-compose up --build` (uses `docker-compose.yml`)
 
 ## Development
 
@@ -136,6 +157,15 @@ at runtime (session-scoped).
 - Lint/format: `ruff check .` (and `ruff format .` if you want formatting).
 - Type check: `mypy .`
 - Tests: `python -m pytest`
+- Register commands: `python -m scripts.register_commands --guild <id>` during dev; use `--global` for production sync after validation.
+- Logging: structured key/value logging with command context (guild/channel/user/command); set `LOG_LEVEL=DEBUG` for verbose output in staging.
+- Signals & shutdown: SIGTERM/SIGINT trigger a graceful shutdown and close the Mongo client; Discord backoff helpers use timeouts and honor `retry_after`.
+- Docs/Help sync: `python -m scripts.generate_docs` refreshes `docs/commands.md`; `/help` pulls from the same catalog.
+- Per-guild config: staff can use `/config_guild_set` to override settings per guild; stored in Mongo `guild_settings`.
+- Releases: pushing a `v*` tag runs the release workflow to build and attach wheel/sdist artifacts.
+- Dev watch: `python -m scripts.dev_watch` (requires `watchfiles`) restarts the bot on Python file changes.
+- Profiling: `python -m scripts.profile --module offside_bot.__main__ --func main` for quick CPU profiling (non-production).
+- Feature flags: use `FEATURE_FLAGS=metrics_log` to enable sample scheduler job; extend via `utils/flags.py`.
 
 ### Embed style guide
 - Use `utils.embeds.make_embed` to keep colors/icons consistent.

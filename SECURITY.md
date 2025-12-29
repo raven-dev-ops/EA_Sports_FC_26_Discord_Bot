@@ -20,6 +20,8 @@ avoid filing a public issue.
 - Keep `.env` and Heroku config vars private; rotate Discord tokens and API keys immediately if exposed.
 - Do not post tokens, MongoDB URIs, or Google credentials in issues, logs, or screenshots.
 - If a secret leak is suspected, revoke the credential and open a private advisory with the timestamp and impacted environment.
+- CI runs automated secret scanning (gitleaks). Please resolve any findings before merging.
+- Avoid logging secrets; redact tokens/URIs from debugging output and screenshots.
 
 ## Response Targets
 

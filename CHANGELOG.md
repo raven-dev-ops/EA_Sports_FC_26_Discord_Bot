@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.12] - 2025-12-29
+
+### Added
+- Global permission guard for staff-facing cogs and friendly denial messaging.
+- Asyncio exception handler with error IDs for interaction responses.
+- CI secret scanning via gitleaks with expanded `.gitignore` and security guidance.
+- Startup config summary logging (non-secret) to verify env wiring quickly.
+- Structured command logging (guild/channel/user/command) and command registration script (`scripts/register_commands.py`) for guild/global sync.
+- Discord HTTP helpers now honor `retry_after` with bounded exponential backoff and timeouts; graceful shutdown closes Mongo client.
+- Command registry validation (duplicate name/description checks) and standalone migration runner with mongomock-tested schema versioning.
+- In-memory channel caching to reduce Discord API calls.
+- Shared command catalog powering `/help` and generated docs (`docs/commands.md`) via `scripts.generate_docs` with CI check.
+- Command metrics (duration/status) logged per command for basic observability.
+- Per-guild config overrides with staff commands to view/set; mass-mention guard on inputs and safer allowed mentions on sends.
+- Dependency hygiene: dependabot config, pip-audit in CI, and release workflow builds artifacts on tags.
+- Optional scheduler scaffold with feature-flagged jobs (`metrics_log`) and dev hot-reload/watch + profiling scripts for DX.
+
 ## [0.2.11] - 2025-12-29
 
 ### Added

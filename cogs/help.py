@@ -4,6 +4,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
+from utils.command_catalog import commands_by_category
 from utils.embeds import DEFAULT_COLOR, WARNING_COLOR, make_embed
 
 
@@ -13,6 +14,7 @@ class HelpCog(commands.Cog):
 
     @app_commands.command(name="help", description="Show bot commands and examples.")
     async def help_command(self, interaction: discord.Interaction) -> None:
+        catalog = commands_by_category()
         embed = make_embed(
             title="Offside Bot Help",
             description="Command catalog with examples. All responses are ephemeral.",
@@ -38,36 +40,14 @@ class HelpCog(commands.Cog):
             ),
             inline=False,
         )
-        embed.add_field(
-            name="Coach Commands",
-            value=(
-                "- `/roster [tournament]` open roster dashboard.\n"
-                "- `/help` show this menu."
-            ),
-            inline=False,
-        )
-        embed.add_field(
-            name="Staff/Admin Commands",
-            value=(
-                "- `/unlock_roster <coach> [tournament]`\n"
-                "- `/dev_on` / `/dev_off` toggle test routing\n"
-                "- `/config_view` / `/config_set <field> <value>` (runtime only)\n"
-                "- `/ping` health check"
-            ),
-            inline=False,
-        )
-        embed.add_field(
-            name="Tournament Commands",
-            value=(
-                "- Setup: `/tournament_create`, `/tournament_state`, `/tournament_register`\n"
-                "- Brackets: `/tournament_bracket` publish, `/tournament_bracket_preview` dry-run\n"
-                "- Matches: `/match_report`, `/match_confirm`, `/match_deadline`, `/match_forfeit`\n"
-                "- Scheduling: `/match_reschedule`, `/dispute_add`, `/dispute_resolve`, `/advance_round`\n"
-                "- Groups: `/group_create`, `/group_register`, `/group_generate_fixtures`, "
-                "`/group_match_report`, `/group_standings`, `/group_advance`"
-            ),
-            inline=False,
-        )
+        for category, cmds in catalog.items():
+            lines = []
+            for cmd in cmds:
+                line = f"- `{cmd.name}` — {cmd.description} (perm: {cmd.permissions})"
+                if cmd.example:
+                    line += f" e.g., `{cmd.example}`"
+                lines.append(line)
+            embed.add_field(name=f"{category} Commands", value="\n".join(lines), inline=False)
         embed.add_field(
             name="Roster Submission Steps",
             value=(

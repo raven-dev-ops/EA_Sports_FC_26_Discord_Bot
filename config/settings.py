@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Iterable
 
 from . import constants
@@ -31,6 +31,9 @@ class Settings:
     banlist_range: str | None
     banlist_cache_ttl_seconds: int
     google_sheets_credentials_json: str | None
+    use_sharding: bool = False
+    shard_count: int | None = None
+    feature_flags: set[str] = field(default_factory=set)
 
 
 def _required_str(name: str, missing: list[str]) -> str:
@@ -88,6 +91,13 @@ def _optional_int_default(name: str, default: int) -> int:
         raise RuntimeError(f"{name} must be an integer.") from None
 
 
+def _optional_str_set(name: str) -> set[str]:
+    raw = os.getenv(name, "").strip()
+    if not raw:
+        return set()
+    return {part.strip() for part in raw.split(",") if part.strip()}
+
+
 def _optional_str(name: str) -> str | None:
     raw = os.getenv(name, "").strip()
     return raw or None
@@ -109,6 +119,10 @@ def _format_list(values: Iterable[str]) -> str:
 
 
 def load_settings() -> Settings:
+    """
+    Load and validate environment configuration.
+    Raises RuntimeError with a consolidated message when required values are missing/invalid.
+    """
     missing: list[str] = []
     invalid: list[str] = []
 
@@ -144,6 +158,9 @@ def load_settings() -> Settings:
 
     discord_test_channel_id = _optional_int(constants.DISCORD_TEST_CHANNEL_ENV)
     test_mode = _optional_bool(constants.TEST_MODE_ENV, default=True)
+    use_sharding = _optional_bool(constants.USE_SHARDING_ENV, default=False)
+    shard_count = _optional_int(constants.SHARD_COUNT_ENV)
+    feature_flags = _optional_str_set(constants.FEATURE_FLAGS_ENV)
 
     if test_mode and discord_test_channel_id is None:
         raise RuntimeError(
@@ -177,4 +194,38 @@ def load_settings() -> Settings:
         google_sheets_credentials_json=_optional_str(
             constants.GOOGLE_SHEETS_CREDENTIALS_JSON_ENV
         ),
+        use_sharding=use_sharding,
+        shard_count=shard_count,
+        feature_flags=feature_flags,
     )
+
+
+def summarize_settings(settings: Settings) -> dict[str, object]:
+    """
+    Produce a non-secret snapshot of configuration for startup logging.
+    """
+    return {
+        "application_id": settings.discord_application_id,
+        "client_id_present": bool(settings.discord_client_id),
+        "test_mode": settings.test_mode,
+        "test_channel": settings.discord_test_channel_id,
+        "use_sharding": settings.use_sharding,
+        "shard_count": settings.shard_count,
+        "feature_flags": sorted(settings.feature_flags),
+        "portals": {
+            "roster": settings.channel_roster_portal_id,
+            "coach": settings.channel_coach_portal_id,
+            "staff": settings.channel_staff_portal_id,
+        },
+        "roles": {
+            "broskie": settings.role_broskie_id,
+            "super_league_coach": settings.role_super_league_coach_id,
+            "coach_premium": settings.role_coach_premium_id,
+            "coach_premium_plus": settings.role_coach_premium_plus_id,
+            "staff_roles_defined": bool(settings.staff_role_ids),
+        },
+        "banlist_enabled": bool(settings.banlist_sheet_id),
+        "mongodb_uri_present": bool(settings.mongodb_uri),
+        "mongodb_db_name": settings.mongodb_db_name,
+        "mongodb_collection": settings.mongodb_collection,
+    }

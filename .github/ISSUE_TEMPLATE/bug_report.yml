@@ -1,0 +1,25 @@
+name: Bug Report
+description: File a bug report
+labels: ["type:bug"]
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: Describe the bug and expected behavior.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Include command, channel, user role, and any payload.
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / screenshots
+      description: Include error IDs or Discord message IDs if available.
+    validations:
+      required: false
