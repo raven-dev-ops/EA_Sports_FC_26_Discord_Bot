@@ -715,8 +715,8 @@ async def send_admin_portal_message(
     embed = build_admin_embed()
     view = AdminPortalView()
     try:
-        await channel.send(embed=intro_embed)
-        await channel.send(embed=embed, view=view)
+        await send_message(channel, embed=intro_embed)
+        await send_message(channel, embed=embed, view=view)
     except discord.DiscordException as exc:
         logging.warning("Failed to post admin portal to channel %s: %s", target_channel_id, exc)
         await interaction.response.send_message(
@@ -768,8 +768,8 @@ async def post_admin_portal(bot: commands.Bot) -> None:
     embed = build_admin_embed()
     view = AdminPortalView()
     try:
-        await channel.send(embed=intro_embed)
-        await channel.send(embed=embed, view=view)
+        await send_message(channel, embed=intro_embed)
+        await send_message(channel, embed=embed, view=view)
         logging.info("Posted admin/staff portal embed.")
     except discord.DiscordException as exc:
         logging.warning("Failed to post admin portal to channel %s: %s", target_channel_id, exc)
