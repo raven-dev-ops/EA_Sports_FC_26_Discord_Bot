@@ -2,6 +2,19 @@
 
 Roster management and staff review bot for Discord tournaments.
 
+## Getting Started (Tournament Operators)
+
+1. Set up Discord channels and roles:
+   - Create channels for coach portal, staff portal (reviews), and approved roster logs.
+   - Create required roles (Broskie, Super League Coach, Coach Premium, Coach Premium Plus) and staff roles.
+2. Configure the bot:
+   - Copy `.env.example` to `.env` and fill in the required IDs and tokens.
+   - Ensure `TEST_MODE=true` and `DISCORD_TEST_CHANNEL` are set while validating in a staging guild.
+3. Deploy and verify:
+   - Run locally (`python -m offside_bot`) or deploy to your host (e.g., Heroku worker).
+   - Confirm the coach and staff portal embeds appear in their channels.
+   - Submit a test roster, approve/reject, and confirm approved rosters flow to the roster portal.
+
 ## Features (current)
 
 - Ephemeral roster workflow with role-based caps and min-8 submission rule.
@@ -26,6 +39,8 @@ Roster management and staff review bot for Discord tournaments.
 - `/help` — Command list and coach instructions. Example: `/help`.
 
 ## Configuration
+
+Use `.env.example` as the template for your `.env`. Required fields are listed below; keep secrets out of version control.
 
 Required (startup):
 - `DISCORD_TOKEN`
@@ -76,6 +91,13 @@ at runtime (session-scoped).
    - `python -m pip install -r requirements.txt`
 3. Start the bot:
    - `python -m offside_bot`
+
+## Development
+
+- Install dev tools: `python -m pip install -r requirements.txt -r requirements-dev.txt`
+- Lint/format: `ruff check .` (and `ruff format .` if you want formatting).
+- Type check: `mypy .`
+- Tests: `python -m pytest`
 
 ## Testing
 

@@ -1,0 +1,16 @@
+[tool.ruff]
+line-length = 99
+target-version = "py312"
+exclude = ["scripts/export_members.py"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+
+[tool.mypy]
+python_version = "3.12"
+ignore_missing_imports = true
+warn_unused_ignores = false
+disallow_untyped_defs = false
+allow_redefinition = true
+show_error_codes = true
+exclude = ["tests/.*", "scripts/.*"]

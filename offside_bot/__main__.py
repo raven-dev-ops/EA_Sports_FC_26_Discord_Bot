@@ -1,6 +1,9 @@
 import asyncio
 import logging
+import logging.config
+import os
 import pkgutil
+import sys
 
 import discord
 from discord.ext import commands
@@ -10,13 +13,44 @@ from utils.errors import log_interaction_error, send_interaction_error
 from interactions.admin_portal import post_admin_portal
 from interactions.coach_portal import post_coach_portal
 
-LOG_FORMAT = "%(asctime)s | %(levelname)s | %(name)s | %(message)s"
+LOG_FORMAT = "%(asctime)s level=%(levelname)s name=%(name)s msg=\"%(message)s\""
 LOG_CHANNEL_FORMAT = "%(levelname)s %(name)s: %(message)s"
 MAX_LOG_MESSAGE_LENGTH = 1800
 
 
 def setup_logging() -> None:
-    logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
+    level = os.getenv("LOG_LEVEL", "INFO").upper()
+    logging.config.dictConfig(
+        {
+            "version": 1,
+            "formatters": {
+                "structured": {"format": LOG_FORMAT},
+                "discord_channel": {"format": LOG_CHANNEL_FORMAT},
+            },
+            "handlers": {
+                "console": {
+                    "class": "logging.StreamHandler",
+                    "level": level,
+                    "formatter": "structured",
+                }
+            },
+            "root": {"level": level, "handlers": ["console"]},
+            "loggers": {
+                "discord": {"level": "WARNING"},
+                "asyncio": {"level": "WARNING"},
+            },
+        }
+    )
+    logging.captureWarnings(True)
+
+
+def install_excepthook() -> None:
+    def _hook(exc_type, exc_value, exc_traceback):
+        logging.error(
+            "Uncaught exception",
+            exc_info=(exc_type, exc_value, exc_traceback),
+        )
+    sys.excepthook = _hook
 
 
 class DiscordLogFilter(logging.Filter):
@@ -154,6 +188,7 @@ def register_commands(bot: OffsideBot) -> None:
 
 def main() -> None:
     setup_logging()
+    install_excepthook()
     settings: Settings
     try:
         settings = load_settings()
