@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Any
+import logging
 
 import discord
 
@@ -60,6 +61,14 @@ def build_roster_dashboard(
     embed.add_field(name="Status", value=status, inline=True)
 
     if cap is None and not has_roster:
+        logging.warning(
+            "Roster eligibility failed for user %s roles=%s (expected: super=%s, premium=%s, premium_plus=%s)",
+            interaction.user.id if interaction.user else "unknown",
+            role_ids,
+            settings.role_super_league_coach_id,
+            settings.role_coach_premium_id,
+            settings.role_coach_premium_plus_id,
+        )
         embed.add_field(
             name="Eligibility",
             value="Not eligible for roster creation (missing coach role).",
