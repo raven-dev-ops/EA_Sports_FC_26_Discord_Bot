@@ -4,6 +4,8 @@ from typing import Any
 
 import discord
 
+from utils.discord_wrappers import delete_message, fetch_channel, send_message
+
 from interactions.modals import AddPlayerModal, CreateRosterModal, RemovePlayerModal
 from services.audit_service import (
     AUDIT_ACTION_APPROVED,
@@ -281,13 +283,12 @@ class SubmitRosterConfirmView(SafeView):
         )
         channel = interaction.client.get_channel(staff_channel_id)
         if channel is None:
-            try:
-                channel = await interaction.client.fetch_channel(staff_channel_id)
-            except discord.DiscordException:
-                await interaction.response.edit_message(
-                    content="Staff channel not found.", view=None
-                )
-                return
+            channel = await fetch_channel(interaction.client, staff_channel_id)
+        if channel is None:
+            await interaction.response.edit_message(
+                content="Staff channel not found.", view=None
+            )
+            return
 
         players = get_roster_players(self.roster_id)
         if len(players) < 8:
@@ -319,9 +320,14 @@ class SubmitRosterConfirmView(SafeView):
             status_text=status_text,
         )
 
-        staff_message = await channel.send(
-            message_content, view=StaffReviewView(roster_id=self.roster_id)
+        staff_message = await send_message(
+            channel, message_content, view=StaffReviewView(roster_id=self.roster_id)
         )
+        if staff_message is None:
+            await interaction.response.edit_message(
+                content="Failed to send submission to staff channel.", view=None
+            )
+            return
 
         create_submission_record(
             roster_id=self.roster_id,
@@ -445,18 +451,9 @@ class StaffReviewView(SafeView):
         staff_channel = None
         staff_message = None
         if submission:
-        async def _fetch_staff_channel() -> discord.abc.Messageable | None:
-            ch = interaction.client.get_channel(submission.get("staff_channel_id"))
-            if ch is not None:
-                return ch
-            try:
-                return await interaction.client.fetch_channel(
-                    submission.get("staff_channel_id")
-                )
-            except discord.DiscordException:
-                return None
-
-        staff_channel = await _fetch_staff_channel()
+            staff_channel = await fetch_channel(
+                interaction.client, submission.get("staff_channel_id")
+            )
             if staff_channel:
                 try:
                     staff_message = await staff_channel.fetch_message(
@@ -475,15 +472,9 @@ class StaffReviewView(SafeView):
                 roster_channel_id = settings.channel_roster_portal_id
                 roster_channel = interaction.client.get_channel(roster_channel_id)
                 if roster_channel is None:
-                    try:
-                        roster_channel = await interaction.client.fetch_channel(roster_channel_id)
-                    except discord.DiscordException:
-                        roster_channel = None
+                    roster_channel = await fetch_channel(interaction.client, roster_channel_id)
                 if roster_channel:
-                    try:
-                        await roster_channel.send(message_content)
-                    except discord.DiscordException:
-                        pass
+                    await send_message(roster_channel, message_content)
 
         if reason:
             try:
@@ -498,26 +489,15 @@ class StaffReviewView(SafeView):
 
         # Clean up the staff portal message after a decision to avoid duplicates.
         if submission:
-            target_staff_channel = staff_channel
-            if target_staff_channel is None:
-                async def _fetch() -> discord.abc.Messageable | None:
-                    ch = interaction.client.get_channel(submission.get("staff_channel_id"))
-                    if ch is not None:
-                        return ch
-                    try:
-                        return await interaction.client.fetch_channel(
-                            submission.get("staff_channel_id")
-                        )
-                    except discord.DiscordException:
-                        return None
-
-                target_staff_channel = await _fetch()
+            target_staff_channel = staff_channel or await fetch_channel(
+                interaction.client, submission.get("staff_channel_id")
+            )
             if target_staff_channel:
                 try:
                     msg = await target_staff_channel.fetch_message(
                         submission.get("staff_message_id")
                     )
-                    await msg.delete()
+                    await delete_message(msg)
                 except discord.DiscordException:
                     pass
 
