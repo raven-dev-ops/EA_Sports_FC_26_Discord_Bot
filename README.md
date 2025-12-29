@@ -19,7 +19,7 @@ Roster management and staff review bot for Discord tournaments.
 
 - Ephemeral roster workflow with role-based caps and min-8 submission rule; identity checks enforce no duplicates and required player fields.
 - Staff review with approve/reject/unlock; decisions DM coaches with reasons; staff cards cleaned after action.
-- Portals auto-post on startup: coach portal (dashboard/help), staff portal (controls/review), roster portal (approved only).
+- Portals auto-post on startup: coach portal (dashboard/help), staff portal (controls/review), roster portal (approved only); bot cleans prior portal embeds before posting new ones.
 - Audit trail for staff actions; unlock clears stale submissions for resubmission.
 - Tournament scaffold with staff-only commands, bracket preview/publish, match/dispute flows, and leaderboard stats.
 - Optional Google Sheets ban list checks.
@@ -30,6 +30,12 @@ Roster management and staff review bot for Discord tournaments.
 - **Coach Roster Portal** (channel `CHANNEL_COACH_PORTAL_ID`): embed with buttons to open the roster dashboard (create/add/remove/view/submit) and to show the coach help guide. Responses are ephemeral.
 - **Admin/Staff Control Panel** (channel `CHANNEL_STAFF_PORTAL_ID`): embed with buttons for Bot Controls, Tournaments, Coaches, Rosters, Players, DB/Analytics. Each button opens an ephemeral embed and action buttons (e.g., test-mode toggle, health check, roster unlock guidance). The bot deletes the previous portal embed before posting a new one.
 - **Approved Roster Posts** (channel `CHANNEL_ROSTER_PORTAL_ID`): only approved rosters are reposted here after staff approval; submission reviews happen in the staff portal.
+
+### Dashboard embeds & buttons
+- Coach portal: intro embed + roster portal embed. Buttons open the roster dashboard (add/remove/view/submit, rename) and coach help. Responses are ephemeral; portal is idempotent and cleans prior portal embeds.
+- Staff portal: intro embed + admin control panel. Buttons for Bot Controls (test mode, ping), Tournaments (quick reference), Coaches/Rosters (unlock guidance, review tips), Players (ban list note), DB/Analytics (schema/index info). Staff actions are ephemeral; the submission review message is cleaned after approve/reject.
+- Roster portal: receives approved roster embeds only; staff review/decision happens in the staff portal, not here.
+- Help command: `/help` returns an embed with coach/staff/tournament/ops categories and submission steps; all responses are ephemeral.
 
 ## Commands
 
@@ -62,6 +68,7 @@ Operations (staff-only)
 - `/config_view` snapshot of non-secret runtime settings.
 - `/config_set <field> <value>` runtime override (no persistence; restart to reset).
 - `/rules_template` starter rules template to copy/paste.
+- `/help` command catalog (coach/staff/tournament/ops) and step-by-step submission guidance; all responses are ephemeral.
 
 ## Configuration
 
