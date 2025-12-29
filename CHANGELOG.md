@@ -47,6 +47,14 @@ All notable changes to this project will be documented in this file.
 ### Removed
 - Temporary member export helper `scripts/export_members.py` (one-time use for capturing the guild roster to MongoDB).
 
+## [0.2.5] - 2025-12-29
+
+### Added
+- Dockerfile and .dockerignore for containerized runs; README/CONTRIBUTING updated with Docker usage.
+- Contributor guide with local setup, tooling, and secrets guidance.
+- CI/dev tooling configs: Ruff/Mypy settings, pre-commit config, dev requirements.
+- Structured logging config with env-based log level; `.env.example` for config template.
+
 ## [0.1.0] - 2025-12-28
 
 ### Added

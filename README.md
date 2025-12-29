@@ -92,6 +92,11 @@ at runtime (session-scoped).
 3. Start the bot:
    - `python -m offside_bot`
 
+## Docker
+
+- Build: `docker build -t offside-bot .`
+- Run: `docker run --env-file .env offside-bot`
+
 ## Development
 
 - Install dev tools: `python -m pip install -r requirements.txt -r requirements-dev.txt`
