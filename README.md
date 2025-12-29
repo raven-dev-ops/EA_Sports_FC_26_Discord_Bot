@@ -139,6 +139,9 @@ at runtime (session-scoped).
 ## Notes
 
 - The one-time member export helper was removed after use; current repo contains only bot/runtime code.
+- Migrations and recovery run automatically at startup:
+  - Schema version is tracked in `_meta.schema_version`; indexes are ensured each boot.
+  - Recovery unlocks rosters that were submitted but lost their submission message record and prunes orphan submission docs.
 
 ## Heroku deploy
 

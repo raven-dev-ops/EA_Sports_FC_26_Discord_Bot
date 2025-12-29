@@ -2,12 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.2.9] - 2025-12-29
+## [0.2.10] - 2025-12-29
 
 ### Added
 - Input sanitization helper `sanitize_text` applied across tournament commands to trim/cap fields.
 - Tournament tests for bracket preview, idempotent bracket generation, and match concurrency guards.
 - New unit tests for validation helpers; added tournament service test coverage.
+- Startup migrations runner with schema version tracking; recovery job to heal stuck rosters and prune orphan submission records.
 
 ### Changed
 - Bracket generation is idempotent (reuses existing matches instead of duplicating).

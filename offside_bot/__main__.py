@@ -12,6 +12,8 @@ from utils.discord_wrappers import fetch_channel, send_message
 from utils.errors import log_interaction_error, send_interaction_error
 from interactions.admin_portal import post_admin_portal
 from interactions.coach_portal import post_coach_portal
+from migrations import apply_migrations
+from services.recovery_service import run_startup_recovery
 
 LOG_FORMAT = "%(asctime)s level=%(levelname)s name=%(name)s msg=\"%(message)s\""
 LOG_CHANNEL_FORMAT = "%(levelname)s %(name)s: %(message)s"
@@ -170,6 +172,18 @@ def main() -> None:
         settings = load_settings()
     except RuntimeError as exc:
         logging.error("Configuration error: %s", exc)
+        raise
+    # Run migrations and recovery before starting the bot.
+    try:
+        latest = apply_migrations(settings=settings, logger=logging.getLogger(__name__))
+        logging.info("Schema migrations complete; current version %s.", latest)
+    except Exception:
+        logging.exception("Failed during migrations.")
+        raise
+    try:
+        run_startup_recovery(logger=logging.getLogger(__name__))
+    except Exception:
+        logging.exception("Startup recovery encountered an error.")
         raise
 
     bot = build_bot(settings)
