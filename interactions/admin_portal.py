@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import discord
 
-from utils.channel_routing import resolve_channel_id
+import logging
+
 from utils.errors import send_interaction_error
 from interactions.views import SafeView
 from discord.ext import commands
@@ -471,10 +472,7 @@ async def send_admin_portal_message(
         await send_interaction_error(interaction)
         return
 
-    test_mode = bool(getattr(interaction.client, "test_mode", False))
-    target_channel_id = resolve_channel_id(
-        settings, settings.channel_staff_portal_id, test_mode=test_mode
-    )
+    target_channel_id = settings.channel_staff_portal_id
 
     channel = interaction.client.get_channel(target_channel_id)
     if channel is None:
@@ -501,7 +499,15 @@ async def send_admin_portal_message(
 
     embed = build_admin_embed()
     view = AdminPortalView()
-    await channel.send(embed=embed, view=view)
+    try:
+        await channel.send(embed=embed, view=view)
+    except discord.DiscordException as exc:
+        logging.warning("Failed to post admin portal to channel %s: %s", target_channel_id, exc)
+        await interaction.response.send_message(
+            f"Could not post admin control panel to <#{target_channel_id}>.",
+            ephemeral=True,
+        )
+        return
     await interaction.response.send_message(
         f"Posted admin control panel to <#{target_channel_id}>.",
         ephemeral=True,
@@ -513,10 +519,7 @@ async def post_admin_portal(bot: commands.Bot) -> None:
     if settings is None:
         return
 
-    test_mode = bool(getattr(bot, "test_mode", False))
-    target_channel_id = resolve_channel_id(
-        settings, settings.channel_staff_portal_id, test_mode=test_mode
-    )
+    target_channel_id = settings.channel_staff_portal_id
 
     channel = bot.get_channel(target_channel_id)
     if channel is None:
@@ -540,5 +543,6 @@ async def post_admin_portal(bot: commands.Bot) -> None:
     view = AdminPortalView()
     try:
         await channel.send(embed=embed, view=view)
-    except discord.DiscordException:
-        return
+        logging.info("Posted admin/staff portal embed.")
+    except discord.DiscordException as exc:
+        logging.warning("Failed to post admin portal to channel %s: %s", target_channel_id, exc)

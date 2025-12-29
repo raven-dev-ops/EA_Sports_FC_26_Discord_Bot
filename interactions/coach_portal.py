@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import discord
 
+import logging
+
 from interactions.dashboard import build_roster_dashboard
 from interactions.views import SafeView
-from utils.channel_routing import resolve_channel_id
 from discord.ext import commands
 
 
@@ -97,9 +98,7 @@ async def send_coach_portal_message(
         return
 
     test_mode = bool(getattr(interaction.client, "test_mode", False))
-    target_channel_id = resolve_channel_id(
-        settings, settings.channel_coach_portal_id, test_mode=test_mode
-    )
+    target_channel_id = settings.channel_coach_portal_id
 
     channel = interaction.client.get_channel(target_channel_id)
     if channel is None:
@@ -125,7 +124,15 @@ async def send_coach_portal_message(
 
     embed = build_coach_portal_embed()
     view = CoachPortalView()
-    await channel.send(embed=embed, view=view)
+    try:
+        await channel.send(embed=embed, view=view)
+    except discord.DiscordException as exc:
+        logging.warning("Failed to post coach portal to channel %s: %s", target_channel_id, exc)
+        await interaction.response.send_message(
+            f"Could not post coach portal to <#{target_channel_id}>.",
+            ephemeral=True,
+        )
+        return
     await interaction.response.send_message(
         f"Posted coach portal to <#{target_channel_id}>.",
         ephemeral=True,
@@ -138,9 +145,7 @@ async def post_coach_portal(bot: commands.Bot) -> None:
         return
 
     test_mode = bool(getattr(bot, "test_mode", False))
-    target_channel_id = resolve_channel_id(
-        settings, settings.channel_roster_portal_id, test_mode=test_mode
-    )
+    target_channel_id = settings.channel_coach_portal_id
 
     channel = bot.get_channel(target_channel_id)
     if channel is None:
@@ -164,5 +169,7 @@ async def post_coach_portal(bot: commands.Bot) -> None:
     view = CoachPortalView()
     try:
         await channel.send(embed=embed, view=view)
-    except discord.DiscordException:
+        logging.info("Posted coach portal embed.")
+    except discord.DiscordException as exc:
+        logging.warning("Failed to post coach portal to channel %s: %s", target_channel_id, exc)
         return
