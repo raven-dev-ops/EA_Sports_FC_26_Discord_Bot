@@ -544,19 +544,23 @@ class DeleteRosterModal(discord.ui.Modal, title="Delete Roster"):
         submission = delete_submission_by_roster(roster["_id"])
         settings = getattr(interaction.client, "settings", None)
         if settings and submission:
-            channel_id = settings.channel_roster_portal_id
-            channel = interaction.client.get_channel(channel_id)
-            if channel is None:
-                try:
-                    channel = await interaction.client.fetch_channel(channel_id)
-                except discord.DiscordException:
-                    channel = None
-            if channel is not None:
-                try:
-                    msg = await channel.fetch_message(submission["staff_message_id"])
-                    await msg.delete()
-                except discord.DiscordException:
-                    pass
+            for channel_id in (
+                settings.channel_staff_portal_id,
+                settings.channel_roster_portal_id,
+            ):
+                channel = interaction.client.get_channel(channel_id)
+                if channel is None:
+                    try:
+                        channel = await interaction.client.fetch_channel(channel_id)
+                    except discord.DiscordException:
+                        channel = None
+                if channel is not None:
+                    try:
+                        msg = await channel.fetch_message(submission["staff_message_id"])
+                        await msg.delete()
+                        break
+                    except discord.DiscordException:
+                        continue
 
         delete_roster(roster["_id"])
         await interaction.response.send_message(
