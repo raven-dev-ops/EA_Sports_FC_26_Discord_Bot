@@ -21,6 +21,18 @@ All notable changes to this project will be documented in this file.
 - Avoided pymongo `Collection` truthiness checks that crash `unlock_roster`.
 - Normalized MongoDB database names with invalid characters (e.g., spaces).
 
+## [0.2.2] - 2025-12-29
+
+### Added
+- Auto-posting admin/staff and coach portals to their configured channels; portals include action buttons.
+- Admin portal unlock and delete roster modals; roster delete also removes submission messages.
+- Coach team name edit modal; staff decision reasons with coach DM notification; minimum 8 players required to submit.
+- Roster approvals repost to roster portal; submissions stay in staff portal.
+
+### Changed
+- Routing uses new channel envs: `CHANNEL_STAFF_PORTAL_ID` (staff portal), `CHANNEL_COACH_PORTAL_ID` (coach portal), `CHANNEL_ROSTER_PORTAL_ID` (approved roster embeds).
+- Reduced Discord rate-limit risk by spacing portal posts on startup.
+
 ## [0.1.0] - 2025-12-28
 
 ### Added

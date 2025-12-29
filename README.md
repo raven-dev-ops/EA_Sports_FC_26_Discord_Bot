@@ -20,7 +20,7 @@ Roster management and staff review bot for Discord tournaments.
 
 - `/roster [tournament]` — Opens the roster creation modal and dashboard (create/add/remove/view/submit). Example: `/roster` or `/roster tournament:"Summer Cup"`.
 - `/unlock_roster <coach> [tournament]` — Staff-only unlock; uses latest roster if tournament is omitted. Example: `/unlock_roster @Coach` or `/unlock_roster @Coach tournament:"Summer Cup"`.
-- `/dev_on` / `/dev_off` — Staff-only test-mode routing toggle (staff submissions + logs to test channel). Examples: `/dev_on`, `/dev_off`.
+- `/dev_on` / `/dev_off` — Staff-only test-mode routing toggle (staff portal messages + logs to test channel). Examples: `/dev_on`, `/dev_off`.
 - `/ping` — Health check. Example: `/ping`.
 - `/help` — Command list and coach instructions. Example: `/help`.
 
@@ -58,7 +58,7 @@ Optional:
 
 ## Test mode
 
-When `TEST_MODE=true`, staff submissions and log messages are routed to
+When `TEST_MODE=true`, staff portal messages and log messages are routed to
 `DISCORD_TEST_CHANNEL`. Use `/dev_on` and `/dev_off` to toggle routing
 at runtime (session-scoped).
 

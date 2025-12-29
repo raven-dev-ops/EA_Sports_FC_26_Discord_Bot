@@ -47,7 +47,7 @@ class HelpCog(commands.Cog):
         )
         embed.add_field(
             name="/dev_on",
-            value="Staff-only test mode routing on.\nExample: `/dev_on`",
+            value="Staff-only test mode routing on (routes portal posts/logs to test channel).\nExample: `/dev_on`",
             inline=False,
         )
         embed.add_field(
