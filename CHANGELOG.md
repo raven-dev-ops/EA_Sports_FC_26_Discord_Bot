@@ -42,6 +42,11 @@ All notable changes to this project will be documented in this file.
 ### Added
 - Test suite coverage for submission lifecycle and roster status transitions; `python -m pytest` runs the suite.
 
+## [0.2.4] - 2025-12-29
+
+### Removed
+- Temporary member export helper `scripts/export_members.py` (one-time use for capturing the guild roster to MongoDB).
+
 ## [0.1.0] - 2025-12-28
 
 ### Added
