@@ -236,7 +236,7 @@ class SubmitRosterConfirmView(SafeView):
 
         test_mode = bool(getattr(interaction.client, "test_mode", False))
         staff_channel_id = resolve_channel_id(
-            settings, settings.channel_staff_portal_id, test_mode=test_mode
+            settings, settings.channel_roster_portal_id, test_mode=test_mode
         )
         channel = interaction.client.get_channel(staff_channel_id)
         if channel is None:
