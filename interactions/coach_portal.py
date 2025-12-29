@@ -37,6 +37,36 @@ def build_coach_help_embed() -> discord.Embed:
     return embed
 
 
+def build_coach_intro_embed() -> discord.Embed:
+    embed = discord.Embed(
+        title="Coach Portal Overview",
+        description=(
+            "@Super League Coach\n"
+            "@Coach Premium @Coach Premium+\n\n"
+            "Coaches, welcome to the Offside Bot Portal\n\n"
+            "This portal is the official system used for signing players and submitting your team roster. "
+            "To assist you, the Coach Help button is available and provides a full list of commands you may need throughout the process.\n\n"
+            "When you are ready to begin, select Open Roster Dashboard. Inside the dashboard, you will be able to add players, remove players, view your current roster, "
+            "and edit your team name. All players must be added using their correct player DISCORD ID copied from their profile. "
+            "The roster name must exactly match the team name that was assigned to you by staff; no extra words, symbols, or changes are allowed.\n\n"
+            "**Roster Requirements & Limits**\n"
+            "A minimum of 8 players is required in order to submit a roster. Super League coaches are permitted to sign up to 16 players. "
+            "Coaches with a Premium membership may sign up to 22 players, while Premium Plus coaches may sign up to 25 players. "
+            "It is the coach’s responsibility to ensure their roster does not exceed these limits.\n\n"
+            "🚨 **Submission & Approval Process**\n"
+            "Once your roster is complete, you may submit it. Each team is allowed one initial submission. After submission, a staff member will review your roster. "
+            "If approved, you will receive confirmation along with the name of the staff member who approved and assigned your team. "
+            "If your roster is rejected, you will receive a direct message explaining the reason for the rejection and what needs to be corrected.\n\n"
+            "✅ **Resubmission & Finalization**\n"
+            "If your roster is rejected, review the feedback carefully, then go to your team’s ticket and ping the staff member who declined your roster. "
+            "That staff member will unlock your roster, allowing you to make the required changes and submit again. After resubmission, wait for approval. "
+            "Once your roster is approved, it is finalized and cannot be changed under the roster lock date, which will be announced below this message."
+        ),
+        color=discord.Color.orange(),
+    )
+    return embed
+
+
 def build_coach_portal_embed() -> discord.Embed:
     embed = discord.Embed(
         title="Coach Roster Portal",
@@ -114,7 +144,10 @@ async def send_coach_portal_message(
     try:
         async for message in channel.history(limit=20):
             if message.author.id == interaction.client.user.id:
-                if message.embeds and message.embeds[0].title == "Coach Roster Portal":
+                if message.embeds and message.embeds[0].title in {
+                    "Coach Roster Portal",
+                    "Coach Portal Overview",
+                }:
                     try:
                         await message.delete()
                     except discord.DiscordException:
@@ -122,9 +155,11 @@ async def send_coach_portal_message(
     except discord.DiscordException:
         pass
 
+    intro_embed = build_coach_intro_embed()
     embed = build_coach_portal_embed()
     view = CoachPortalView()
     try:
+        await channel.send(embed=intro_embed)
         await channel.send(embed=embed, view=view)
     except discord.DiscordException as exc:
         logging.warning("Failed to post coach portal to channel %s: %s", target_channel_id, exc)
@@ -157,7 +192,10 @@ async def post_coach_portal(bot: commands.Bot) -> None:
     try:
         async for message in channel.history(limit=20):
             if message.author.id == bot.user.id:
-                if message.embeds and message.embeds[0].title == "Coach Roster Portal":
+                if message.embeds and message.embeds[0].title in {
+                    "Coach Roster Portal",
+                    "Coach Portal Overview",
+                }:
                     try:
                         await message.delete()
                     except discord.DiscordException:
@@ -165,9 +203,11 @@ async def post_coach_portal(bot: commands.Bot) -> None:
     except discord.DiscordException:
         pass
 
+    intro_embed = build_coach_intro_embed()
     embed = build_coach_portal_embed()
     view = CoachPortalView()
     try:
+        await channel.send(embed=intro_embed)
         await channel.send(embed=embed, view=view)
         logging.info("Posted coach portal embed.")
     except discord.DiscordException as exc:
