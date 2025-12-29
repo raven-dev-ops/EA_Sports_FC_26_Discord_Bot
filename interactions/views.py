@@ -468,19 +468,16 @@ class StaffReviewView(SafeView):
         if approved:
             settings = getattr(interaction.client, "settings", None)
             if settings:
-                test_mode = bool(getattr(interaction.client, "test_mode", False))
-                roster_channel_id = resolve_channel_id(
-                    settings, settings.channel_roster_portal_id, test_mode=test_mode
-                )
-                channel = interaction.client.get_channel(roster_channel_id)
-                if channel is None:
+                roster_channel_id = settings.channel_roster_portal_id
+                roster_channel = interaction.client.get_channel(roster_channel_id)
+                if roster_channel is None:
                     try:
-                        channel = await interaction.client.fetch_channel(roster_channel_id)
+                        roster_channel = await interaction.client.fetch_channel(roster_channel_id)
                     except discord.DiscordException:
-                        channel = None
-                if channel:
+                        roster_channel = None
+                if roster_channel:
                     try:
-                        await channel.send(message_content)
+                        await roster_channel.send(message_content)
                     except discord.DiscordException:
                         pass
 
@@ -496,11 +493,23 @@ class StaffReviewView(SafeView):
                 pass
 
         # Clean up the staff portal message after a decision to avoid duplicates.
-        if staff_message:
-            try:
-                await staff_message.delete()
-            except discord.DiscordException:
-                pass
+        if submission:
+            target_staff_channel = staff_channel
+            if target_staff_channel is None:
+                try:
+                    target_staff_channel = await interaction.client.fetch_channel(
+                        submission.get("staff_channel_id")
+                    )
+                except discord.DiscordException:
+                    target_staff_channel = None
+            if target_staff_channel:
+                try:
+                    msg = await target_staff_channel.fetch_message(
+                        submission.get("staff_message_id")
+                    )
+                    await msg.delete()
+                except discord.DiscordException:
+                    pass
 
 
 class StaffDecisionModal(discord.ui.Modal, title="Decision"):
