@@ -214,6 +214,9 @@ def report_score(
     if match.get("status") == MATCH_STATUS_COMPLETED:
         return match
     scores = match.get("scores", {})
+    existing = scores.get(str(reporter_team_id))
+    if existing and existing.get("for") == score_for and existing.get("against") == score_against:
+        return match
     scores[str(reporter_team_id)] = {
         "for": int(score_for),
         "against": int(score_against),
@@ -251,13 +254,12 @@ def confirm_match(
         raise RuntimeError("Match not found.")
     if match.get("status") == MATCH_STATUS_COMPLETED:
         return match
-    scores = match.get("scores", {})
-    reporter_score = None
-    for team_id, payload in scores.items():
-        reporter_score = payload
-        break
-    if not reporter_score:
+    if match.get("status") != MATCH_STATUS_REPORTED:
         raise RuntimeError("No score reported yet.")
+    scores = match.get("scores", {})
+    if not scores:
+        raise RuntimeError("No score reported yet.")
+    reporter_score = next(iter(scores.values()))
     winner = match.get("team_a")
     loser = match.get("team_b")
     if reporter_score["for"] < reporter_score["against"]:
