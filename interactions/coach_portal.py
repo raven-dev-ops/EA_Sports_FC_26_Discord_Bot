@@ -165,8 +165,8 @@ async def send_coach_portal_message(
     embed = build_coach_portal_embed()
     view = CoachPortalView()
     try:
-        await channel.send(embed=intro_embed)
-        await channel.send(embed=embed, view=view)
+        await send_message(channel, embed=intro_embed)
+        await send_message(channel, embed=embed, view=view)
     except discord.DiscordException as exc:
         logging.warning("Failed to post coach portal to channel %s: %s", target_channel_id, exc)
         await interaction.response.send_message(
@@ -219,8 +219,8 @@ async def post_coach_portal(bot: commands.Bot) -> None:
     embed = build_coach_portal_embed()
     view = CoachPortalView()
     try:
-        await channel.send(embed=intro_embed)
-        await channel.send(embed=embed, view=view)
+        await send_message(channel, embed=intro_embed)
+        await send_message(channel, embed=embed, view=view)
         logging.info("Posted coach portal embed.")
     except discord.DiscordException as exc:
         logging.warning("Failed to post coach portal to channel %s: %s", target_channel_id, exc)

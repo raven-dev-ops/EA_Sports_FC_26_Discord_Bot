@@ -6,6 +6,7 @@ import discord
 from utils.errors import send_interaction_error
 from interactions.views import SafeView
 from discord.ext import commands
+from utils.discord_wrappers import send_message
 from services.submission_service import delete_submission_by_roster
 from services.roster_service import (
     delete_roster,

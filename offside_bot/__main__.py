@@ -8,7 +8,7 @@ import discord
 from discord.ext import commands
 
 from config import Settings, load_settings
-from utils.discord_wrappers import fetch_channel
+from utils.discord_wrappers import fetch_channel, send_message
 from utils.errors import log_interaction_error, send_interaction_error
 from interactions.admin_portal import post_admin_portal
 from interactions.coach_portal import post_coach_portal
@@ -71,7 +71,8 @@ class DiscordLogHandler(logging.Handler):
         if channel is None or getattr(channel, "id", None) != channel_id:
             channel = await fetch_channel(self.bot, channel_id)
             self._channel = channel
-        await channel.send(f"```{message}```")
+        if channel:
+            await send_message(channel, f"```{message}```")
 
 
 def attach_discord_log_handler(bot: commands.Bot) -> None:
