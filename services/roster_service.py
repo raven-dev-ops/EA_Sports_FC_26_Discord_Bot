@@ -231,6 +231,34 @@ def roster_is_locked(roster: dict[str, Any]) -> bool:
     }
 
 
+def validate_roster_identity(
+    roster_id: Any, *, collection: Collection | None = None
+) -> tuple[bool, str]:
+    """
+    Validate roster before submission: duplicates, missing fields, and counts.
+    Returns (ok, message).
+    """
+    if collection is None:
+        collection = get_collection()
+    players = list(
+        collection.find(
+            {"record_type": "roster_player", "roster_id": roster_id},
+            sort=[("added_at", 1)],
+        )
+    )
+    if len(players) < 8:
+        return False, "You need at least 8 players before submitting."
+    seen = set()
+    for p in players:
+        pid = p.get("player_discord_id")
+        if pid in seen:
+            return False, "Duplicate player detected in the roster."
+        seen.add(pid)
+        if not p.get("gamertag") or not p.get("ea_id"):
+            return False, "All players must include gamertag and EA ID."
+    return True, "OK"
+
+
 def update_roster_name(
     roster_id: Any, team_name: str, *, collection: Collection | None = None
 ) -> None:

@@ -9,11 +9,19 @@ from services import group_service as gs
 from utils.discord_wrappers import fetch_channel, send_message, edit_message
 from utils.embeds import DEFAULT_COLOR, SUCCESS_COLOR, WARNING_COLOR, make_embed
 from utils.validation import sanitize_text
+from utils.permissions import is_staff_user
+from services import stats_service
 
 
 class TournamentCog(commands.Cog):
     def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
+        self.settings = getattr(bot, "settings", None)
+
+    def _require_staff(self, interaction: discord.Interaction) -> bool:
+        if is_staff_user(interaction.user, self.settings):
+            return True
+        return False
 
     async def _get_channels(
         self, interaction: discord.Interaction, tournament: dict
@@ -34,6 +42,9 @@ class TournamentCog(commands.Cog):
         format: str = "single_elimination",
         rules: str | None = None,
     ) -> None:
+        if not self._require_staff(interaction):
+            await interaction.response.send_message("Not authorized.", ephemeral=True)
+            return
         matches_channel_id = None
         disputes_channel_id = None
         guild = interaction.guild
@@ -67,6 +78,9 @@ class TournamentCog(commands.Cog):
         name: str,
         state: str,
     ) -> None:
+        if not self._require_staff(interaction):
+            await interaction.response.send_message("Not authorized.", ephemeral=True)
+            return
         state = state.upper()
         if state not in {
             ts.TOURNAMENT_STATE_DRAFT,
@@ -93,6 +107,9 @@ class TournamentCog(commands.Cog):
         coach_id: str,
         seed: int | None = None,
     ) -> None:
+        if not self._require_staff(interaction):
+            await interaction.response.send_message("Not authorized.", ephemeral=True)
+            return
         try:
             coach_int = int(coach_id.replace("<@", "").replace(">", "").replace("!", ""))
         except ValueError:
@@ -114,6 +131,9 @@ class TournamentCog(commands.Cog):
 
     @app_commands.command(name="tournament_bracket", description="Generate a bracket")
     async def tournament_bracket(self, interaction: discord.Interaction, tournament: str) -> None:
+        if not self._require_staff(interaction):
+            await interaction.response.send_message("Not authorized.", ephemeral=True)
+            return
         try:
             safe_tournament = sanitize_text(tournament, max_length=60)
             matches = ts.generate_bracket(tournament_name=safe_tournament)
@@ -139,6 +159,9 @@ class TournamentCog(commands.Cog):
         name="tournament_bracket_preview", description="Preview the first-round bracket without publishing."
     )
     async def tournament_bracket_preview(self, interaction: discord.Interaction, tournament: str) -> None:
+        if not self._require_staff(interaction):
+            await interaction.response.send_message("Not authorized.", ephemeral=True)
+            return
         try:
             preview = ts.preview_bracket(tournament_name=sanitize_text(tournament, max_length=60))
         except RuntimeError as exc:
@@ -173,6 +196,9 @@ class TournamentCog(commands.Cog):
         score_for: int,
         score_against: int,
     ) -> None:
+        if not self._require_staff(interaction):
+            await interaction.response.send_message("Not authorized.", ephemeral=True)
+            return
         safe_tournament = sanitize_text(tournament, max_length=60)
         tour = ts.get_tournament(safe_tournament)
         if tour is None:
@@ -212,6 +238,9 @@ class TournamentCog(commands.Cog):
         match_id: str,
         confirming_team_id: str,
     ) -> None:
+        if not self._require_staff(interaction):
+            await interaction.response.send_message("Not authorized.", ephemeral=True)
+            return
         safe_tournament = sanitize_text(tournament, max_length=60)
         tour = ts.get_tournament(safe_tournament)
         if tour is None:
@@ -263,6 +292,9 @@ class TournamentCog(commands.Cog):
         match_id: str,
         deadline: str,
     ) -> None:
+        if not self._require_staff(interaction):
+            await interaction.response.send_message("Not authorized.", ephemeral=True)
+            return
         ok = ts.set_match_deadline(
             tournament_name=sanitize_text(tournament, max_length=60),
             match_id=match_id,
@@ -281,6 +313,9 @@ class TournamentCog(commands.Cog):
         match_id: str,
         winner_team_id: str,
     ) -> None:
+        if not self._require_staff(interaction):
+            await interaction.response.send_message("Not authorized.", ephemeral=True)
+            return
         try:
             match = ts.forfeit_match(
                 tournament_name=sanitize_text(tournament, max_length=60),
@@ -302,6 +337,9 @@ class TournamentCog(commands.Cog):
         match_id: str,
         reason: str,
     ) -> None:
+        if not self._require_staff(interaction):
+            await interaction.response.send_message("Not authorized.", ephemeral=True)
+            return
         safe_tournament = sanitize_text(tournament, max_length=60)
         tour = ts.get_tournament(safe_tournament)
         if tour is None:
@@ -339,6 +377,9 @@ class TournamentCog(commands.Cog):
         match_id: str,
         reason: str,
     ) -> None:
+        if not self._require_staff(interaction):
+            await interaction.response.send_message("Not authorized.", ephemeral=True)
+            return
         safe_tournament = sanitize_text(tournament, max_length=60)
         tour = ts.get_tournament(safe_tournament)
         if tour is None:
@@ -372,6 +413,9 @@ class TournamentCog(commands.Cog):
         match_id: str,
         resolution: str,
     ) -> None:
+        if not self._require_staff(interaction):
+            await interaction.response.send_message("Not authorized.", ephemeral=True)
+            return
         safe_tournament = sanitize_text(tournament, max_length=60)
         tour = ts.get_tournament(safe_tournament)
         if tour is None:
@@ -410,6 +454,9 @@ class TournamentCog(commands.Cog):
 
     @app_commands.command(name="advance_round", description="Advance winners to the next round")
     async def advance_round(self, interaction: discord.Interaction, tournament: str) -> None:
+        if not self._require_staff(interaction):
+            await interaction.response.send_message("Not authorized.", ephemeral=True)
+            return
         try:
             safe_tournament = sanitize_text(tournament, max_length=60)
             matches = ts.advance_round(tournament_name=safe_tournament)
@@ -438,6 +485,9 @@ class TournamentCog(commands.Cog):
         tournament: str,
         group_name: str,
     ) -> None:
+        if not self._require_staff(interaction):
+            await interaction.response.send_message("Not authorized.", ephemeral=True)
+            return
         try:
             gs.ensure_group(
                 tournament_name=sanitize_text(tournament, max_length=60),
@@ -459,6 +509,9 @@ class TournamentCog(commands.Cog):
         team_name: str,
         coach_id: str,
     ) -> None:
+        if not self._require_staff(interaction):
+            await interaction.response.send_message("Not authorized.", ephemeral=True)
+            return
         try:
             coach_int = int(coach_id.replace("<@", "").replace(">", "").replace("!", ""))
         except ValueError:
@@ -489,6 +542,9 @@ class TournamentCog(commands.Cog):
         score_a: int,
         score_b: int,
     ) -> None:
+        if not self._require_staff(interaction):
+            await interaction.response.send_message("Not authorized.", ephemeral=True)
+            return
         try:
             gs.record_group_match(
                 tournament_name=sanitize_text(tournament, max_length=60),
@@ -512,6 +568,9 @@ class TournamentCog(commands.Cog):
         tournament: str,
         group_name: str,
     ) -> None:
+        if not self._require_staff(interaction):
+            await interaction.response.send_message("Not authorized.", ephemeral=True)
+            return
         try:
             teams = gs.get_standings(
                 tournament_name=sanitize_text(tournament, max_length=60),
@@ -536,6 +595,9 @@ class TournamentCog(commands.Cog):
         group_name: str,
         top_n: int,
     ) -> None:
+        if not self._require_staff(interaction):
+            await interaction.response.send_message("Not authorized.", ephemeral=True)
+            return
         try:
             advanced = gs.advance_top(
                 tournament_name=sanitize_text(tournament, max_length=60),
@@ -559,6 +621,9 @@ class TournamentCog(commands.Cog):
         group_name: str,
         double_round: bool = False,
     ) -> None:
+        if not self._require_staff(interaction):
+            await interaction.response.send_message("Not authorized.", ephemeral=True)
+            return
         try:
             fixtures = gs.generate_group_fixtures(
                 tournament_name=sanitize_text(tournament, max_length=60),
@@ -575,6 +640,26 @@ class TournamentCog(commands.Cog):
         await interaction.response.send_message(
             "Fixtures:\n" + "\n".join(lines), ephemeral=True
         )
+
+    @app_commands.command(name="tournament_stats", description="Show wins/losses and GD for a tournament.")
+    async def tournament_stats(self, interaction: discord.Interaction, tournament: str) -> None:
+        if not self._require_staff(interaction):
+            await interaction.response.send_message("Not authorized.", ephemeral=True)
+            return
+        leaderboard = stats_service.compute_leaderboard(sanitize_text(tournament, max_length=60))
+        if not leaderboard:
+            await interaction.response.send_message("No completed matches yet.", ephemeral=True)
+            return
+        lines = [
+            f"{idx+1}. {row['team_name']} - W {row['wins']} / L {row['losses']} (GD {row['gd']})"
+            for idx, row in enumerate(leaderboard)
+        ]
+        embed = make_embed(
+            title=f"Leaderboard: {tournament}",
+            description="\n".join(lines),
+            color=DEFAULT_COLOR,
+        )
+        await interaction.response.send_message(embed=embed, ephemeral=True)
 
 
 async def setup(bot: commands.Bot) -> None:

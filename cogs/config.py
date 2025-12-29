@@ -4,6 +4,8 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
+from utils.permissions import is_staff_user
+
 
 SAFE_CONFIG_FIELDS = {
     "discord_application_id",
@@ -28,19 +30,11 @@ SAFE_CONFIG_FIELDS = {
 class ConfigCog(commands.Cog):
     def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
-
-    def _is_staff(self, interaction: discord.Interaction) -> bool:
-        settings = getattr(self.bot, "settings", None)
-        if settings is None:
-            return False
-        role_ids = {role.id for role in getattr(interaction.user, "roles", [])}
-        if settings.staff_role_ids:
-            return bool(role_ids.intersection(settings.staff_role_ids))
-        return bool(getattr(interaction.user, "guild_permissions", None).manage_guild)
+        self.settings = getattr(bot, "settings", None)
 
     @app_commands.command(name="config_view", description="View current bot configuration (non-secret).")
     async def config_view(self, interaction: discord.Interaction) -> None:
-        if not self._is_staff(interaction):
+        if not is_staff_user(interaction.user, self.settings):
             await interaction.response.send_message("Not authorized.", ephemeral=True)
             return
         settings = getattr(self.bot, "settings", None)
@@ -56,7 +50,7 @@ class ConfigCog(commands.Cog):
     @app_commands.command(name="config_set", description="Set a runtime config value (staff only).")
     @app_commands.describe(field="Config field", value="New value")
     async def config_set(self, interaction: discord.Interaction, field: str, value: str) -> None:
-        if not self._is_staff(interaction):
+        if not is_staff_user(interaction.user, self.settings):
             await interaction.response.send_message("Not authorized.", ephemeral=True)
             return
         field = field.strip()

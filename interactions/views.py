@@ -24,6 +24,7 @@ from services.roster_service import (
     set_roster_status,
     delete_roster,
     update_roster_name,
+    validate_roster_identity,
 )
 from services.submission_service import (
     create_submission_record,
@@ -291,9 +292,10 @@ class SubmitRosterConfirmView(SafeView):
             return
 
         players = get_roster_players(self.roster_id)
-        if len(players) < 8:
+        ok, reason = validate_roster_identity(self.roster_id)
+        if not ok:
             await interaction.response.edit_message(
-                content="You need at least 8 players before submitting.",
+                content=reason,
                 view=None,
             )
             return
