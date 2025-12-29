@@ -32,24 +32,33 @@ Roster management and staff review bot for Discord tournaments.
 
 ## Commands
 
-- `/roster [tournament]` ? Opens the roster creation modal and dashboard (create/add/remove/view/submit). Example: `/roster` or `/roster tournament:"Summer Cup"`.
-- `/unlock_roster <coach> [tournament]` ? Staff-only unlock; uses latest roster if tournament is omitted. Example: `/unlock_roster @Coach` or `/unlock_roster @Coach tournament:"Summer Cup"`.
-- `/dev_on` / `/dev_off` ? Staff-only test-mode routing toggle (staff portal messages + logs to test channel). Examples: `/dev_on`, `/dev_off`.
-- `/ping` ? Health check. Example: `/ping`.
-- `/help` ? Command list and coach instructions. Example: `/help`.
-- Tournament (minimal, single elimination scaffold):
-  - `/tournament_create <name> [format] [rules]`
-  - `/tournament_state <name> <DRAFT|REG_OPEN|IN_PROGRESS|COMPLETED>`
-  - `/tournament_register <tournament> <team_name> <coach_id> [seed]`
-  - `/tournament_bracket <tournament>` (pairs registered teams into round-1 matches)
-  - `/match_report <tournament> <match_id> <reporter_team_id> <score_for> <score_against>`
-  - `/match_confirm <tournament> <match_id> <confirming_team_id>`
-  - `/match_deadline <tournament> <match_id> <deadline note>`
-  - `/match_forfeit <tournament> <match_id> <winner_team_id>`
-  - `/match_reschedule <tournament> <match_id> <reason>`
-  - `/dispute_add <tournament> <match_id> <reason>`
-  - `/dispute_resolve <tournament> <match_id> <resolution>`
-  - `/advance_round <tournament>`
+Roster & Staff
+- `/roster [tournament]` opens the roster dashboard (create/add/remove/view/submit). Example: `/roster tournament:"Summer Cup"`.
+- `/unlock_roster <coach> [tournament]` staff-only unlock; uses latest roster if tournament omitted. Example: `/unlock_roster @Coach`.
+- `/dev_on` / `/dev_off` staff-only test-mode routing toggle (routes portals/logs to test channel).
+- `/help` command catalog + coach/staff steps.
+- `/ping` health check.
+
+Tournament
+- `/tournament_create <name> [format] [rules]`
+- `/tournament_state <name> <DRAFT|REG_OPEN|IN_PROGRESS|COMPLETED>`
+- `/tournament_register <tournament> <team_name> <coach_id> [seed]`
+- `/tournament_bracket <tournament>` publish round-1 bracket and advance state.
+- `/tournament_bracket_preview <tournament>` dry-run preview of round-1 pairings (no DB writes).
+- `/advance_round <tournament>` create next round from winners.
+- `/match_report <tournament> <match_id> <reporter_team_id> <score_for> <score_against>`
+- `/match_confirm <tournament> <match_id> <confirming_team_id>`
+- `/match_deadline <tournament> <match_id> <deadline note>`
+- `/match_forfeit <tournament> <match_id> <winner_team_id>`
+- `/match_reschedule <tournament> <match_id> <reason>`
+- `/dispute_add <tournament> <match_id> <reason>`
+- `/dispute_resolve <tournament> <match_id> <resolution>`
+- Groups: `/group_create`, `/group_register`, `/group_generate_fixtures [double_round]`, `/group_match_report`, `/group_standings`, `/group_advance <top_n>`
+
+Operations
+- `/config_view` staff-only snapshot of non-secret runtime settings.
+- `/config_set <field> <value>` staff-only runtime override (no persistence; restart to reset).
+- `/rules_template` returns a starter rules template to copy/paste.
 
 ## Configuration
 
@@ -116,6 +125,11 @@ at runtime (session-scoped).
 - Lint/format: `ruff check .` (and `ruff format .` if you want formatting).
 - Type check: `mypy .`
 - Tests: `python -m pytest`
+
+### Embed style guide
+- Use `utils.embeds.make_embed` to keep colors/icons consistent.
+- Colors: `DEFAULT_COLOR` (info), `SUCCESS_COLOR` (confirmations), `WARNING_COLOR` (attention), `ERROR_COLOR` (errors).
+- Prefer concise descriptions and ephemeral responses to reduce channel noise.
 
 ## Testing
 

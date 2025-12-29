@@ -4,6 +4,8 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
+from utils.embeds import DEFAULT_COLOR, WARNING_COLOR, make_embed
+
 
 class HelpCog(commands.Cog):
     def __init__(self, bot: commands.Bot) -> None:
@@ -11,66 +13,89 @@ class HelpCog(commands.Cog):
 
     @app_commands.command(name="help", description="Show bot commands and examples.")
     async def help_command(self, interaction: discord.Interaction) -> None:
-        embed = discord.Embed(
+        embed = make_embed(
             title="Offside Bot Help",
-            description="Command list with examples and roster submission steps.",
+            description="Command catalog with examples. All responses are ephemeral.",
+            color=DEFAULT_COLOR,
         )
         embed.add_field(
-            name="Coach: submit roster (players + coach)",
+            name="Coach Workflow",
             value=(
-                "1) Run `/roster` (optionally add `tournament`).\n"
-                "2) Fill Team Name (and Tournament Name if needed).\n"
-                "3) Use **Add Player** to add each player.\n"
-                "4) Use **Submit Roster** and confirm.\n"
-                "5) Wait for staff approval/rejection."
+                "1) `/roster` → open dashboard modal.\n"
+                "2) Add players via **Add Player** (use exact Discord IDs).\n"
+                "3) Minimum 8 players to submit; limits depend on coach role.\n"
+                "4) **Submit Roster** once ready.\n"
+                "5) If rejected, staff will unlock; fix issues and re-submit."
             ),
             inline=False,
         )
         embed.add_field(
-            name="Staff: review submission",
+            name="Staff Workflow",
             value=(
-                "1) Open the staff submission post.\n"
-                "2) Click **Approve** or **Reject**.\n"
-                "3) Use `/unlock_roster @Coach` if edits are needed."
+                "• Review submissions in the staff portal. Use the dashboard buttons to approve/reject.\n"
+                "• If rejecting, include a clear reason; then `/unlock_roster @Coach`.\n"
+                "• Approved rosters are posted to the roster portal automatically."
             ),
             inline=False,
         )
         embed.add_field(
-            name="/roster [tournament]",
-            value="Open the roster creation modal.\nExample: `/roster`",
-            inline=False,
-        )
-        embed.add_field(
-            name="/unlock_roster <coach> [tournament]",
-            value="Staff-only roster unlock.\nExample: `/unlock_roster @Coach`",
-            inline=False,
-        )
-        embed.add_field(
-            name="/dev_on",
-            value="Staff-only test mode routing on (routes portal posts/logs to test channel).\nExample: `/dev_on`",
-            inline=False,
-        )
-        embed.add_field(
-            name="/dev_off",
-            value="Staff-only test mode routing off.\nExample: `/dev_off`",
-            inline=False,
-        )
-        embed.add_field(
-            name="/ping",
-            value="Health check.\nExample: `/ping`",
-            inline=False,
-        )
-        embed.add_field(
-            name="Tournament commands (staff)",
+            name="Coach Commands",
             value=(
-                "- `/tournament_create`, `/tournament_state` (DRAFT|REG_OPEN|IN_PROGRESS|COMPLETED)\n"
-                "- `/tournament_register`, `/tournament_bracket`, `/advance_round`\n"
-                "- `/match_report`, `/match_confirm`, `/match_deadline`, `/match_forfeit`\n"
-                "- `/match_reschedule`, `/dispute_add`, `/dispute_resolve`"
+                "- `/roster [tournament]` open roster dashboard.\n"
+                "- `/help` show this menu."
             ),
             inline=False,
         )
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+        embed.add_field(
+            name="Staff/Admin Commands",
+            value=(
+                "- `/unlock_roster <coach> [tournament]`\n"
+                "- `/dev_on` / `/dev_off` toggle test routing\n"
+                "- `/config_view` / `/config_set <field> <value>` (runtime only)\n"
+                "- `/ping` health check"
+            ),
+            inline=False,
+        )
+        embed.add_field(
+            name="Tournament Commands",
+            value=(
+                "- Setup: `/tournament_create`, `/tournament_state`, `/tournament_register`\n"
+                "- Brackets: `/tournament_bracket` publish, `/tournament_bracket_preview` dry-run\n"
+                "- Matches: `/match_report`, `/match_confirm`, `/match_deadline`, `/match_forfeit`\n"
+                "- Scheduling: `/match_reschedule`, `/dispute_add`, `/dispute_resolve`, `/advance_round`\n"
+                "- Groups: `/group_create`, `/group_register`, `/group_generate_fixtures`, "
+                "`/group_match_report`, `/group_standings`, `/group_advance`"
+            ),
+            inline=False,
+        )
+        embed.add_field(
+            name="Roster Submission Steps",
+            value=(
+                "1) Gather player Discord IDs and your assigned team name.\n"
+                "2) Open `/roster`, enter team name and tournament (if requested).\n"
+                "3) Add players one by one; verify counts meet min/role limits.\n"
+                "4) Submit once; wait for staff review. If rejected, address the reason and re-submit after unlock.\n"
+                "5) Approved rosters are final until staff reopens them."
+            ),
+            inline=False,
+        )
+        embed.add_field(
+            name="Notes",
+            value=(
+                "- All messages are ephemeral to reduce channel noise.\n"
+                "- Use exact team names and IDs; inputs are trimmed/sanitized.\n"
+                "- Test mode routes logs and portals to the configured test channel."
+            ),
+            inline=False,
+        )
+        embed.set_footer(text="Need more? Reach out in the staff channel.")
+
+        warning = make_embed(
+            title="Reminder",
+            description="Keep player counts within your role limits and double-check IDs before submitting.",
+            color=WARNING_COLOR,
+        )
+        await interaction.response.send_message(embeds=[embed, warning], ephemeral=True)
 
 
 async def setup(bot: commands.Bot) -> None:

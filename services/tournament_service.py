@@ -215,6 +215,40 @@ def generate_bracket(
     return matches
 
 
+def preview_bracket(
+    *,
+    tournament_name: str,
+    collection: Collection | None = None,
+) -> list[dict[str, Any]]:
+    """
+    Return round 1 pairings without mutating the database or advancing state.
+    Useful for "dry-run" previews before publishing the bracket.
+    """
+    if collection is None:
+        collection = get_collection()
+    tour = get_tournament(tournament_name, collection=collection)
+    if tour is None:
+        raise RuntimeError("Tournament not found.")
+    participants = list_participants(tournament_name, collection=collection)
+    if len(participants) < 2:
+        raise RuntimeError("Need at least 2 participants to preview a bracket.")
+
+    pairs = _pairwise(participants)
+    preview: list[dict[str, Any]] = []
+    for idx, (a, b) in enumerate(pairs, start=1):
+        preview.append(
+            {
+                "round": 1,
+                "sequence": idx,
+                "team_a": a.get("team_name"),
+                "team_b": b.get("team_name") if b else None,
+                "team_a_seed": a.get("seed"),
+                "team_b_seed": b.get("seed") if b else None,
+            }
+        )
+    return preview
+
+
 def list_matches(tournament_name: str, *, collection: Collection | None = None) -> list[dict[str, Any]]:
     if collection is None:
         collection = get_collection()
@@ -236,6 +270,7 @@ def report_score(
     score_for: int,
     score_against: int,
     collection: Collection | None = None,
+    expected_updated_at: datetime | None = None,
 ) -> dict[str, Any]:
     if collection is None:
         collection = get_collection()
@@ -262,10 +297,15 @@ def report_score(
         "against": int(score_against),
         "reported_at": _now(),
     }
-    collection.update_one(
-        {"_id": match["_id"]},
+    filter_doc = {"_id": match["_id"]}
+    if expected_updated_at is not None:
+        filter_doc["updated_at"] = expected_updated_at
+    result = collection.update_one(
+        filter_doc,
         {"$set": {"scores": scores, "status": MATCH_STATUS_REPORTED, "updated_at": _now()}},
     )
+    if expected_updated_at is not None and result.matched_count == 0:
+        raise RuntimeError("Match changed; retry your update.")
     match["scores"] = scores
     match["status"] = MATCH_STATUS_REPORTED
     return match
@@ -277,6 +317,7 @@ def confirm_match(
     match_id: str,
     confirming_team_id: Any,
     collection: Collection | None = None,
+    expected_updated_at: datetime | None = None,
 ) -> dict[str, Any]:
     if collection is None:
         collection = get_collection()
@@ -304,8 +345,11 @@ def confirm_match(
     loser = match.get("team_b")
     if reporter_score["for"] < reporter_score["against"]:
         winner, loser = loser, winner
-    collection.update_one(
-        {"_id": match["_id"]},
+    filter_doc = {"_id": match["_id"]}
+    if expected_updated_at is not None:
+        filter_doc["updated_at"] = expected_updated_at
+    result = collection.update_one(
+        filter_doc,
         {
             "$set": {
                 "scores": scores,
@@ -315,6 +359,8 @@ def confirm_match(
             }
         },
     )
+    if expected_updated_at is not None and result.matched_count == 0:
+        raise RuntimeError("Match changed; retry your update.")
     match["winner"] = winner
     match["status"] = MATCH_STATUS_COMPLETED
     return match

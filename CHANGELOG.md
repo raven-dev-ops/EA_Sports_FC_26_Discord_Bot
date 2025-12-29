@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.8] - 2025-12-29
+
+### Added
+- `/config_view` and `/config_set` (staff-only) to inspect/override safe runtime settings.
+- `/tournament_bracket_preview` dry-run pairing preview (no DB writes) plus name-aware bracket/advance embeds.
+- `/rules_template` starter rules generator and categorized `/help` with consistent embed styling via `utils.embeds`.
+- Centralized embed colors (info/success/warning/error) for consistent UX.
+
+### Changed
+- Match report/confirm uses optimistic concurrency via `expected_updated_at` to avoid clobbering concurrent edits.
+- Bracket and advance responses now use embeds and team names instead of raw IDs.
+
+## [0.2.7] - 2025-12-29
+
+### Added
+- Privacy policy retention/deletion notes and deployment hardening guidance in README/CONTRIBUTING.
+- VERSION file to track releases.
+- Tournament channel routing stores message references for later edits; roster/tournament flows guarded with optimistic status checks.
+
 ## [0.2.0] - 2025-12-28
 
 ### Added

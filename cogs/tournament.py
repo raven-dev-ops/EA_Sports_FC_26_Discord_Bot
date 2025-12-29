@@ -7,6 +7,7 @@ from discord.ext import commands
 from services import tournament_service as ts
 from services import group_service as gs
 from utils.discord_wrappers import fetch_channel, send_message, edit_message
+from utils.embeds import DEFAULT_COLOR, SUCCESS_COLOR, WARNING_COLOR, make_embed
 
 
 class TournamentCog(commands.Cog):
@@ -115,10 +116,48 @@ class TournamentCog(commands.Cog):
         except RuntimeError as exc:
             await interaction.response.send_message(str(exc), ephemeral=True)
             return
-        lines = [f"Round {m['round']} Match {m['sequence']}: {m['team_a']} vs {m['team_b']}" for m in matches]
-        await interaction.response.send_message(
-            "Bracket generated:\n" + "\n".join(lines), ephemeral=True
+        # Display with team names if available
+        participants = ts.list_participants(tournament.strip())
+        name_map = {p["_id"]: p["team_name"] for p in participants}
+        lines = [
+            f"R{m['round']} M{m['sequence']}: {name_map.get(m['team_a'], m['team_a'])}"
+            f" vs {name_map.get(m.get('team_b'), m.get('team_b'))}"
+            for m in matches
+        ]
+        embed = make_embed(
+            title=f"Bracket published: {tournament}",
+            description="\n".join(lines),
+            color=SUCCESS_COLOR,
         )
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
+    @app_commands.command(
+        name="tournament_bracket_preview", description="Preview the first-round bracket without publishing."
+    )
+    async def tournament_bracket_preview(self, interaction: discord.Interaction, tournament: str) -> None:
+        try:
+            preview = ts.preview_bracket(tournament_name=tournament.strip())
+        except RuntimeError as exc:
+            await interaction.response.send_message(str(exc), ephemeral=True)
+            return
+
+        def _fmt(name: str | None, seed: int | None) -> str:
+            if not name:
+                return "BYE"
+            return f"{name} (seed {seed})" if seed is not None else name
+
+        lines = [
+            f"R1 M{m['sequence']}: {_fmt(m['team_a'], m.get('team_a_seed'))}"
+            f" vs {_fmt(m.get('team_b'), m.get('team_b_seed'))}"
+            for m in preview
+        ]
+        embed = make_embed(
+            title=f"Bracket preview: {tournament}",
+            description="\n".join(lines),
+            color=DEFAULT_COLOR,
+            footer="No changes saved; rerun after edits or seeding adjustments.",
+        )
+        await interaction.response.send_message(embed=embed, ephemeral=True)
 
     @app_commands.command(name="match_report", description="Report a match score")
     async def match_report(
@@ -134,6 +173,7 @@ class TournamentCog(commands.Cog):
         if tour is None:
             await interaction.response.send_message("Tournament not found.", ephemeral=True)
             return
+        expected = tour.get("updated_at")
         try:
             reported = ts.report_score(
                 tournament_name=tournament.strip(),
@@ -141,6 +181,7 @@ class TournamentCog(commands.Cog):
                 reporter_team_id=reporter_team_id,
                 score_for=score_for,
                 score_against=score_against,
+                expected_updated_at=expected,
             )
         except RuntimeError as exc:
             await interaction.response.send_message(str(exc), ephemeral=True)
@@ -170,11 +211,13 @@ class TournamentCog(commands.Cog):
         if tour is None:
             await interaction.response.send_message("Tournament not found.", ephemeral=True)
             return
+        expected = tour.get("updated_at")
         try:
             match = ts.confirm_match(
                 tournament_name=tournament.strip(),
                 match_id=match_id,
                 confirming_team_id=confirming_team_id,
+                expected_updated_at=expected,
             )
         except RuntimeError as exc:
             await interaction.response.send_message(str(exc), ephemeral=True)
@@ -322,7 +365,7 @@ class TournamentCog(commands.Cog):
             await interaction.response.send_message("Tournament not found.", ephemeral=True)
             return
         try:
-            ts.resolve_dispute(
+            match = ts.resolve_dispute(
                 tournament_name=tournament.strip(),
                 match_id=match_id,
                 resolution=resolution,
@@ -332,7 +375,7 @@ class TournamentCog(commands.Cog):
             return
         _, disputes_ch = await self._get_channels(interaction, tour)
         if disputes_ch:
-            existing_msg_id = ts.get_tournament(tournament.strip()).get("dispute_message_id")
+            existing_msg_id = match.get("dispute_message_id")
             if existing_msg_id:
                 try:
                     msg = await disputes_ch.fetch_message(existing_msg_id)
@@ -359,11 +402,20 @@ class TournamentCog(commands.Cog):
         except RuntimeError as exc:
             await interaction.response.send_message(str(exc), ephemeral=True)
             return
-        lines = [f"Round {m['round']} Match {m['sequence']}: {m['team_a']} vs {m['team_b']}" for m in matches]
-        await interaction.response.send_message(
-            "Next round created:\n" + "\n".join(lines),
-            ephemeral=True,
+        participants = ts.list_participants(tournament.strip())
+        name_map = {p["_id"]: p["team_name"] for p in participants}
+        lines = [
+            f"R{m['round']} M{m['sequence']}: {name_map.get(m['team_a'], m['team_a'])}"
+            f" vs {name_map.get(m.get('team_b'), m.get('team_b'))}"
+            for m in matches
+        ]
+        round_label = matches[0]["round"] if matches else "next"
+        embed = make_embed(
+            title=f"Advanced to round {round_label}",
+            description="\n".join(lines) if lines else "No new matches created.",
+            color=WARNING_COLOR,
         )
+        await interaction.response.send_message(embed=embed, ephemeral=True)
 
     @app_commands.command(name="group_create", description="Create a group within a tournament")
     async def group_create(
