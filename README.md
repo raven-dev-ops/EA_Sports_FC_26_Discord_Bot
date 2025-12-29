@@ -44,6 +44,12 @@ Roster management and staff review bot for Discord tournaments.
   - `/tournament_bracket <tournament>` (pairs registered teams into round-1 matches)
   - `/match_report <tournament> <match_id> <reporter_team_id> <score_for> <score_against>`
   - `/match_confirm <tournament> <match_id> <confirming_team_id>`
+  - `/match_deadline <tournament> <match_id> <deadline note>`
+  - `/match_forfeit <tournament> <match_id> <winner_team_id>`
+  - `/match_reschedule <tournament> <match_id> <reason>`
+  - `/dispute_add <tournament> <match_id> <reason>`
+  - `/dispute_resolve <tournament> <match_id> <resolution>`
+  - `/advance_round <tournament>`
 
 ## Configuration
 
