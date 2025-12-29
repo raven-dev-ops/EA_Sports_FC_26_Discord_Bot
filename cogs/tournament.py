@@ -6,11 +6,23 @@ from discord.ext import commands
 
 from services import tournament_service as ts
 from services import group_service as gs
+from utils.discord_wrappers import fetch_channel, send_message
 
 
 class TournamentCog(commands.Cog):
     def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
+
+    async def _get_channels(
+        self, interaction: discord.Interaction, tournament: dict
+    ) -> tuple[discord.abc.Messageable | None, discord.abc.Messageable | None]:
+        matches_ch = None
+        disputes_ch = None
+        if tournament.get("matches_channel_id"):
+            matches_ch = await fetch_channel(interaction.client, int(tournament["matches_channel_id"]))
+        if tournament.get("disputes_channel_id"):
+            disputes_ch = await fetch_channel(interaction.client, int(tournament["disputes_channel_id"]))
+        return matches_ch, disputes_ch
 
     @app_commands.command(name="tournament_create", description="Create a tournament")
     async def tournament_create(
@@ -118,6 +130,10 @@ class TournamentCog(commands.Cog):
         score_for: int,
         score_against: int,
     ) -> None:
+        tour = ts.get_tournament(tournament.strip())
+        if tour is None:
+            await interaction.response.send_message("Tournament not found.", ephemeral=True)
+            return
         try:
             reported = ts.report_score(
                 tournament_name=tournament.strip(),
@@ -129,6 +145,13 @@ class TournamentCog(commands.Cog):
         except RuntimeError as exc:
             await interaction.response.send_message(str(exc), ephemeral=True)
             return
+        matches_ch, _ = await self._get_channels(interaction, tour)
+        if matches_ch:
+            await send_message(
+                matches_ch,
+                f"[{tournament}] Match {match_id} reported: {reporter_team_id} "
+                f"{score_for}-{score_against} (status: {reported.get('status')})",
+            )
         await interaction.response.send_message(
             f"Score recorded for match {match_id}: {score_for}-{score_against}.", ephemeral=True
         )
@@ -141,6 +164,10 @@ class TournamentCog(commands.Cog):
         match_id: str,
         confirming_team_id: str,
     ) -> None:
+        tour = ts.get_tournament(tournament.strip())
+        if tour is None:
+            await interaction.response.send_message("Tournament not found.", ephemeral=True)
+            return
         try:
             match = ts.confirm_match(
                 tournament_name=tournament.strip(),
@@ -150,6 +177,12 @@ class TournamentCog(commands.Cog):
         except RuntimeError as exc:
             await interaction.response.send_message(str(exc), ephemeral=True)
             return
+        matches_ch, _ = await self._get_channels(interaction, tour)
+        if matches_ch:
+            await send_message(
+                matches_ch,
+                f"[{tournament}] Match {match_id} confirmed. Winner: {match.get('winner')}",
+            )
         await interaction.response.send_message(
             f"Match {match_id} confirmed. Winner: {match.get('winner')}", ephemeral=True
         )
@@ -197,6 +230,10 @@ class TournamentCog(commands.Cog):
         match_id: str,
         reason: str,
     ) -> None:
+        tour = ts.get_tournament(tournament.strip())
+        if tour is None:
+            await interaction.response.send_message("Tournament not found.", ephemeral=True)
+            return
         try:
             req = ts.request_reschedule(
                 tournament_name=tournament.strip(),
@@ -207,6 +244,13 @@ class TournamentCog(commands.Cog):
         except RuntimeError as exc:
             await interaction.response.send_message(str(exc), ephemeral=True)
             return
+        matches_ch, disputes_ch = await self._get_channels(interaction, tour)
+        target = disputes_ch or matches_ch
+        if target:
+            await send_message(
+                target,
+                f"[{tournament}] Reschedule requested for match {match_id} by <@{interaction.user.id}>: {reason}",
+            )
         await interaction.response.send_message(
             f"Reschedule request noted for match {match_id}. ({len(req.get('reschedule_requests', []))} requests total)",
             ephemeral=True,
@@ -220,6 +264,10 @@ class TournamentCog(commands.Cog):
         match_id: str,
         reason: str,
     ) -> None:
+        tour = ts.get_tournament(tournament.strip())
+        if tour is None:
+            await interaction.response.send_message("Tournament not found.", ephemeral=True)
+            return
         try:
             ts.add_dispute(
                 tournament_name=tournament.strip(),
@@ -230,6 +278,12 @@ class TournamentCog(commands.Cog):
         except RuntimeError as exc:
             await interaction.response.send_message(str(exc), ephemeral=True)
             return
+        _, disputes_ch = await self._get_channels(interaction, tour)
+        if disputes_ch:
+            await send_message(
+                disputes_ch,
+                f"[{tournament}] Dispute filed on match {match_id} by <@{interaction.user.id}>: {reason}",
+            )
         await interaction.response.send_message("Dispute recorded.", ephemeral=True)
 
     @app_commands.command(name="dispute_resolve", description="Resolve the latest dispute on a match")
@@ -240,6 +294,10 @@ class TournamentCog(commands.Cog):
         match_id: str,
         resolution: str,
     ) -> None:
+        tour = ts.get_tournament(tournament.strip())
+        if tour is None:
+            await interaction.response.send_message("Tournament not found.", ephemeral=True)
+            return
         try:
             ts.resolve_dispute(
                 tournament_name=tournament.strip(),
@@ -249,6 +307,12 @@ class TournamentCog(commands.Cog):
         except RuntimeError as exc:
             await interaction.response.send_message(str(exc), ephemeral=True)
             return
+        _, disputes_ch = await self._get_channels(interaction, tour)
+        if disputes_ch:
+            await send_message(
+                disputes_ch,
+                f"[{tournament}] Dispute resolved for match {match_id}: {resolution}",
+            )
         await interaction.response.send_message("Dispute resolved.", ephemeral=True)
 
     @app_commands.command(name="advance_round", description="Advance winners to the next round")
