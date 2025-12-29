@@ -191,6 +191,10 @@ def generate_bracket(
     if len(participants) < 2:
         raise RuntimeError("Need at least 2 participants to generate a bracket.")
 
+    existing_matches = list_matches(tournament_name, collection=collection)
+    if existing_matches:
+        return existing_matches
+
     now = _now()
     pairs = _pairwise(participants)
     matches: list[dict[str, Any]] = []

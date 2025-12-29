@@ -8,6 +8,7 @@ from services import tournament_service as ts
 from services import group_service as gs
 from utils.discord_wrappers import fetch_channel, send_message, edit_message
 from utils.embeds import DEFAULT_COLOR, SUCCESS_COLOR, WARNING_COLOR, make_embed
+from utils.validation import sanitize_text
 
 
 class TournamentCog(commands.Cog):
@@ -36,7 +37,9 @@ class TournamentCog(commands.Cog):
         matches_channel_id = None
         disputes_channel_id = None
         guild = interaction.guild
-        safe_name = name.strip()
+        safe_name = sanitize_text(name, max_length=60)
+        safe_format = sanitize_text(format, max_length=40)
+        safe_rules = sanitize_text(rules, max_length=400, allow_newlines=False) if rules else None
         if guild:
             try:
                 match_channel = await guild.create_text_channel(f"{safe_name}-matches")
@@ -47,8 +50,8 @@ class TournamentCog(commands.Cog):
                 pass
         tour = ts.create_tournament(
             name=safe_name,
-            format=format.strip(),
-            rules=rules,
+            format=safe_format,
+            rules=safe_rules,
             matches_channel_id=matches_channel_id,
             disputes_channel_id=disputes_channel_id,
         )
@@ -73,7 +76,7 @@ class TournamentCog(commands.Cog):
         }:
             await interaction.response.send_message("Invalid state.", ephemeral=True)
             return
-        updated = ts.update_tournament_state(name.strip(), state)
+        updated = ts.update_tournament_state(sanitize_text(name, max_length=60), state)
         if not updated:
             await interaction.response.send_message("Tournament not found.", ephemeral=True)
             return
@@ -97,8 +100,8 @@ class TournamentCog(commands.Cog):
             return
         try:
             participant = ts.add_participant(
-                tournament_name=tournament.strip(),
-                team_name=team_name.strip(),
+                tournament_name=sanitize_text(tournament, max_length=60),
+                team_name=sanitize_text(team_name, max_length=60),
                 coach_id=coach_int,
                 seed=seed,
             )
@@ -112,12 +115,13 @@ class TournamentCog(commands.Cog):
     @app_commands.command(name="tournament_bracket", description="Generate a bracket")
     async def tournament_bracket(self, interaction: discord.Interaction, tournament: str) -> None:
         try:
-            matches = ts.generate_bracket(tournament_name=tournament.strip())
+            safe_tournament = sanitize_text(tournament, max_length=60)
+            matches = ts.generate_bracket(tournament_name=safe_tournament)
         except RuntimeError as exc:
             await interaction.response.send_message(str(exc), ephemeral=True)
             return
         # Display with team names if available
-        participants = ts.list_participants(tournament.strip())
+        participants = ts.list_participants(safe_tournament)
         name_map = {p["_id"]: p["team_name"] for p in participants}
         lines = [
             f"R{m['round']} M{m['sequence']}: {name_map.get(m['team_a'], m['team_a'])}"
@@ -136,7 +140,7 @@ class TournamentCog(commands.Cog):
     )
     async def tournament_bracket_preview(self, interaction: discord.Interaction, tournament: str) -> None:
         try:
-            preview = ts.preview_bracket(tournament_name=tournament.strip())
+            preview = ts.preview_bracket(tournament_name=sanitize_text(tournament, max_length=60))
         except RuntimeError as exc:
             await interaction.response.send_message(str(exc), ephemeral=True)
             return
@@ -169,14 +173,15 @@ class TournamentCog(commands.Cog):
         score_for: int,
         score_against: int,
     ) -> None:
-        tour = ts.get_tournament(tournament.strip())
+        safe_tournament = sanitize_text(tournament, max_length=60)
+        tour = ts.get_tournament(safe_tournament)
         if tour is None:
             await interaction.response.send_message("Tournament not found.", ephemeral=True)
             return
         expected = tour.get("updated_at")
         try:
             reported = ts.report_score(
-                tournament_name=tournament.strip(),
+                tournament_name=safe_tournament,
                 match_id=match_id,
                 reporter_team_id=reporter_team_id,
                 score_for=score_for,
@@ -207,14 +212,15 @@ class TournamentCog(commands.Cog):
         match_id: str,
         confirming_team_id: str,
     ) -> None:
-        tour = ts.get_tournament(tournament.strip())
+        safe_tournament = sanitize_text(tournament, max_length=60)
+        tour = ts.get_tournament(safe_tournament)
         if tour is None:
             await interaction.response.send_message("Tournament not found.", ephemeral=True)
             return
         expected = tour.get("updated_at")
         try:
             match = ts.confirm_match(
-                tournament_name=tournament.strip(),
+                tournament_name=safe_tournament,
                 match_id=match_id,
                 confirming_team_id=confirming_team_id,
                 expected_updated_at=expected,
@@ -257,7 +263,11 @@ class TournamentCog(commands.Cog):
         match_id: str,
         deadline: str,
     ) -> None:
-        ok = ts.set_match_deadline(tournament_name=tournament.strip(), match_id=match_id, deadline=deadline)
+        ok = ts.set_match_deadline(
+            tournament_name=sanitize_text(tournament, max_length=60),
+            match_id=match_id,
+            deadline=sanitize_text(deadline, max_length=120),
+        )
         if not ok:
             await interaction.response.send_message("Tournament or match not found.", ephemeral=True)
             return
@@ -273,7 +283,7 @@ class TournamentCog(commands.Cog):
     ) -> None:
         try:
             match = ts.forfeit_match(
-                tournament_name=tournament.strip(),
+                tournament_name=sanitize_text(tournament, max_length=60),
                 match_id=match_id,
                 winner_team_id=winner_team_id,
             )
@@ -292,15 +302,16 @@ class TournamentCog(commands.Cog):
         match_id: str,
         reason: str,
     ) -> None:
-        tour = ts.get_tournament(tournament.strip())
+        safe_tournament = sanitize_text(tournament, max_length=60)
+        tour = ts.get_tournament(safe_tournament)
         if tour is None:
             await interaction.response.send_message("Tournament not found.", ephemeral=True)
             return
         try:
             req = ts.request_reschedule(
-                tournament_name=tournament.strip(),
+                tournament_name=safe_tournament,
                 match_id=match_id,
-                reason=reason,
+                reason=sanitize_text(reason, max_length=200),
                 requested_by=interaction.user.id,
             )
         except RuntimeError as exc:
@@ -328,15 +339,16 @@ class TournamentCog(commands.Cog):
         match_id: str,
         reason: str,
     ) -> None:
-        tour = ts.get_tournament(tournament.strip())
+        safe_tournament = sanitize_text(tournament, max_length=60)
+        tour = ts.get_tournament(safe_tournament)
         if tour is None:
             await interaction.response.send_message("Tournament not found.", ephemeral=True)
             return
         try:
             ts.add_dispute(
-                tournament_name=tournament.strip(),
+                tournament_name=safe_tournament,
                 match_id=match_id,
-                reason=reason,
+                reason=sanitize_text(reason, max_length=200),
                 filed_by=interaction.user.id,
             )
         except RuntimeError as exc:
@@ -360,15 +372,16 @@ class TournamentCog(commands.Cog):
         match_id: str,
         resolution: str,
     ) -> None:
-        tour = ts.get_tournament(tournament.strip())
+        safe_tournament = sanitize_text(tournament, max_length=60)
+        tour = ts.get_tournament(safe_tournament)
         if tour is None:
             await interaction.response.send_message("Tournament not found.", ephemeral=True)
             return
         try:
             match = ts.resolve_dispute(
-                tournament_name=tournament.strip(),
+                tournament_name=safe_tournament,
                 match_id=match_id,
-                resolution=resolution,
+                resolution=sanitize_text(resolution, max_length=200),
             )
         except RuntimeError as exc:
             await interaction.response.send_message(str(exc), ephemeral=True)
@@ -398,11 +411,12 @@ class TournamentCog(commands.Cog):
     @app_commands.command(name="advance_round", description="Advance winners to the next round")
     async def advance_round(self, interaction: discord.Interaction, tournament: str) -> None:
         try:
-            matches = ts.advance_round(tournament_name=tournament.strip())
+            safe_tournament = sanitize_text(tournament, max_length=60)
+            matches = ts.advance_round(tournament_name=safe_tournament)
         except RuntimeError as exc:
             await interaction.response.send_message(str(exc), ephemeral=True)
             return
-        participants = ts.list_participants(tournament.strip())
+        participants = ts.list_participants(safe_tournament)
         name_map = {p["_id"]: p["team_name"] for p in participants}
         lines = [
             f"R{m['round']} M{m['sequence']}: {name_map.get(m['team_a'], m['team_a'])}"
@@ -425,7 +439,10 @@ class TournamentCog(commands.Cog):
         group_name: str,
     ) -> None:
         try:
-            gs.ensure_group(tournament_name=tournament.strip(), group_name=group_name.strip())
+            gs.ensure_group(
+                tournament_name=sanitize_text(tournament, max_length=60),
+                group_name=sanitize_text(group_name, max_length=60),
+            )
         except RuntimeError as exc:
             await interaction.response.send_message(str(exc), ephemeral=True)
             return
@@ -449,9 +466,9 @@ class TournamentCog(commands.Cog):
             return
         try:
             gs.add_group_team(
-                tournament_name=tournament.strip(),
-                group_name=group_name.strip(),
-                team_name=team_name.strip(),
+                tournament_name=sanitize_text(tournament, max_length=60),
+                group_name=sanitize_text(group_name, max_length=60),
+                team_name=sanitize_text(team_name, max_length=60),
                 coach_id=coach_int,
             )
         except RuntimeError as exc:
@@ -474,10 +491,10 @@ class TournamentCog(commands.Cog):
     ) -> None:
         try:
             gs.record_group_match(
-                tournament_name=tournament.strip(),
-                group_name=group_name.strip(),
-                team_a=team_a.strip(),
-                team_b=team_b.strip(),
+                tournament_name=sanitize_text(tournament, max_length=60),
+                group_name=sanitize_text(group_name, max_length=60),
+                team_a=sanitize_text(team_a, max_length=60),
+                team_b=sanitize_text(team_b, max_length=60),
                 score_a=score_a,
                 score_b=score_b,
             )
@@ -497,7 +514,8 @@ class TournamentCog(commands.Cog):
     ) -> None:
         try:
             teams = gs.get_standings(
-                tournament_name=tournament.strip(), group_name=group_name.strip()
+                tournament_name=sanitize_text(tournament, max_length=60),
+                group_name=sanitize_text(group_name, max_length=60),
             )
         except RuntimeError as exc:
             await interaction.response.send_message(str(exc), ephemeral=True)
@@ -520,8 +538,8 @@ class TournamentCog(commands.Cog):
     ) -> None:
         try:
             advanced = gs.advance_top(
-                tournament_name=tournament.strip(),
-                group_name=group_name.strip(),
+                tournament_name=sanitize_text(tournament, max_length=60),
+                group_name=sanitize_text(group_name, max_length=60),
                 top_n=top_n,
             )
         except RuntimeError as exc:
@@ -543,8 +561,8 @@ class TournamentCog(commands.Cog):
     ) -> None:
         try:
             fixtures = gs.generate_group_fixtures(
-                tournament_name=tournament.strip(),
-                group_name=group_name.strip(),
+                tournament_name=sanitize_text(tournament, max_length=60),
+                group_name=sanitize_text(group_name, max_length=60),
                 double_round=double_round,
             )
         except RuntimeError as exc:

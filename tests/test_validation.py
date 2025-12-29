@@ -1,4 +1,4 @@
-from utils.validation import normalize_console, validate_team_name
+from utils.validation import normalize_console, validate_team_name, sanitize_text
 
 
 def test_validate_team_name_accepts_valid_values() -> None:
@@ -17,3 +17,10 @@ def test_normalize_console_aliases() -> None:
     assert normalize_console("ps5") == "PS"
     assert normalize_console("XBOX") == "XBOX"
     assert normalize_console("PC") == "PC"
+
+
+def test_sanitize_text_behaviour() -> None:
+    assert sanitize_text("  hello  ") == "hello"
+    assert sanitize_text("a\nb", allow_newlines=False) == "a b"
+    long_value = "x" * 400
+    assert len(sanitize_text(long_value, max_length=50)) == 50
