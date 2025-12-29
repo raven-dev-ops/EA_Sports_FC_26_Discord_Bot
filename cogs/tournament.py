@@ -5,6 +5,7 @@ from discord import app_commands
 from discord.ext import commands
 
 from services import tournament_service as ts
+from services import group_service as gs
 
 
 class TournamentCog(commands.Cog):
@@ -358,6 +359,32 @@ class TournamentCog(commands.Cog):
         names = [p["team_name"] for p in advanced]
         await interaction.response.send_message(
             f"Advanced: {', '.join(names)}", ephemeral=True
+        )
+
+    @app_commands.command(name="group_generate_fixtures", description="Generate group round-robin fixtures")
+    @app_commands.describe(double_round="If true, creates home/away mirror fixtures.")
+    async def group_generate_fixtures(
+        self,
+        interaction: discord.Interaction,
+        tournament: str,
+        group_name: str,
+        double_round: bool = False,
+    ) -> None:
+        try:
+            fixtures = gs.generate_group_fixtures(
+                tournament_name=tournament.strip(),
+                group_name=group_name.strip(),
+                double_round=double_round,
+            )
+        except RuntimeError as exc:
+            await interaction.response.send_message(str(exc), ephemeral=True)
+            return
+        lines = [
+            f"Round {f['round']} Match {f['sequence']}: {f['team_a']} vs {f.get('team_b')}"
+            for f in fixtures
+        ]
+        await interaction.response.send_message(
+            "Fixtures:\n" + "\n".join(lines), ephemeral=True
         )
 
 
