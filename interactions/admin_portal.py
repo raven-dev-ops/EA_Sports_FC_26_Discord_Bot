@@ -128,21 +128,26 @@ def bot_controls_embed() -> discord.Embed:
 def tournaments_embed() -> discord.Embed:
     embed = discord.Embed(
         title="Tournaments",
-        description="Multi-cycle roster selection and staff review.",
+        description="Tournament lifecycle controls and match flow (staff).",
         color=discord.Color.dark_blue(),
     )
     embed.add_field(
         name="Usage",
         value=(
-            "- Coaches open the roster dashboard from the portal.\n"
-            "- Staff approve/reject via buttons on submission posts.\n"
-            "- Staff can unlock locked rosters from this portal."
+            "- Create/state: `/tournament_create`, `/tournament_state DRAFT|REG_OPEN|IN_PROGRESS|COMPLETED`.\n"
+            "- Registration/bracket: `/tournament_register`, `/tournament_bracket`, `/advance_round`.\n"
+            "- Matches: `/match_report`, `/match_confirm`, `/match_deadline`, `/match_forfeit`.\n"
+            "- Reschedules/disputes: `/match_reschedule`, `/dispute_add`, `/dispute_resolve`."
         ),
         inline=False,
     )
     embed.add_field(
         name="Notes",
-        value="- Tournament name is optional; only use staff-provided names.\n- Roster caps are based on coach roles.",
+        value=(
+            "- Bracket generation is single-elimination scaffold.\n"
+            "- Forfeits immediately complete a match; advance winners to create next round.\n"
+            "- Use disputes for conflict resolution; add deadline notes for scheduling."
+        ),
         inline=False,
     )
     embed.set_footer(text="Ephemeral responses only.")

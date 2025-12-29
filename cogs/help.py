@@ -60,6 +60,16 @@ class HelpCog(commands.Cog):
             value="Health check.\nExample: `/ping`",
             inline=False,
         )
+        embed.add_field(
+            name="Tournament commands (staff)",
+            value=(
+                "- `/tournament_create`, `/tournament_state` (DRAFT|REG_OPEN|IN_PROGRESS|COMPLETED)\n"
+                "- `/tournament_register`, `/tournament_bracket`, `/advance_round`\n"
+                "- `/match_report`, `/match_confirm`, `/match_deadline`, `/match_forfeit`\n"
+                "- `/match_reschedule`, `/dispute_add`, `/dispute_resolve`"
+            ),
+            inline=False,
+        )
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
 
