@@ -11,6 +11,7 @@ from services.audit_service import (
     record_staff_action,
 )
 from services.roster_service import (
+    ROSTER_STATUS_UNLOCKED,
     ROSTER_STATUS_SUBMITTED,
     ROSTER_STATUS_APPROVED,
     ROSTER_STATUS_REJECTED,
@@ -24,6 +25,7 @@ from services.roster_service import (
 )
 from services.submission_service import (
     create_submission_record,
+    delete_submission_by_roster,
     get_submission_by_roster,
     update_submission_status,
 )
@@ -241,11 +243,30 @@ class SubmitRosterConfirmView(SafeView):
             )
             return
 
-        if get_submission_by_roster(self.roster_id):
-            await interaction.response.edit_message(
-                content="Roster is already submitted.", view=None
-            )
-            return
+        existing_submission = get_submission_by_roster(self.roster_id)
+        if existing_submission:
+            if roster.get("status") == ROSTER_STATUS_UNLOCKED:
+                # Clean up stale submission so the unlocked roster can be resubmitted.
+                removed = delete_submission_by_roster(self.roster_id)
+                if removed:
+                    channel_id = removed.get("staff_channel_id")
+                    channel = interaction.client.get_channel(channel_id)
+                    if channel is None:
+                        try:
+                            channel = await interaction.client.fetch_channel(channel_id)
+                        except discord.DiscordException:
+                            channel = None
+                    if channel:
+                        try:
+                            msg = await channel.fetch_message(removed.get("staff_message_id"))
+                            await msg.delete()
+                        except discord.DiscordException:
+                            pass
+            else:
+                await interaction.response.edit_message(
+                    content="Roster is already submitted.", view=None
+                )
+                return
 
         settings = getattr(interaction.client, "settings", None)
         if settings is None:

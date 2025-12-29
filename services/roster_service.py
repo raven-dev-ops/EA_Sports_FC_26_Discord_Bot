@@ -209,6 +209,8 @@ def set_roster_status(
     updates: dict[str, Any] = {"status": status, "updated_at": now}
     if status == ROSTER_STATUS_SUBMITTED:
         updates["submitted_at"] = now
+    if status in {ROSTER_STATUS_UNLOCKED, ROSTER_STATUS_DRAFT}:
+        updates["submitted_at"] = None
     collection.update_one(
         {"record_type": "team_roster", "_id": roster_id},
         {"$set": updates},
