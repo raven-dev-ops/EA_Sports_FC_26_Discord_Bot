@@ -33,6 +33,7 @@ from typing import Any
 import discord
 from pymongo import MongoClient
 from pymongo.collection import Collection
+from pymongo import UpdateOne
 
 
 DEFAULT_COLLECTION = "FIFADiscordMemberList"
@@ -63,6 +64,8 @@ class ExportClient(discord.Client):
         self.collection = collection
         self.inserted = 0
         self.updated = 0
+        self._buffer: list[UpdateOne] = []
+        self._buffer_size = 200  # tune for throughput vs. heartbeat health
 
     async def on_ready(self) -> None:
         logging.info("Logged in as %s (%s)", self.user, self.user.id if self.user else "unknown")
@@ -91,20 +94,31 @@ class ExportClient(discord.Client):
                 "roles": roles,
                 "updated_at": datetime.now(timezone.utc),
             }
-            result = self.collection.update_one(
-                {"guild_id": guild.id, "user_id": member.id},
-                {"$set": doc},
-                upsert=True,
+            self._buffer.append(
+                UpdateOne(
+                    {"guild_id": guild.id, "user_id": member.id},
+                    {"$set": doc},
+                    upsert=True,
+                )
             )
-            if result.matched_count:
-                self.updated += 1
-            else:
-                self.inserted += 1
             count += 1
-            if count % 500 == 0:
-                logging.info("Processed %s members (inserted %s, updated %s)", count, self.inserted, self.updated)
-                # Gentle pacing to avoid hitting global REST limits on large guilds.
-                await asyncio.sleep(0.25)
+
+            if len(self._buffer) >= self._buffer_size:
+                await self._flush_buffer()
+
+            if count % 200 == 0:
+                logging.info(
+                    "Processed %s members (inserted %s, updated %s)",
+                    count,
+                    self.inserted,
+                    self.updated,
+                )
+                await asyncio.sleep(0.1)
+            if count % 2000 == 0:
+                await asyncio.sleep(1.0)
+
+        # Flush any remaining updates
+        await self._flush_buffer()
 
         logging.info(
             "Done. Processed %s members (inserted %s, updated %s).",
@@ -113,6 +127,26 @@ class ExportClient(discord.Client):
             self.updated,
         )
         await self.close()
+
+    async def _flush_buffer(self) -> None:
+        if not self._buffer:
+            return
+        batch = self._buffer
+        self._buffer = []
+
+        def _write_ops() -> Any:
+            return self.collection.bulk_write(batch, ordered=False)
+
+        try:
+            result = await asyncio.to_thread(_write_ops)
+            self.inserted += result.upserted_count
+            # matched_count includes docs that matched; if they were upserts they are already counted.
+            self.updated += max(result.matched_count, 0)
+        except Exception as exc:  # pragma: no cover - defensive logging
+            logging.error("Bulk write failed: %s", exc)
+            # Re-queue the batch to retry gently
+            self._buffer.extend(batch)
+            await asyncio.sleep(1.0)
 
 
 def main() -> None:
