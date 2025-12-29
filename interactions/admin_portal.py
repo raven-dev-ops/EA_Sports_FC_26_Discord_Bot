@@ -1,12 +1,16 @@
 from __future__ import annotations
 
-import discord
-
 import logging
 
+import discord
 from utils.errors import send_interaction_error
 from interactions.views import SafeView
 from discord.ext import commands
+from services.submission_service import delete_submission_by_roster
+from services.roster_service import delete_roster, get_roster_for_coach
+from repositories.tournament_repo import ensure_cycle_by_name
+from services.roster_service import roster_is_locked
+from interactions.modals import RenameRosterModal
 
 
 def _coach_help_embed() -> discord.Embed:
@@ -222,6 +226,7 @@ class AdminPortalView(SafeView):
             ("Rosters", discord.ButtonStyle.primary, self.on_rosters),
             ("Players", discord.ButtonStyle.primary, self.on_players),
             ("DB Analytics", discord.ButtonStyle.primary, self.on_db),
+            ("Delete Roster", discord.ButtonStyle.danger, self.on_delete_roster),
         ]
         for label, style, handler in buttons:
             button = discord.ui.Button(label=label, style=style)
@@ -298,6 +303,11 @@ class AdminPortalView(SafeView):
             ephemeral=True,
             view=DBView(),
         )
+
+    async def on_delete_roster(self, interaction: discord.Interaction) -> None:
+        if not await self._ensure_staff(interaction):
+            return
+        await interaction.response.send_modal(DeleteRosterModal())
 
 
 class BotControlsView(SafeView):
@@ -382,10 +392,13 @@ class RostersView(SafeView):
         super().__init__(timeout=300)
         btn_flow = discord.ui.Button(label="Submission Flow", style=discord.ButtonStyle.primary)
         btn_audit = discord.ui.Button(label="Audit Info", style=discord.ButtonStyle.secondary)
+        btn_delete = discord.ui.Button(label="Delete Roster", style=discord.ButtonStyle.danger)
         btn_flow.callback = self.on_flow
         btn_audit.callback = self.on_audit
+        btn_delete.callback = self.on_delete
         self.add_item(btn_flow)
         self.add_item(btn_audit)
+        self.add_item(btn_delete)
 
     async def on_flow(self, interaction: discord.Interaction) -> None:
         await interaction.response.send_message(
@@ -398,6 +411,9 @@ class RostersView(SafeView):
             "Approvals, rejections, and unlocks are recorded in the audit collection.",
             ephemeral=True,
         )
+
+    async def on_delete(self, interaction: discord.Interaction) -> None:
+        await interaction.response.send_modal(DeleteRosterModal())
 
 
 class PlayersView(SafeView):
@@ -463,6 +479,71 @@ class DBView(SafeView):
             ephemeral=True,
         )
 
+
+class DeleteRosterModal(discord.ui.Modal, title="Delete Roster"):
+    coach_id = discord.ui.TextInput(
+        label="Coach Discord ID or mention",
+        placeholder="@Coach or 1234567890",
+    )
+    tournament_name = discord.ui.TextInput(
+        label="Tournament Name (optional)",
+        required=False,
+        placeholder="Leave blank for current active tournament",
+    )
+
+    async def on_submit(self, interaction: discord.Interaction) -> None:
+        coach_value = self.coach_id.value.strip()
+        coach_id = None
+        if coach_value.isdigit():
+            coach_id = int(coach_value)
+        else:
+            try:
+                coach_id = int(coach_value.replace("<@", "").replace(">", "").replace("!", ""))
+            except ValueError:
+                coach_id = None
+        if coach_id is None:
+            await interaction.response.send_message(
+                "Enter a valid coach Discord ID or mention.",
+                ephemeral=True,
+            )
+            return
+
+        cycle_id = None
+        if self.tournament_name.value:
+            cycle = ensure_cycle_by_name(self.tournament_name.value.strip())
+            cycle_id = cycle["_id"]
+
+        roster = get_roster_for_coach(coach_id, cycle_id=cycle_id)
+        if roster is None:
+            await interaction.response.send_message(
+                "Roster not found for that coach/tournament.",
+                ephemeral=True,
+            )
+            return
+
+        # Delete submission message if it exists
+        submission = delete_submission_by_roster(roster["_id"])
+        settings = getattr(interaction.client, "settings", None)
+        if settings and submission:
+            channel_id = settings.channel_roster_portal_id
+            channel = interaction.client.get_channel(channel_id)
+            if channel is None:
+                try:
+                    channel = await interaction.client.fetch_channel(channel_id)
+                except discord.DiscordException:
+                    channel = None
+            if channel is not None:
+                try:
+                    msg = await channel.fetch_message(submission["staff_message_id"])
+                    await msg.delete()
+                except discord.DiscordException:
+                    pass
+
+        delete_roster(roster["_id"])
+        await interaction.response.send_message(
+            f"Roster deleted for coach <@{coach_id}>.",
+            ephemeral=True,
+        )
 
 async def send_admin_portal_message(
     interaction: discord.Interaction,

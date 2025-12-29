@@ -19,6 +19,8 @@ from services.roster_service import (
     get_roster_players,
     roster_is_locked,
     set_roster_status,
+    delete_roster,
+    update_roster_name,
 )
 from services.submission_service import (
     create_submission_record,
@@ -28,6 +30,7 @@ from services.submission_service import (
 from utils.errors import log_interaction_error, send_interaction_error
 from utils.formatting import format_submission_message
 from utils.formatting import format_roster_line
+from utils.validation import validate_team_name
 from utils.channel_routing import resolve_channel_id
 
 
@@ -105,6 +108,14 @@ class RosterDashboardView(SafeView):
         )
         submit_button.callback = self.on_submit_roster
         self.add_item(submit_button)
+
+        rename_button = discord.ui.Button(
+            label="Edit Team Name",
+            style=discord.ButtonStyle.secondary,
+            disabled=not has_roster or is_locked,
+        )
+        rename_button.callback = self.on_rename_team
+        self.add_item(rename_button)
 
     async def on_create_roster(self, interaction: discord.Interaction) -> None:
         await interaction.response.send_modal(CreateRosterModal(cycle_id=self.cycle_id))
@@ -187,6 +198,15 @@ class RosterDashboardView(SafeView):
             view=SubmitRosterConfirmView(roster_id=self.roster_id),
             ephemeral=True,
         )
+
+    async def on_rename_team(self, interaction: discord.Interaction) -> None:
+        if self.roster_id is None:
+            await interaction.response.send_message(
+                "Roster not found. Please open the dashboard again.",
+                ephemeral=True,
+            )
+            return
+        await interaction.response.send_modal(RenameRosterModal(roster_id=self.roster_id))
 
 
 class SubmitRosterConfirmView(SafeView):
@@ -310,10 +330,14 @@ class StaffReviewView(SafeView):
         self.add_item(reject_button)
 
     async def on_approve(self, interaction: discord.Interaction) -> None:
-        await self._handle_decision(interaction, approved=True)
+        await interaction.response.send_modal(
+            StaffDecisionModal(roster_id=self.roster_id, approved=True)
+        )
 
     async def on_reject(self, interaction: discord.Interaction) -> None:
-        await self._handle_decision(interaction, approved=False)
+        await interaction.response.send_modal(
+            StaffDecisionModal(roster_id=self.roster_id, approved=False)
+        )
 
     def _is_staff(self, interaction: discord.Interaction) -> bool:
         settings = getattr(interaction.client, "settings", None)
@@ -325,7 +349,11 @@ class StaffReviewView(SafeView):
         return bool(getattr(interaction.user, "guild_permissions", None).manage_guild)
 
     async def _handle_decision(
-        self, interaction: discord.Interaction, *, approved: bool
+        self,
+        interaction: discord.Interaction,
+        *,
+        approved: bool,
+        reason: str | None = None,
     ) -> None:
         if not self._is_staff(interaction):
             await interaction.response.send_message(
@@ -365,6 +393,8 @@ class StaffReviewView(SafeView):
             roster_lines=roster_lines,
             status_text=status_text,
         )
+        if reason:
+            message_content += f"\nReason: {reason}"
 
         update_submission_status(
             roster_id=self.roster_id,
@@ -383,9 +413,53 @@ class StaffReviewView(SafeView):
         await interaction.response.send_message(
             f"Roster {status_text.lower()}.", ephemeral=True
         )
-        if interaction.message is None:
-            return
-        try:
-            await interaction.message.edit(content=message_content, view=self)
-        except discord.DiscordException:
-            return
+
+        submission = get_submission_by_roster(self.roster_id)
+        if submission:
+            channel = interaction.client.get_channel(submission.get("staff_channel_id"))
+            if channel is None:
+                try:
+                    channel = await interaction.client.fetch_channel(
+                        submission.get("staff_channel_id")
+                    )
+                except discord.DiscordException:
+                    channel = None
+            if channel:
+                try:
+                    msg = await channel.fetch_message(submission.get("staff_message_id"))
+                    view = StaffReviewView(roster_id=self.roster_id)
+                    view.disable_items()
+                    await msg.edit(content=message_content, view=view)
+                except discord.DiscordException:
+                    pass
+
+        if reason:
+            try:
+                user = await interaction.client.fetch_user(roster.get("coach_discord_id"))
+                await user.send(
+                    f"Your roster was {status_text.lower()}.\n"
+                    f"Team: {roster.get('team_name', 'Unnamed Team')}\n"
+                    f"Reason: {reason}"
+                )
+            except Exception:
+                pass
+
+
+class StaffDecisionModal(discord.ui.Modal, title="Decision"):
+    reason = discord.ui.TextInput(
+        label="Reason (optional)",
+        required=False,
+        style=discord.TextStyle.paragraph,
+        max_length=500,
+    )
+
+    def __init__(self, *, roster_id: Any, approved: bool) -> None:
+        super().__init__()
+        self.roster_id = roster_id
+        self.approved = approved
+
+    async def on_submit(self, interaction: discord.Interaction) -> None:
+        parent = StaffReviewView(roster_id=self.roster_id)
+        await parent._handle_decision(
+            interaction, approved=self.approved, reason=self.reason.value.strip() or None
+        )

@@ -98,6 +98,7 @@ class OffsideBot(commands.Bot):
             logging.info("Posted admin/staff portal embed.")
         except Exception:
             logging.exception("Failed to post admin portal.")
+        await asyncio.sleep(0.5)
         try:
             await post_coach_portal(self)
             logging.info("Posted coach portal embed.")

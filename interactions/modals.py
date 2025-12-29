@@ -14,6 +14,7 @@ from services.roster_service import (
     get_roster_for_coach,
     remove_player,
     roster_is_locked,
+    update_roster_name,
 )
 from services.banlist_service import get_ban_reason
 from utils.validation import normalize_console, parse_discord_id, validate_team_name
@@ -238,4 +239,46 @@ class RemovePlayerModal(SafeModal, title="Remove Player"):
         await interaction.response.send_message(
             f"Player removed. Roster now {count}/{cap}.",
             ephemeral=True,
+        )
+
+
+class RenameRosterModal(SafeModal, title="Edit Team Name"):
+    def __init__(self, *, roster_id: Any) -> None:
+        super().__init__()
+        self.roster_id = roster_id
+
+    team_name = discord.ui.TextInput(
+        label="New Team Name",
+        min_length=2,
+        max_length=32,
+        placeholder="Enter your team name",
+    )
+
+    async def on_submit(self, interaction: discord.Interaction) -> None:
+        roster = get_roster_by_id(self.roster_id)
+        if roster is None:
+            await interaction.response.send_message(
+                "Roster not found. Please open the dashboard again.",
+                ephemeral=True,
+            )
+            return
+
+        if roster_is_locked(roster):
+            await interaction.response.send_message(
+                "This roster is locked and cannot be edited.",
+                ephemeral=True,
+            )
+            return
+
+        name = self.team_name.value.strip()
+        if not validate_team_name(name):
+            await interaction.response.send_message(
+                "Team name must be 2-32 characters using letters, numbers, spaces, '-' or '_'.",
+                ephemeral=True,
+            )
+            return
+
+        update_roster_name(self.roster_id, name)
+        await interaction.response.send_message(
+            f"Team name updated to **{name}**.", ephemeral=True
         )

@@ -186,6 +186,20 @@ def remove_player(
     return result.deleted_count > 0
 
 
+def delete_roster(
+    roster_id: Any, *, collection: Collection | None = None
+) -> None:
+    if collection is None:
+        collection = get_collection()
+    collection.delete_many(
+        {"record_type": "roster_player", "roster_id": roster_id}
+    )
+    collection.delete_many(
+        {"record_type": "submission_message", "roster_id": roster_id}
+    )
+    collection.delete_one({"record_type": "team_roster", "_id": roster_id})
+
+
 def set_roster_status(
     roster_id: Any, status: str, *, collection: Collection | None = None
 ) -> None:
@@ -207,3 +221,15 @@ def roster_is_locked(roster: dict[str, Any]) -> bool:
         ROSTER_STATUS_APPROVED,
         ROSTER_STATUS_REJECTED,
     }
+
+
+def update_roster_name(
+    roster_id: Any, team_name: str, *, collection: Collection | None = None
+) -> None:
+    if collection is None:
+        collection = get_collection()
+    now = datetime.now(timezone.utc)
+    collection.update_one(
+        {"record_type": "team_roster", "_id": roster_id},
+        {"$set": {"team_name": team_name, "updated_at": now}},
+    )
