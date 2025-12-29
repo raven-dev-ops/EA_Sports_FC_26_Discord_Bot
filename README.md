@@ -14,7 +14,7 @@ Roster management and staff review bot for Discord tournaments.
 ## Portals (auto-posted on startup)
 
 - **Coach Roster Portal** (channel `CHANNEL_ROSTER_PORTAL_ID`): embed with buttons to open the roster dashboard (create/add/remove/view/submit) and to show the coach help guide. Responses are ephemeral.
-- **Admin Control Panel** (channel `CHANNEL_ADMIN_PORTAL_ID`): embed with buttons for Bot Controls, Tournaments, Coaches, Rosters, Players, DB/Analytics. Each button opens an ephemeral embed and action buttons (e.g., test-mode toggle, health check, roster unlock guidance). The bot deletes the previous portal embed before posting a new one.
+- **Admin/Staff Control Panel** (channel `CHANNEL_STAFF_PORTAL_ID`): embed with buttons for Bot Controls, Tournaments, Coaches, Rosters, Players, DB/Analytics. Each button opens an ephemeral embed and action buttons (e.g., test-mode toggle, health check, roster unlock guidance). The bot deletes the previous portal embed before posting a new one.
 
 ## Commands (still available)
 
@@ -34,8 +34,8 @@ Required (startup):
 - `ROLE_COACH_PREMIUM_ID`
 - `ROLE_COACH_PREMIUM_PLUS_ID`
 - `CHANNEL_ROSTER_PORTAL_ID`
-- `CHANNEL_STAFF_SUBMISSIONS_ID`
-- `CHANNEL_ADMIN_PORTAL_ID`
+- `CHANNEL_COACH_PORTAL_ID`
+- `CHANNEL_STAFF_PORTAL_ID`
 
 Required when `TEST_MODE=true`:
 - `DISCORD_TEST_CHANNEL`

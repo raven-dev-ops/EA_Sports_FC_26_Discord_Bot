@@ -98,7 +98,7 @@ async def send_coach_portal_message(
 
     test_mode = bool(getattr(interaction.client, "test_mode", False))
     target_channel_id = resolve_channel_id(
-        settings, settings.channel_roster_portal_id, test_mode=test_mode
+        settings, settings.channel_coach_portal_id, test_mode=test_mode
     )
 
     channel = interaction.client.get_channel(target_channel_id)

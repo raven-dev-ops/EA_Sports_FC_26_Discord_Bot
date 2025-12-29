@@ -473,7 +473,7 @@ async def send_admin_portal_message(
 
     test_mode = bool(getattr(interaction.client, "test_mode", False))
     target_channel_id = resolve_channel_id(
-        settings, settings.channel_admin_portal_id, test_mode=test_mode
+        settings, settings.channel_staff_portal_id, test_mode=test_mode
     )
 
     channel = interaction.client.get_channel(target_channel_id)
@@ -515,7 +515,7 @@ async def post_admin_portal(bot: commands.Bot) -> None:
 
     test_mode = bool(getattr(bot, "test_mode", False))
     target_channel_id = resolve_channel_id(
-        settings, settings.channel_admin_portal_id, test_mode=test_mode
+        settings, settings.channel_staff_portal_id, test_mode=test_mode
     )
 
     channel = bot.get_channel(target_channel_id)
