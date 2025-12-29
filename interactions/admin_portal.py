@@ -393,12 +393,15 @@ class RostersView(SafeView):
         btn_flow = discord.ui.Button(label="Submission Flow", style=discord.ButtonStyle.primary)
         btn_audit = discord.ui.Button(label="Audit Info", style=discord.ButtonStyle.secondary)
         btn_delete = discord.ui.Button(label="Delete Roster", style=discord.ButtonStyle.danger)
+        btn_unlock = discord.ui.Button(label="Unlock Roster", style=discord.ButtonStyle.success)
         btn_flow.callback = self.on_flow
         btn_audit.callback = self.on_audit
         btn_delete.callback = self.on_delete
+        btn_unlock.callback = self.on_unlock
         self.add_item(btn_flow)
         self.add_item(btn_audit)
         self.add_item(btn_delete)
+        self.add_item(btn_unlock)
 
     async def on_flow(self, interaction: discord.Interaction) -> None:
         await interaction.response.send_message(
@@ -414,6 +417,9 @@ class RostersView(SafeView):
 
     async def on_delete(self, interaction: discord.Interaction) -> None:
         await interaction.response.send_modal(DeleteRosterModal())
+
+    async def on_unlock(self, interaction: discord.Interaction) -> None:
+        await interaction.response.send_modal(UnlockRosterModal())
 
 
 class PlayersView(SafeView):
@@ -542,6 +548,54 @@ class DeleteRosterModal(discord.ui.Modal, title="Delete Roster"):
         delete_roster(roster["_id"])
         await interaction.response.send_message(
             f"Roster deleted for coach <@{coach_id}>.",
+            ephemeral=True,
+        )
+
+
+class UnlockRosterModal(discord.ui.Modal, title="Unlock Roster"):
+    coach_id = discord.ui.TextInput(
+        label="Coach Discord ID or mention",
+        placeholder="@Coach or 1234567890",
+    )
+    tournament_name = discord.ui.TextInput(
+        label="Tournament Name (optional)",
+        required=False,
+        placeholder="Leave blank for current active tournament",
+    )
+
+    async def on_submit(self, interaction: discord.Interaction) -> None:
+        coach_value = self.coach_id.value.strip()
+        coach_id = None
+        if coach_value.isdigit():
+            coach_id = int(coach_value)
+        else:
+            try:
+                coach_id = int(coach_value.replace("<@", "").replace(">", "").replace("!", ""))
+            except ValueError:
+                coach_id = None
+        if coach_id is None:
+            await interaction.response.send_message(
+                "Enter a valid coach Discord ID or mention.",
+                ephemeral=True,
+            )
+            return
+
+        cycle_id = None
+        if self.tournament_name.value:
+            cycle = ensure_cycle_by_name(self.tournament_name.value.strip())
+            cycle_id = cycle["_id"]
+
+        roster = get_roster_for_coach(coach_id, cycle_id=cycle_id)
+        if roster is None:
+            await interaction.response.send_message(
+                "Roster not found for that coach/tournament.",
+                ephemeral=True,
+            )
+            return
+
+        set_roster_status(roster["_id"], ROSTER_STATUS_UNLOCKED)
+        await interaction.response.send_message(
+            f"Roster unlocked for coach <@{coach_id}>.",
             ephemeral=True,
         )
 
