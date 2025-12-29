@@ -433,9 +433,7 @@ class StaffReviewView(SafeView):
             if channel:
                 try:
                     msg = await channel.fetch_message(submission.get("staff_message_id"))
-                    view = StaffReviewView(roster_id=self.roster_id)
-                    view.disable_items()
-                    await msg.edit(content=message_content, view=view)
+                    await msg.edit(content=message_content, view=None)
                 except discord.DiscordException:
                     pass
 
