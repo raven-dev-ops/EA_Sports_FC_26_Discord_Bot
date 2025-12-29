@@ -201,7 +201,11 @@ def delete_roster(
 
 
 def set_roster_status(
-    roster_id: Any, status: str, *, collection: Collection | None = None
+    roster_id: Any,
+    status: str,
+    *,
+    collection: Collection | None = None,
+    expected_updated_at: datetime | None = None,
 ) -> None:
     if collection is None:
         collection = get_collection()
@@ -211,10 +215,12 @@ def set_roster_status(
         updates["submitted_at"] = now
     if status in {ROSTER_STATUS_UNLOCKED, ROSTER_STATUS_DRAFT}:
         updates["submitted_at"] = None
-    collection.update_one(
-        {"record_type": "team_roster", "_id": roster_id},
-        {"$set": updates},
-    )
+    filter_doc: dict[str, Any] = {"record_type": "team_roster", "_id": roster_id}
+    if expected_updated_at is not None:
+        filter_doc["updated_at"] = expected_updated_at
+    result = collection.update_one(filter_doc, {"$set": updates})
+    if expected_updated_at is not None and result.matched_count == 0:
+        raise RuntimeError("Roster changed; reopen the dashboard and try again.")
 
 
 def roster_is_locked(roster: dict[str, Any]) -> bool:

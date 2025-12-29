@@ -41,6 +41,8 @@ def create_tournament(
     name: str,
     format: str = "single_elimination",
     rules: str | None = None,
+    matches_channel_id: int | None = None,
+    disputes_channel_id: int | None = None,
     collection: Collection | None = None,
 ) -> dict[str, Any]:
     if collection is None:
@@ -54,6 +56,8 @@ def create_tournament(
         "name": name,
         "format": format,
         "rules": rules,
+        "matches_channel_id": matches_channel_id,
+        "disputes_channel_id": disputes_channel_id,
         "state": TOURNAMENT_STATE_DRAFT,
         "created_at": now,
         "updated_at": now,
@@ -71,6 +75,27 @@ def update_tournament_state(
     result = collection.update_one(
         {"record_type": "tournament", "name": name},
         {"$set": {"state": state, "updated_at": _now()}},
+    )
+    return result.matched_count > 0
+
+
+def update_tournament_channels(
+    name: str,
+    *,
+    matches_channel_id: int | None = None,
+    disputes_channel_id: int | None = None,
+    collection: Collection | None = None,
+) -> bool:
+    if collection is None:
+        collection = get_collection()
+    updates: dict[str, Any] = {"updated_at": _now()}
+    if matches_channel_id is not None:
+        updates["matches_channel_id"] = matches_channel_id
+    if disputes_channel_id is not None:
+        updates["disputes_channel_id"] = disputes_channel_id
+    result = collection.update_one(
+        {"record_type": "tournament", "name": name},
+        {"$set": updates},
     )
     return result.matched_count > 0
 

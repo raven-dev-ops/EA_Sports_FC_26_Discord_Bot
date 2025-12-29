@@ -335,7 +335,11 @@ class SubmitRosterConfirmView(SafeView):
             staff_message_id=staff_message.id,
             status=status_text.upper(),
         )
-        set_roster_status(self.roster_id, ROSTER_STATUS_SUBMITTED)
+        set_roster_status(
+            self.roster_id,
+            ROSTER_STATUS_SUBMITTED,
+            expected_updated_at=roster.get("updated_at"),
+        )
 
         await interaction.response.edit_message(
             content="Roster submitted for staff review.", view=None
@@ -433,7 +437,11 @@ class StaffReviewView(SafeView):
             roster_id=self.roster_id,
             status=status_text.upper(),
         )
-        set_roster_status(self.roster_id, roster_status)
+        set_roster_status(
+            self.roster_id,
+            roster_status,
+            expected_updated_at=roster.get("updated_at"),
+        )
         record_staff_action(
             roster_id=self.roster_id,
             action=AUDIT_ACTION_APPROVED if approved else AUDIT_ACTION_REJECTED,

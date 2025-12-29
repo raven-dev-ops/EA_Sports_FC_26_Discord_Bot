@@ -20,7 +20,25 @@ class TournamentCog(commands.Cog):
         format: str = "single_elimination",
         rules: str | None = None,
     ) -> None:
-        tour = ts.create_tournament(name=name.strip(), format=format.strip(), rules=rules)
+        matches_channel_id = None
+        disputes_channel_id = None
+        guild = interaction.guild
+        safe_name = name.strip()
+        if guild:
+            try:
+                match_channel = await guild.create_text_channel(f"{safe_name}-matches")
+                matches_channel_id = match_channel.id
+                disputes_channel = await guild.create_text_channel(f"{safe_name}-disputes")
+                disputes_channel_id = disputes_channel.id
+            except discord.DiscordException:
+                pass
+        tour = ts.create_tournament(
+            name=safe_name,
+            format=format.strip(),
+            rules=rules,
+            matches_channel_id=matches_channel_id,
+            disputes_channel_id=disputes_channel_id,
+        )
         await interaction.response.send_message(
             f"Tournament `{tour['name']}` created (state: {tour['state']}).", ephemeral=True
         )

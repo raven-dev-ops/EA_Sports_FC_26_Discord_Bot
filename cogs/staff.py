@@ -68,7 +68,15 @@ class StaffCog(commands.Cog):
             )
             return
 
-        set_roster_status(roster["_id"], ROSTER_STATUS_UNLOCKED)
+        try:
+            set_roster_status(
+                roster["_id"],
+                ROSTER_STATUS_UNLOCKED,
+                expected_updated_at=roster.get("updated_at"),
+            )
+        except RuntimeError as exc:
+            await interaction.response.send_message(str(exc), ephemeral=True)
+            return
         submission = delete_submission_by_roster(roster["_id"])
         if submission:
             channel_id = submission.get("staff_channel_id")
