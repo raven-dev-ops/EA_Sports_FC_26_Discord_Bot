@@ -24,6 +24,12 @@ This Privacy Policy describes how the Offside Discord Bot ("the Bot") collects, 
 - Notify coaches and staff about roster status and tournament reminders.
 - Maintain server operations, prevent misuse, and resolve issues.
 
+## Data Retention and Deletion
+
+- Roster/tournament data: kept for the duration of the tournament and a short post-event review period determined by staff; staff can delete entries on request where feasible.
+- Logs: retained up to 30 days for troubleshooting.
+- Ban/blacklist data: retained in Google Sheets by server staff (not controlled by the Bot); requests must go to staff.
+
 ## Sharing and Disclosure
 
 - Information is shared only within the Discord server (e.g., staff-only channels) to fulfill roster review.
@@ -45,6 +51,7 @@ This Privacy Policy describes how the Offside Discord Bot ("the Bot") collects, 
 
 - You can stop using the Bot at any time.
 - Server staff can remove the Bot or delete stored roster data where applicable.
+- You may request deletion or correction of roster/tournament data via server staff; ban/blacklist updates must be handled by staff who own that sheet.
 
 ## Children's Privacy
 

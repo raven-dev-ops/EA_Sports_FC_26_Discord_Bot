@@ -133,6 +133,13 @@ at runtime (session-scoped).
 3. Scale the worker dyno:
    - `heroku ps:scale worker=1 -a <app-name>`
 
+## Deployment Hardening (Recommended)
+- Enable Privileged Intents (Server Members) in the Discord developer portal if you need member exports or eligibility checks.
+- Lock down secrets: use Heroku config vars or `.env` locally; never commit tokens/URIs/keys.
+- Limit MongoDB access (IP allowlist / auth) and enforce strong credentials.
+- Use test mode in staging guilds before toggling `TEST_MODE=false` for production.
+- CI already runs ruff/mypy/pytest; keep it green before deploys.
+
 ## Documentation
 
 - Security policy: `SECURITY.md`
