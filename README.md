@@ -30,13 +30,20 @@ Roster management and staff review bot for Discord tournaments.
 - **Admin/Staff Control Panel** (channel `CHANNEL_STAFF_PORTAL_ID`): embed with buttons for Bot Controls, Tournaments, Coaches, Rosters, Players, DB/Analytics. Each button opens an ephemeral embed and action buttons (e.g., test-mode toggle, health check, roster unlock guidance). The bot deletes the previous portal embed before posting a new one.
 - **Approved Roster Posts** (channel `CHANNEL_ROSTER_PORTAL_ID`): only approved rosters are reposted here after staff approval; submission reviews happen in the staff portal.
 
-## Commands (still available)
+## Commands
 
-- `/roster [tournament]` — Opens the roster creation modal and dashboard (create/add/remove/view/submit). Example: `/roster` or `/roster tournament:"Summer Cup"`.
-- `/unlock_roster <coach> [tournament]` — Staff-only unlock; uses latest roster if tournament is omitted. Example: `/unlock_roster @Coach` or `/unlock_roster @Coach tournament:"Summer Cup"`.
-- `/dev_on` / `/dev_off` — Staff-only test-mode routing toggle (staff portal messages + logs to test channel). Examples: `/dev_on`, `/dev_off`.
-- `/ping` — Health check. Example: `/ping`.
-- `/help` — Command list and coach instructions. Example: `/help`.
+- `/roster [tournament]` ? Opens the roster creation modal and dashboard (create/add/remove/view/submit). Example: `/roster` or `/roster tournament:"Summer Cup"`.
+- `/unlock_roster <coach> [tournament]` ? Staff-only unlock; uses latest roster if tournament is omitted. Example: `/unlock_roster @Coach` or `/unlock_roster @Coach tournament:"Summer Cup"`.
+- `/dev_on` / `/dev_off` ? Staff-only test-mode routing toggle (staff portal messages + logs to test channel). Examples: `/dev_on`, `/dev_off`.
+- `/ping` ? Health check. Example: `/ping`.
+- `/help` ? Command list and coach instructions. Example: `/help`.
+- Tournament (minimal, single elimination scaffold):
+  - `/tournament_create <name> [format] [rules]`
+  - `/tournament_state <name> <DRAFT|REG_OPEN|IN_PROGRESS|COMPLETED>`
+  - `/tournament_register <tournament> <team_name> <coach_id> [seed]`
+  - `/tournament_bracket <tournament>` (pairs registered teams into round-1 matches)
+  - `/match_report <tournament> <match_id> <reporter_team_id> <score_for> <score_against>`
+  - `/match_confirm <tournament> <match_id> <confirming_team_id>`
 
 ## Configuration
 
