@@ -1,4 +1,5 @@
 import re
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 TEAM_NAME_PATTERN = re.compile(r"^[A-Za-z0-9 _-]{2,32}$")
 DISCORD_ID_PATTERN = re.compile(r"\d+")
@@ -19,6 +20,27 @@ CONSOLE_ALIASES = {
     "NINTENDO SWITCH": "SWITCH",
 }
 
+PLATFORM_ALIASES = {
+    "PC": "PC",
+    "WINDOWS": "PC",
+    "PS5": "PS5",
+    "PLAYSTATION 5": "PS5",
+    "PLAYSTATION5": "PS5",
+}
+
+YES_NO_ALIASES = {
+    "YES": True,
+    "Y": True,
+    "TRUE": True,
+    "ON": True,
+    "1": True,
+    "NO": False,
+    "N": False,
+    "FALSE": False,
+    "OFF": False,
+    "0": False,
+}
+
 
 def validate_team_name(value: str) -> bool:
     return bool(TEAM_NAME_PATTERN.fullmatch(value.strip()))
@@ -34,6 +56,45 @@ def parse_discord_id(value: str) -> int | None:
     if not match:
         return None
     return int(match.group(0))
+
+
+def parse_int_in_range(value: str, *, min_value: int, max_value: int) -> int | None:
+    cleaned = value.strip()
+    if not cleaned:
+        return None
+    if not cleaned.isdigit():
+        return None
+    parsed = int(cleaned)
+    if parsed < min_value or parsed > max_value:
+        return None
+    return parsed
+
+
+def normalize_yes_no(value: str) -> bool | None:
+    cleaned = value.strip().upper()
+    if not cleaned:
+        return None
+    return YES_NO_ALIASES.get(cleaned)
+
+
+def normalize_platform(value: str) -> str | None:
+    cleaned = value.strip().upper()
+    if not cleaned:
+        return None
+    return PLATFORM_ALIASES.get(cleaned)
+
+
+def normalize_timezone(value: str) -> str | None:
+    cleaned = value.strip()
+    if not cleaned:
+        return None
+    if cleaned.upper() == "UTC":
+        return "UTC"
+    try:
+        ZoneInfo(cleaned)
+    except ZoneInfoNotFoundError:
+        return None
+    return cleaned
 
 
 def sanitize_text(value: str, *, max_length: int = 300, allow_newlines: bool = False) -> str:

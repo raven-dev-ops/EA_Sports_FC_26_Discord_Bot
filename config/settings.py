@@ -14,15 +14,19 @@ class Settings:
     discord_client_id: int | None
     discord_public_key: str | None
     interactions_endpoint_url: str | None
-    discord_test_channel_id: int | None
     test_mode: bool
     role_broskie_id: int
     role_super_league_coach_id: int
     role_coach_premium_id: int
     role_coach_premium_plus_id: int
-    channel_roster_portal_id: int
-    channel_coach_portal_id: int
-    channel_staff_portal_id: int
+    channel_staff_portal_id: int | None
+    channel_club_portal_id: int | None
+    channel_coach_portal_id: int | None
+    channel_recruit_portal_id: int | None
+    channel_staff_monitor_id: int | None
+    channel_roster_listing_id: int | None
+    channel_recruit_listing_id: int | None
+    channel_club_listing_id: int | None
     staff_role_ids: set[int]
     mongodb_uri: str | None
     mongodb_db_name: str | None
@@ -34,6 +38,11 @@ class Settings:
     use_sharding: bool = False
     shard_count: int | None = None
     feature_flags: set[str] = field(default_factory=set)
+    fc25_stats_cache_ttl_seconds: int = 900
+    fc25_stats_http_timeout_seconds: int = 7
+    fc25_stats_max_concurrency: int = 3
+    fc25_stats_rate_limit_per_guild: int = 20
+    fc25_default_platform: str = "common-gen5"
 
 
 def _required_str(name: str, missing: list[str]) -> str:
@@ -138,16 +147,6 @@ def load_settings() -> Settings:
         constants.ROLE_COACH_PREMIUM_PLUS_ID_ENV, missing, invalid
     )
 
-    channel_roster_portal_id = _required_int(
-        constants.CHANNEL_ROSTER_PORTAL_ID_ENV, missing, invalid
-    )
-    channel_coach_portal_id = _required_int(
-        constants.CHANNEL_COACH_PORTAL_ID_ENV, missing, invalid
-    )
-    channel_staff_portal_id = _required_int(
-        constants.CHANNEL_STAFF_PORTAL_ID_ENV, missing, invalid
-    )
-
     if missing or invalid:
         details = []
         if missing:
@@ -156,16 +155,47 @@ def load_settings() -> Settings:
             details.append(f"Invalid integer config: {_format_list(invalid)}")
         raise RuntimeError("; ".join(details))
 
-    discord_test_channel_id = _optional_int(constants.DISCORD_TEST_CHANNEL_ENV)
     test_mode = _optional_bool(constants.TEST_MODE_ENV, default=True)
     use_sharding = _optional_bool(constants.USE_SHARDING_ENV, default=False)
     shard_count = _optional_int(constants.SHARD_COUNT_ENV)
     feature_flags = _optional_str_set(constants.FEATURE_FLAGS_ENV)
+    staff_role_ids = _optional_int_set(constants.STAFF_ROLE_IDS_ENV)
 
-    if test_mode and discord_test_channel_id is None:
-        raise RuntimeError(
-            "DISCORD_TEST_CHANNEL is required when TEST_MODE is enabled."
-        )
+    channel_staff_portal_id = _optional_int(constants.CHANNEL_STAFF_PORTAL_ID_ENV)
+    channel_club_portal_id = _optional_int(constants.CHANNEL_CLUB_PORTAL_ID_ENV)
+    channel_coach_portal_id = _optional_int(constants.CHANNEL_COACH_PORTAL_ID_ENV)
+    channel_recruit_portal_id = _optional_int(constants.CHANNEL_RECRUIT_PORTAL_ID_ENV)
+
+    channel_staff_monitor_id = _optional_int(constants.CHANNEL_STAFF_MONITOR_ID_ENV)
+
+    channel_roster_listing_id = _optional_int(constants.CHANNEL_ROSTER_LISTING_ID_ENV)
+    if channel_roster_listing_id is None:
+        channel_roster_listing_id = _optional_int(constants.CHANNEL_ROSTER_PORTAL_ID_ENV)
+    channel_recruit_listing_id = _optional_int(constants.CHANNEL_RECRUIT_LISTING_ID_ENV)
+    channel_club_listing_id = _optional_int(constants.CHANNEL_CLUB_LISTING_ID_ENV)
+
+    fc25_stats_cache_ttl_seconds = _optional_int_default(
+        constants.FC25_STATS_CACHE_TTL_SECONDS_ENV, default=900
+    )
+    fc25_stats_http_timeout_seconds = _optional_int_default(
+        constants.FC25_STATS_HTTP_TIMEOUT_SECONDS_ENV, default=7
+    )
+    fc25_stats_max_concurrency = _optional_int_default(
+        constants.FC25_STATS_MAX_CONCURRENCY_ENV, default=3
+    )
+    fc25_stats_rate_limit_per_guild = _optional_int_default(
+        constants.FC25_STATS_RATE_LIMIT_PER_GUILD_ENV, default=20
+    )
+    fc25_default_platform = _optional_str(constants.FC25_DEFAULT_PLATFORM_ENV) or "common-gen5"
+
+    if fc25_stats_cache_ttl_seconds <= 0:
+        raise RuntimeError("FC25_STATS_CACHE_TTL_SECONDS must be > 0.")
+    if fc25_stats_http_timeout_seconds <= 0:
+        raise RuntimeError("FC25_STATS_HTTP_TIMEOUT_SECONDS must be > 0.")
+    if fc25_stats_max_concurrency <= 0:
+        raise RuntimeError("FC25_STATS_MAX_CONCURRENCY must be > 0.")
+    if fc25_stats_rate_limit_per_guild <= 0:
+        raise RuntimeError("FC25_STATS_RATE_LIMIT_PER_GUILD must be > 0.")
 
     return Settings(
         discord_token=discord_token,
@@ -173,16 +203,20 @@ def load_settings() -> Settings:
         discord_client_id=_optional_int(constants.DISCORD_CLIENT_ID_ENV),
         discord_public_key=_optional_str(constants.DISCORD_PUBLIC_KEY_ENV),
         interactions_endpoint_url=_optional_str(constants.DISCORD_INTERACTIONS_ENDPOINT_URL_ENV),
-        discord_test_channel_id=discord_test_channel_id,
         test_mode=test_mode,
         role_broskie_id=role_broskie_id,
         role_super_league_coach_id=role_super_league_coach_id,
         role_coach_premium_id=role_coach_premium_id,
         role_coach_premium_plus_id=role_coach_premium_plus_id,
-        channel_roster_portal_id=channel_roster_portal_id,
-        channel_coach_portal_id=channel_coach_portal_id,
         channel_staff_portal_id=channel_staff_portal_id,
-        staff_role_ids=_optional_int_set(constants.STAFF_ROLE_IDS_ENV),
+        channel_club_portal_id=channel_club_portal_id,
+        channel_coach_portal_id=channel_coach_portal_id,
+        channel_recruit_portal_id=channel_recruit_portal_id,
+        channel_staff_monitor_id=channel_staff_monitor_id,
+        channel_roster_listing_id=channel_roster_listing_id,
+        channel_recruit_listing_id=channel_recruit_listing_id,
+        channel_club_listing_id=channel_club_listing_id,
+        staff_role_ids=staff_role_ids,
         mongodb_uri=_optional_str(constants.MONGODB_URI_ENV),
         mongodb_db_name=_optional_str(constants.MONGODB_DB_NAME_ENV),
         mongodb_collection=_optional_str(constants.MONGODB_COLLECTION_ENV),
@@ -197,6 +231,11 @@ def load_settings() -> Settings:
         use_sharding=use_sharding,
         shard_count=shard_count,
         feature_flags=feature_flags,
+        fc25_stats_cache_ttl_seconds=fc25_stats_cache_ttl_seconds,
+        fc25_stats_http_timeout_seconds=fc25_stats_http_timeout_seconds,
+        fc25_stats_max_concurrency=fc25_stats_max_concurrency,
+        fc25_stats_rate_limit_per_guild=fc25_stats_rate_limit_per_guild,
+        fc25_default_platform=fc25_default_platform,
     )
 
 
@@ -208,14 +247,25 @@ def summarize_settings(settings: Settings) -> dict[str, object]:
         "application_id": settings.discord_application_id,
         "client_id_present": bool(settings.discord_client_id),
         "test_mode": settings.test_mode,
-        "test_channel": settings.discord_test_channel_id,
         "use_sharding": settings.use_sharding,
         "shard_count": settings.shard_count,
         "feature_flags": sorted(settings.feature_flags),
-        "portals": {
-            "roster": settings.channel_roster_portal_id,
-            "coach": settings.channel_coach_portal_id,
-            "staff": settings.channel_staff_portal_id,
+        "fc25": {
+            "cache_ttl_seconds": settings.fc25_stats_cache_ttl_seconds,
+            "http_timeout_seconds": settings.fc25_stats_http_timeout_seconds,
+            "max_concurrency": settings.fc25_stats_max_concurrency,
+            "rate_limit_per_guild": settings.fc25_stats_rate_limit_per_guild,
+            "default_platform": settings.fc25_default_platform,
+        },
+        "channels": {
+            "staff_portal": settings.channel_staff_portal_id,
+            "club_portal": settings.channel_club_portal_id,
+            "coach_portal": settings.channel_coach_portal_id,
+            "recruit_portal": settings.channel_recruit_portal_id,
+            "staff_monitor": settings.channel_staff_monitor_id,
+            "roster_listing": settings.channel_roster_listing_id,
+            "recruit_listing": settings.channel_recruit_listing_id,
+            "club_listing": settings.channel_club_listing_id,
         },
         "roles": {
             "broskie": settings.role_broskie_id,

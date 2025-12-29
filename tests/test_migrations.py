@@ -16,15 +16,19 @@ def _fake_settings() -> Settings:
         discord_client_id=None,
         discord_public_key=None,
         interactions_endpoint_url=None,
-        discord_test_channel_id=None,
         test_mode=True,
         role_broskie_id=1,
         role_super_league_coach_id=2,
         role_coach_premium_id=3,
         role_coach_premium_plus_id=4,
-        channel_roster_portal_id=5,
-        channel_coach_portal_id=6,
         channel_staff_portal_id=7,
+        channel_club_portal_id=None,
+        channel_coach_portal_id=6,
+        channel_recruit_portal_id=None,
+        channel_staff_monitor_id=None,
+        channel_roster_listing_id=5,
+        channel_recruit_listing_id=None,
+        channel_club_listing_id=None,
         staff_role_ids=set(),
         mongodb_uri="mongodb://localhost",
         mongodb_db_name="testdb",
@@ -49,10 +53,10 @@ def test_apply_migrations_with_mongomock(monkeypatch) -> None:
 
     logger = logging.getLogger("test_migrations")
     latest = apply_migrations(settings=settings, logger=logger)
-    assert latest == 1
+    assert latest == 3
 
     client = database.get_client(settings)
     meta = client[settings.mongodb_db_name]["_meta"].find_one({"_id": "schema_version"})
-    assert meta and meta["version"] == 1
+    assert meta and meta["version"] == 3
 
     close_client()

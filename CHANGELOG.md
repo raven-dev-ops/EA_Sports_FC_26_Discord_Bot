@@ -2,6 +2,40 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.14] - 2025-12-29
+
+### Fixed
+- CI packaging build now succeeds via explicit setuptools package discovery in `pyproject.toml`.
+- CI type checking now passes after aligning Discord channel helpers/types.
+
+### Changed
+- Dependency updates: discord.py 2.6.4, gspread 6.2.1, google-auth 2.45.0, pymongo 4.15.5, mypy 1.19.1.
+- GitHub Actions updates: actions/checkout v6, actions/setup-python v6.
+- Admin portal no longer offers ad-hoc test mode toggles (test mode is controlled via config and `/setup_channels`).
+
+## [0.2.13] - 2025-12-29
+
+### Added
+- `/setup_channels` to create/repair the `--OFFSIDE DASHBOARD--` and `--OFFSIDE REPORTS--` categories + channels and store per-guild IDs in Mongo.
+- Centralized channel resolver (per-guild config + env fallback) so portal/listing posts respect test mode automatically.
+- Recruitment portal: player profile register/edit, preview, availability selector, unregister; idempotent listing + staff-copy upserts.
+- Club portal: club ad register/edit, preview, unregister; idempotent listing + staff-copy upserts.
+- FC25 Clubs verified stats (optional; `FEATURE_FLAGS=fc25_stats`): policy docs, Mongo records + indexes, async HTTP client + typed errors, caching/rate limits/circuit breaker, link/unlink/refresh, scheduled refresh worker, and embed rendering.
+- Roster tools: coach "Add From Player Pool" flow with filters (position/archetype/server) + pagination; selection pre-fills the add-player modal.
+- Staff tools: `/player_pool`, `/player_pool_index` (pinned index), and `/me` (ephemeral profile preview).
+- Abuse/quality controls: cooldowns on profile/ad edits, minimum publish requirements, and club ad minimum description length.
+- Optional club ad approvals (`FEATURE_FLAGS=club_ads_approval`) with approve/reject actions and audit logging.
+- QA checklist (`docs/qa-checklist.md`) and additional parsing/fixture tests for FC25 helpers.
+
+### Changed
+- `TEST_MODE=true` routes all portal posts, listing posts, and forwarded logs to the staff monitor channel (`channel_staff_monitor_id`) only.
+- Channel env vars are optional overrides; approved rosters post to `CHANNEL_ROSTER_LISTING_ID` (fallback to legacy `CHANNEL_ROSTER_PORTAL_ID`).
+- Recruitment/club listing posts use safe `allowed_mentions` defaults to avoid pings.
+
+### Removed
+- `/dev_on` and `/dev_off` test-mode toggle commands.
+- `DISCORD_TEST_CHANNEL` config (no longer required or used).
+
 ## [0.2.12] - 2025-12-29
 
 ### Added

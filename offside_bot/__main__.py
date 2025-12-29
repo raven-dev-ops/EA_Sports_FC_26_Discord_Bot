@@ -4,16 +4,24 @@ import os
 import pkgutil
 import signal
 import sys
+from typing import TypeAlias
 
 import discord
 from discord.ext import commands
 
 from config import Settings, load_settings
 from config.settings import summarize_settings
-from database import close_client
+from database import close_client, get_collection
 from interactions.admin_portal import post_admin_portal
+from interactions.club_portal import post_club_portal
 from interactions.coach_portal import post_coach_portal
+from interactions.fc25_stats_modals import refresh_fc25_stats_for_user
+from interactions.recruit_portal import post_recruit_portal
 from migrations import apply_migrations
+from services.channel_setup_service import cleanup_staff_monitor_channel
+from services.fc25_stats_feature import fc25_stats_enabled
+from services.fc25_stats_service import list_links
+from services.guild_config_service import get_guild_config, set_guild_config
 from services.recovery_service import run_startup_recovery
 from services.scheduler import Scheduler
 from utils.command_registry import validate_command_tree
@@ -28,6 +36,8 @@ from utils.permissions import enforce_command_permissions
 LOG_FORMAT = "%(asctime)s level=%(levelname)s name=%(name)s msg=\"%(message)s\""
 LOG_CHANNEL_FORMAT = "%(levelname)s %(name)s: %(message)s"
 MAX_LOG_MESSAGE_LENGTH = 1800
+
+BotLike: TypeAlias = commands.Bot | commands.AutoShardedBot
 
 
 def setup_logging() -> None:
@@ -53,14 +63,18 @@ def install_asyncio_exception_handler(loop: asyncio.AbstractEventLoop) -> None:
     loop.set_exception_handler(_handle)
 
 
-def install_signal_handlers(bot: commands.Bot) -> None:
+def install_signal_handlers(bot: BotLike) -> None:
     """
     Install SIGTERM/SIGINT handlers to trigger a graceful shutdown.
     """
     try:
         loop = bot.loop
+
+        def _request_close() -> None:
+            asyncio.create_task(bot.close())
+
         for sig in (signal.SIGTERM, signal.SIGINT):
-            loop.add_signal_handler(sig, lambda s=sig: asyncio.create_task(bot.close()))
+            loop.add_signal_handler(sig, _request_close)
     except (NotImplementedError, RuntimeError):
         logging.debug("Signal handlers not installed on this platform.")
 
@@ -69,8 +83,8 @@ async def mark_command_start(interaction: discord.Interaction) -> bool:
     """
     Tree check that timestamps the start of a command for latency metrics.
     """
-    if not hasattr(interaction, "_started_at_ms"):
-        interaction._started_at_ms = now_ms()
+    if getattr(interaction, "_started_at_ms", None) is None:
+        setattr(interaction, "_started_at_ms", now_ms())
     return True
 
 
@@ -80,7 +94,7 @@ class DiscordLogFilter(logging.Filter):
 
 
 class DiscordLogHandler(logging.Handler):
-    def __init__(self, bot: commands.Bot) -> None:
+    def __init__(self, bot: BotLike) -> None:
         super().__init__(level=logging.INFO)
         self.bot = bot
         self._channel: discord.abc.Messageable | None = None
@@ -88,7 +102,7 @@ class DiscordLogHandler(logging.Handler):
     def emit(self, record: logging.LogRecord) -> None:
         if not getattr(self.bot, "test_mode", False):
             return
-        channel_id = getattr(self.bot, "test_channel_id", None)
+        channel_id = getattr(self.bot, "staff_monitor_channel_id", None)
         if not channel_id:
             return
         try:
@@ -105,7 +119,7 @@ class DiscordLogHandler(logging.Handler):
     async def _send(self, message: str) -> None:
         if not getattr(self.bot, "test_mode", False):
             return
-        channel_id = getattr(self.bot, "test_channel_id", None)
+        channel_id = getattr(self.bot, "staff_monitor_channel_id", None)
         if not channel_id:
             return
         channel = self._channel
@@ -116,7 +130,7 @@ class DiscordLogHandler(logging.Handler):
             await send_message(channel, f"```{message}```")
 
 
-def attach_discord_log_handler(bot: commands.Bot) -> None:
+def attach_discord_log_handler(bot: BotLike) -> None:
     root_logger = logging.getLogger()
     for handler in root_logger.handlers:
         if isinstance(handler, DiscordLogHandler):
@@ -127,7 +141,7 @@ def attach_discord_log_handler(bot: commands.Bot) -> None:
     root_logger.addHandler(handler)
 
 
-async def load_cogs(bot: commands.Bot) -> None:
+async def load_cogs(bot: BotLike) -> None:
     try:
         import cogs
     except Exception:
@@ -142,7 +156,24 @@ async def load_cogs(bot: commands.Bot) -> None:
             logging.exception("Failed to load cog %s", module.name)
 
 
+class OffsideCommandTree(discord.app_commands.CommandTree):
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        for check in (mark_command_start, enforce_safe_inputs, enforce_command_permissions):
+            try:
+                ok = await check(interaction)
+            except Exception:
+                ok = False
+            if not ok:
+                return False
+        return True
+
+
 class OffsideBot(commands.AutoShardedBot):
+    settings: Settings
+    test_mode: bool
+    staff_monitor_channel_id: int | None
+    scheduler: Scheduler
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.scheduler = Scheduler()
@@ -159,14 +190,55 @@ class OffsideBot(commands.AutoShardedBot):
             logging.info("Posted coach portal embed.")
         except Exception:
             logging.exception("Failed to post coach portal.")
+        await asyncio.sleep(0.5)
+        try:
+            await post_recruit_portal(self)
+            logging.info("Posted recruit portal embed.")
+        except Exception:
+            logging.exception("Failed to post recruit portal.")
+        await asyncio.sleep(0.5)
+        try:
+            await post_club_portal(self)
+            logging.info("Posted club portal embed.")
+        except Exception:
+            logging.exception("Failed to post club portal.")
+
+    async def _cleanup_test_mode_channels(self) -> None:
+        if getattr(self, "test_mode", False):
+            return
+        settings = getattr(self, "settings", None)
+        if settings is None or not (settings.mongodb_uri and settings.mongodb_db_name and settings.mongodb_collection):
+            return
+        try:
+            collection = get_collection(settings)
+        except Exception:
+            return
+        for guild in self.guilds:
+            me = guild.me
+            if me is None or not me.guild_permissions.manage_channels:
+                continue
+            existing = {}
+            try:
+                existing = get_guild_config(guild.id, collection=collection)
+            except Exception:
+                continue
+            if not existing.get("channel_staff_monitor_id"):
+                continue
+            updated, actions = await cleanup_staff_monitor_channel(
+                guild,
+                existing_config=existing,
+            )
+            for action in actions:
+                logging.info("Test-mode cleanup (guild=%s): %s", guild.id, action)
+            if updated != existing:
+                try:
+                    set_guild_config(guild.id, updated, collection=collection)
+                except Exception:
+                    logging.exception("Failed to persist guild cleanup (guild=%s).", guild.id)
 
     async def setup_hook(self) -> None:
         await load_cogs(self)
         attach_discord_log_handler(self)
-        # Global permission guard
-        self.tree.add_check(mark_command_start)
-        self.tree.add_check(enforce_safe_inputs)
-        self.tree.add_check(enforce_command_permissions)
         try:
             await self.tree.sync()
             logging.info("Synced app commands.")
@@ -181,6 +253,9 @@ class OffsideBot(commands.AutoShardedBot):
             logging.info("Bot ready as %s (ID: %s).", user, user.id)
         else:
             logging.info("Bot ready (user not available yet).")
+        if not getattr(self, "_test_mode_cleanup_done", False):
+            await self._cleanup_test_mode_channels()
+            self._test_mode_cleanup_done = True
         if not getattr(self, "_portals_posted", False):
             await self.post_portals()
             self._portals_posted = True
@@ -219,7 +294,69 @@ class OffsideBot(commands.AutoShardedBot):
                 self.scheduler.add_job("metrics_log", 300.0, log_metrics)
             except RuntimeError:
                 pass
+        if feature_enabled("fc25_stats", settings):
+            try:
+                self.scheduler.add_job("fc25_refresh", 1800.0, self._fc25_refresh_job)
+            except RuntimeError:
+                pass
         await self.scheduler.start()
+
+    async def _fc25_refresh_job(self) -> None:
+        from datetime import datetime, timezone
+
+        settings = getattr(self, "settings", None)
+        if settings is None:
+            return
+        if not (settings.mongodb_uri and settings.mongodb_db_name and settings.mongodb_collection):
+            return
+        try:
+            collection = get_collection(settings)
+        except Exception:
+            return
+
+        min_age_seconds = max(300, int(settings.fc25_stats_cache_ttl_seconds))
+        max_per_guild = max(1, min(10, int(settings.fc25_stats_rate_limit_per_guild) // 2))
+        now = datetime.now(timezone.utc)
+        test_mode = bool(getattr(self, "test_mode", False))
+
+        for guild in self.guilds:
+            if not fc25_stats_enabled(settings, guild_id=guild.id):
+                continue
+            try:
+                links = list_links(guild.id, verified_only=True, limit=200, collection=collection)
+            except Exception:
+                continue
+
+            refreshed = 0
+            for link in links:
+                if refreshed >= max_per_guild:
+                    break
+                user_id = link.get("user_id")
+                if not isinstance(user_id, int):
+                    continue
+                last = link.get("last_fetched_at")
+                if isinstance(last, datetime):
+                    age = (now - last).total_seconds()
+                    if age < min_age_seconds:
+                        continue
+                try:
+                    status = await refresh_fc25_stats_for_user(
+                        self,
+                        settings,
+                        guild_id=guild.id,
+                        user_id=user_id,
+                        test_mode=test_mode,
+                        reason="scheduled",
+                    )
+                except Exception:
+                    logging.exception(
+                        "FC25 scheduled refresh failed (guild=%s user=%s).",
+                        guild.id,
+                        user_id,
+                    )
+                    continue
+                if status in {"refreshed", "cached"}:
+                    refreshed += 1
 
     async def close(self) -> None:
         try:
@@ -238,10 +375,11 @@ def build_bot(settings: Settings) -> OffsideBot:
         intents=intents,
         application_id=settings.discord_application_id,
         shard_count=settings.shard_count if settings.use_sharding else None,
+        tree_cls=OffsideCommandTree,
     )
     bot.settings = settings
     bot.test_mode = settings.test_mode
-    bot.test_channel_id = settings.discord_test_channel_id
+    bot.staff_monitor_channel_id = settings.channel_staff_monitor_id
     install_asyncio_exception_handler(bot.loop)
     return bot
 
@@ -249,7 +387,8 @@ def build_bot(settings: Settings) -> OffsideBot:
 def register_commands(bot: OffsideBot) -> None:
     @bot.tree.command(name="ping", description="Check bot responsiveness.")
     async def ping(interaction: discord.Interaction) -> None:
-        interaction._started_at_ms = getattr(interaction, "_started_at_ms", now_ms())
+        if getattr(interaction, "_started_at_ms", None) is None:
+            setattr(interaction, "_started_at_ms", now_ms())
         await interaction.response.send_message("pong", ephemeral=True)
 
 

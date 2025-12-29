@@ -10,6 +10,7 @@ This Privacy Policy describes how the Offside Discord Bot ("the Bot") collects, 
 - Roster details: team name, tournament name, player gamertag/PSN, EA ID, console/platform.
 - Operational metadata: command inputs, timestamps, and server/channel IDs required to perform actions.
 - Eligibility data: ban/blacklist entries accessed from a Google Sheet maintained by staff (e.g., Discord ID, reason, date).
+- Optional FC25 Clubs stats linking (opt-in): a link between your Discord user and a Clubs identity (platform key, club ID/name, member name) plus limited cached stats snapshots used to render “Verified Stats” on your profile.
 
 ## Sources of Information
 
@@ -29,6 +30,7 @@ This Privacy Policy describes how the Offside Discord Bot ("the Bot") collects, 
 - Roster/tournament data: kept for the duration of the tournament and a short post-event review period determined by staff; staff can delete entries on request where feasible.
 - Logs: retained up to 30 days for troubleshooting.
 - Ban/blacklist data: retained in Google Sheets by server staff (not controlled by the Bot); requests must go to staff.
+- FC25 stats (if enabled and you opt in): retained according to `docs/fc25-stats-policy.md` and deleted when you unlink/delete your stats.
 
 ## Sharing and Disclosure
 

@@ -14,7 +14,8 @@ from services.roster_service import (
     set_roster_status,
 )
 from services.submission_service import delete_submission_by_roster
-from utils.discord_wrappers import send_message
+from utils.channel_routing import resolve_channel_id
+from utils.discord_wrappers import fetch_channel, send_message
 from utils.errors import send_interaction_error
 
 
@@ -107,21 +108,6 @@ def build_admin_embed() -> discord.Embed:
         value="Data checks, health, and exports.",
         inline=False,
     )
-    return embed
-
-
-def bot_controls_embed() -> discord.Embed:
-    embed = discord.Embed(
-        title="Bot Controls",
-        description="Test mode, health, and diagnostics (staff only).",
-        color=discord.Color.blurple(),
-    )
-    embed.add_field(
-        name="Actions",
-        value="Toggle test-mode routing and check bot health.",
-        inline=False,
-    )
-    embed.set_footer(text="Ephemeral responses only.")
     return embed
 
 
@@ -258,7 +244,6 @@ class AdminPortalView(SafeView):
         super().__init__(timeout=None)
 
         buttons = [
-            ("Bot Controls", discord.ButtonStyle.primary, self.on_bot_controls),
             ("Tournaments", discord.ButtonStyle.primary, self.on_tournaments),
             ("Coaches", discord.ButtonStyle.primary, self.on_coaches),
             ("Rosters", discord.ButtonStyle.primary, self.on_rosters),
@@ -267,8 +252,8 @@ class AdminPortalView(SafeView):
             ("Delete Roster", discord.ButtonStyle.danger, self.on_delete_roster),
         ]
         for label, style, handler in buttons:
-            button = discord.ui.Button(label=label, style=style)
-            button.callback = handler
+            button: discord.ui.Button = discord.ui.Button(label=label, style=style)
+            setattr(button, "callback", handler)
             self.add_item(button)
 
     def _staff_only(self, interaction: discord.Interaction) -> bool:
@@ -291,15 +276,6 @@ class AdminPortalView(SafeView):
     def _is_admin(self, interaction: discord.Interaction) -> bool:
         perms = getattr(interaction.user, "guild_permissions", None)
         return bool(perms and perms.administrator)
-
-    async def on_bot_controls(self, interaction: discord.Interaction) -> None:
-        if not await self._ensure_staff(interaction):
-            return
-        await interaction.response.send_message(
-            embed=bot_controls_embed(),
-            ephemeral=True,
-            view=BotControlsView(),
-        )
 
     async def on_tournaments(self, interaction: discord.Interaction) -> None:
         if not await self._ensure_staff(interaction):
@@ -354,42 +330,21 @@ class AdminPortalView(SafeView):
             )
             return
         await interaction.response.send_modal(DeleteRosterModal())
-
-
-class BotControlsView(SafeView):
-    def __init__(self) -> None:
-        super().__init__(timeout=300)
-        btn_on = discord.ui.Button(label="Test Mode On", style=discord.ButtonStyle.success)
-        btn_off = discord.ui.Button(label="Test Mode Off", style=discord.ButtonStyle.danger)
-        btn_ping = discord.ui.Button(label="Health Check", style=discord.ButtonStyle.primary)
-        btn_on.callback = self.on_enable
-        btn_off.callback = self.on_disable
-        btn_ping.callback = self.on_ping
-        self.add_item(btn_on)
-        self.add_item(btn_off)
-        self.add_item(btn_ping)
-
-    async def on_enable(self, interaction: discord.Interaction) -> None:
-        interaction.client.test_mode = True
-        await interaction.response.send_message("Test mode enabled for this session.", ephemeral=True)
-
-    async def on_disable(self, interaction: discord.Interaction) -> None:
-        interaction.client.test_mode = False
-        await interaction.response.send_message("Test mode disabled for this session.", ephemeral=True)
-
-    async def on_ping(self, interaction: discord.Interaction) -> None:
-        await interaction.response.send_message("pong", ephemeral=True)
-
-
 class TournamentsView(SafeView):
     def __init__(self) -> None:
         super().__init__(timeout=300)
-        btn_dashboard = discord.ui.Button(label="Coach Dashboard", style=discord.ButtonStyle.primary)
-        btn_staff = discord.ui.Button(label="Staff Review Tips", style=discord.ButtonStyle.secondary)
-        btn_unlock = discord.ui.Button(label="Unlock Guidance", style=discord.ButtonStyle.secondary)
-        btn_dashboard.callback = self.on_dashboard
-        btn_staff.callback = self.on_staff
-        btn_unlock.callback = self.on_unlock
+        btn_dashboard: discord.ui.Button = discord.ui.Button(
+            label="Coach Dashboard", style=discord.ButtonStyle.primary
+        )
+        btn_staff: discord.ui.Button = discord.ui.Button(
+            label="Staff Review Tips", style=discord.ButtonStyle.secondary
+        )
+        btn_unlock: discord.ui.Button = discord.ui.Button(
+            label="Unlock Guidance", style=discord.ButtonStyle.secondary
+        )
+        setattr(btn_dashboard, "callback", self.on_dashboard)
+        setattr(btn_staff, "callback", self.on_staff)
+        setattr(btn_unlock, "callback", self.on_unlock)
         self.add_item(btn_dashboard)
         self.add_item(btn_staff)
         self.add_item(btn_unlock)
@@ -416,10 +371,14 @@ class TournamentsView(SafeView):
 class CoachesView(SafeView):
     def __init__(self) -> None:
         super().__init__(timeout=300)
-        btn_help = discord.ui.Button(label="Coach Help", style=discord.ButtonStyle.primary)
-        btn_unlock = discord.ui.Button(label="Unlock Roster", style=discord.ButtonStyle.secondary)
-        btn_help.callback = self.on_help
-        btn_unlock.callback = self.on_unlock
+        btn_help: discord.ui.Button = discord.ui.Button(
+            label="Coach Help", style=discord.ButtonStyle.primary
+        )
+        btn_unlock: discord.ui.Button = discord.ui.Button(
+            label="Unlock Roster", style=discord.ButtonStyle.secondary
+        )
+        setattr(btn_help, "callback", self.on_help)
+        setattr(btn_unlock, "callback", self.on_unlock)
         self.add_item(btn_help)
         self.add_item(btn_unlock)
 
@@ -436,14 +395,22 @@ class CoachesView(SafeView):
 class RostersView(SafeView):
     def __init__(self) -> None:
         super().__init__(timeout=300)
-        btn_flow = discord.ui.Button(label="Submission Flow", style=discord.ButtonStyle.primary)
-        btn_audit = discord.ui.Button(label="Audit Info", style=discord.ButtonStyle.secondary)
-        btn_delete = discord.ui.Button(label="Delete Roster", style=discord.ButtonStyle.danger)
-        btn_unlock = discord.ui.Button(label="Unlock Roster", style=discord.ButtonStyle.success)
-        btn_flow.callback = self.on_flow
-        btn_audit.callback = self.on_audit
-        btn_delete.callback = self.on_delete
-        btn_unlock.callback = self.on_unlock
+        btn_flow: discord.ui.Button = discord.ui.Button(
+            label="Submission Flow", style=discord.ButtonStyle.primary
+        )
+        btn_audit: discord.ui.Button = discord.ui.Button(
+            label="Audit Info", style=discord.ButtonStyle.secondary
+        )
+        btn_delete: discord.ui.Button = discord.ui.Button(
+            label="Delete Roster", style=discord.ButtonStyle.danger
+        )
+        btn_unlock: discord.ui.Button = discord.ui.Button(
+            label="Unlock Roster", style=discord.ButtonStyle.success
+        )
+        setattr(btn_flow, "callback", self.on_flow)
+        setattr(btn_audit, "callback", self.on_audit)
+        setattr(btn_delete, "callback", self.on_delete)
+        setattr(btn_unlock, "callback", self.on_unlock)
         self.add_item(btn_flow)
         self.add_item(btn_audit)
         self.add_item(btn_delete)
@@ -471,12 +438,18 @@ class RostersView(SafeView):
 class PlayersView(SafeView):
     def __init__(self) -> None:
         super().__init__(timeout=300)
-        btn_fields = discord.ui.Button(label="Player Fields", style=discord.ButtonStyle.primary)
-        btn_ban = discord.ui.Button(label="Ban Checks", style=discord.ButtonStyle.secondary)
-        btn_errors = discord.ui.Button(label="Common Errors", style=discord.ButtonStyle.secondary)
-        btn_fields.callback = self.on_fields
-        btn_ban.callback = self.on_ban
-        btn_errors.callback = self.on_errors
+        btn_fields: discord.ui.Button = discord.ui.Button(
+            label="Player Fields", style=discord.ButtonStyle.primary
+        )
+        btn_ban: discord.ui.Button = discord.ui.Button(
+            label="Ban Checks", style=discord.ButtonStyle.secondary
+        )
+        btn_errors: discord.ui.Button = discord.ui.Button(
+            label="Common Errors", style=discord.ButtonStyle.secondary
+        )
+        setattr(btn_fields, "callback", self.on_fields)
+        setattr(btn_ban, "callback", self.on_ban)
+        setattr(btn_errors, "callback", self.on_errors)
         self.add_item(btn_fields)
         self.add_item(btn_ban)
         self.add_item(btn_errors)
@@ -503,12 +476,18 @@ class PlayersView(SafeView):
 class DBView(SafeView):
     def __init__(self) -> None:
         super().__init__(timeout=300)
-        btn_schema = discord.ui.Button(label="Schema", style=discord.ButtonStyle.primary)
-        btn_indexes = discord.ui.Button(label="Indexes", style=discord.ButtonStyle.secondary)
-        btn_future = discord.ui.Button(label="Future", style=discord.ButtonStyle.secondary)
-        btn_schema.callback = self.on_schema
-        btn_indexes.callback = self.on_indexes
-        btn_future.callback = self.on_future
+        btn_schema: discord.ui.Button = discord.ui.Button(
+            label="Schema", style=discord.ButtonStyle.primary
+        )
+        btn_indexes: discord.ui.Button = discord.ui.Button(
+            label="Indexes", style=discord.ButtonStyle.secondary
+        )
+        btn_future: discord.ui.Button = discord.ui.Button(
+            label="Future", style=discord.ButtonStyle.secondary
+        )
+        setattr(btn_schema, "callback", self.on_schema)
+        setattr(btn_indexes, "callback", self.on_indexes)
+        setattr(btn_future, "callback", self.on_future)
         self.add_item(btn_schema)
         self.add_item(btn_indexes)
         self.add_item(btn_future)
@@ -533,11 +512,11 @@ class DBView(SafeView):
 
 
 class DeleteRosterModal(discord.ui.Modal, title="Delete Roster"):
-    coach_id = discord.ui.TextInput(
+    coach_id: discord.ui.TextInput = discord.ui.TextInput(
         label="Coach Discord ID or mention",
         placeholder="@Coach or 1234567890",
     )
-    tournament_name = discord.ui.TextInput(
+    tournament_name: discord.ui.TextInput = discord.ui.TextInput(
         label="Tournament Name (optional)",
         required=False,
         placeholder="Leave blank for current active tournament",
@@ -575,25 +554,17 @@ class DeleteRosterModal(discord.ui.Modal, title="Delete Roster"):
 
         # Delete submission message if it exists
         submission = delete_submission_by_roster(roster["_id"])
-        settings = getattr(interaction.client, "settings", None)
-        if settings and submission:
-            for channel_id in (
-                settings.channel_staff_portal_id,
-                settings.channel_roster_portal_id,
-            ):
-                channel = interaction.client.get_channel(channel_id)
-                if channel is None:
+        if submission:
+            channel_id = submission.get("staff_channel_id")
+            message_id = submission.get("staff_message_id")
+            if isinstance(channel_id, int) and isinstance(message_id, int):
+                channel = await fetch_channel(interaction.client, channel_id)
+                if channel:
                     try:
-                        channel = await interaction.client.fetch_channel(channel_id)
-                    except discord.DiscordException:
-                        channel = None
-                if channel is not None:
-                    try:
-                        msg = await channel.fetch_message(submission["staff_message_id"])
+                        msg = await channel.fetch_message(message_id)
                         await msg.delete()
-                        break
                     except discord.DiscordException:
-                        continue
+                        pass
 
         delete_roster(roster["_id"])
         await interaction.response.send_message(
@@ -603,11 +574,11 @@ class DeleteRosterModal(discord.ui.Modal, title="Delete Roster"):
 
 
 class UnlockRosterModal(discord.ui.Modal, title="Unlock Roster"):
-    coach_id = discord.ui.TextInput(
+    coach_id: discord.ui.TextInput = discord.ui.TextInput(
         label="Coach Discord ID or mention",
         placeholder="@Coach or 1234567890",
     )
-    tournament_name = discord.ui.TextInput(
+    tournament_name: discord.ui.TextInput = discord.ui.TextInput(
         label="Tournament Name (optional)",
         required=False,
         placeholder="Leave blank for current active tournament",
@@ -655,22 +626,15 @@ class UnlockRosterModal(discord.ui.Modal, title="Unlock Roster"):
         submission = delete_submission_by_roster(roster["_id"])
         if submission:
             channel_id = submission.get("staff_channel_id")
-            async def _fetch() -> discord.abc.Messageable | None:
-                ch = interaction.client.get_channel(channel_id)
-                if ch is not None:
-                    return ch
-                try:
-                    return await interaction.client.fetch_channel(channel_id)
-                except discord.DiscordException:
-                    return None
-
-            channel = await _fetch()
-            if channel:
-                try:
-                    msg = await channel.fetch_message(submission.get("staff_message_id"))
-                    await msg.delete()
-                except discord.DiscordException:
-                    pass
+            message_id = submission.get("staff_message_id")
+            if isinstance(channel_id, int) and isinstance(message_id, int):
+                channel = await fetch_channel(interaction.client, channel_id)
+                if channel:
+                    try:
+                        msg = await channel.fetch_message(message_id)
+                        await msg.delete()
+                    except discord.DiscordException:
+                        pass
         await interaction.response.send_message(
             f"Roster unlocked for coach <@{coach_id}>.",
             ephemeral=True,
@@ -684,18 +648,21 @@ async def send_admin_portal_message(
         await send_interaction_error(interaction)
         return
 
-    target_channel_id = settings.channel_staff_portal_id
+    test_mode = bool(getattr(interaction.client, "test_mode", False))
+    target_channel_id = resolve_channel_id(
+        settings,
+        guild_id=getattr(interaction.guild, "id", None),
+        field="channel_staff_portal_id",
+        test_mode=test_mode,
+    )
+    if not target_channel_id:
+        await interaction.response.send_message(
+            "Staff portal channel is not configured. Ask staff to run `/setup_channels`.",
+            ephemeral=True,
+        )
+        return
 
-    async def _fetch_channel() -> discord.abc.Messageable | None:
-        ch = interaction.client.get_channel(target_channel_id)
-        if ch is not None:
-            return ch
-        try:
-            return await interaction.client.fetch_channel(target_channel_id)
-        except discord.DiscordException:
-            return None
-
-    channel = await _fetch_channel()
+    channel = await fetch_channel(interaction.client, target_channel_id)
     if channel is None:
         await interaction.response.send_message(
             "Admin portal channel not found.",
@@ -705,8 +672,9 @@ async def send_admin_portal_message(
 
     # Delete prior portal embeds posted by the bot to keep the channel tidy.
     try:
+        client_user = interaction.client.user
         async for message in channel.history(limit=20):
-            if message.author.id == interaction.client.user.id:
+            if client_user and message.author.id == client_user.id:
                 if message.embeds and message.embeds[0].title in {
                     "Admin Control Panel",
                     "Staff Portal Overview",
@@ -737,46 +705,54 @@ async def send_admin_portal_message(
     )
 
 
-async def post_admin_portal(bot: commands.Bot) -> None:
+async def post_admin_portal(bot: commands.Bot | commands.AutoShardedBot) -> None:
     settings = getattr(bot, "settings", None)
     if settings is None:
         return
 
-    target_channel_id = settings.channel_staff_portal_id
+    test_mode = bool(getattr(bot, "test_mode", False))
+    for guild in bot.guilds:
+        target_channel_id = resolve_channel_id(
+            settings,
+            guild_id=guild.id,
+            field="channel_staff_portal_id",
+            test_mode=test_mode,
+        )
+        if not target_channel_id:
+            continue
 
-    async def _fetch_channel() -> discord.abc.Messageable | None:
-        ch = bot.get_channel(target_channel_id)
-        if ch is not None:
-            return ch
+        channel = await fetch_channel(bot, target_channel_id)
+        if channel is None:
+            continue
+
+        bot_user = bot.user
+        if bot_user is None:
+            continue
         try:
-            return await bot.fetch_channel(target_channel_id)
+            async for message in channel.history(limit=20):
+                if message.author.id == bot_user.id:
+                    if message.embeds and message.embeds[0].title in {
+                        "Admin Control Panel",
+                        "Staff Portal Overview",
+                    }:
+                        try:
+                            await message.delete()
+                        except discord.DiscordException:
+                            pass
         except discord.DiscordException:
-            return None
+            pass
 
-    channel = await _fetch_channel()
-    if channel is None:
-        return
-
-    try:
-        async for message in channel.history(limit=20):
-            if message.author.id == bot.user.id:
-                if message.embeds and message.embeds[0].title in {
-                    "Admin Control Panel",
-                    "Staff Portal Overview",
-                }:
-                    try:
-                        await message.delete()
-                    except discord.DiscordException:
-                        pass
-    except discord.DiscordException:
-        pass
-
-    intro_embed = build_admin_intro_embed()
-    embed = build_admin_embed()
-    view = AdminPortalView()
-    try:
-        await send_message(channel, embed=intro_embed)
-        await send_message(channel, embed=embed, view=view)
-        logging.info("Posted admin/staff portal embed.")
-    except discord.DiscordException as exc:
-        logging.warning("Failed to post admin portal to channel %s: %s", target_channel_id, exc)
+        intro_embed = build_admin_intro_embed()
+        embed = build_admin_embed()
+        view = AdminPortalView()
+        try:
+            await send_message(channel, embed=intro_embed)
+            await send_message(channel, embed=embed, view=view)
+            logging.info("Posted admin/staff portal embed (guild=%s channel=%s).", guild.id, target_channel_id)
+        except discord.DiscordException as exc:
+            logging.warning(
+                "Failed to post admin portal to channel %s (guild=%s): %s",
+                target_channel_id,
+                guild.id,
+                exc,
+            )

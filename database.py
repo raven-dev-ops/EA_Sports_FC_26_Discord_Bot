@@ -120,6 +120,51 @@ def ensure_indexes(collection: Collection) -> list[str]:
             partialFilterExpression={"record_type": "guild_settings"},
         )
     )
+    indexes.append(
+        collection.create_index(
+            [("record_type", 1), ("guild_id", 1), ("user_id", 1)],
+            unique=True,
+            name="uniq_recruit_profile",
+            partialFilterExpression={"record_type": "recruit_profile"},
+        )
+    )
+    indexes.append(
+        collection.create_index(
+            [("record_type", 1), ("guild_id", 1), ("owner_id", 1)],
+            unique=True,
+            name="uniq_club_ad_by_owner",
+            partialFilterExpression={"record_type": "club_ad"},
+        )
+    )
+    indexes.append(
+        collection.create_index(
+            [
+                ("record_type", 1),
+                ("guild_id", 1),
+                ("main_position", 1),
+                ("main_archetype", 1),
+                ("server_name", 1),
+                ("updated_at", -1),
+            ],
+            name="idx_recruit_profile_filters",
+            partialFilterExpression={"record_type": "recruit_profile"},
+        )
+    )
+    indexes.append(
+        collection.create_index(
+            [("record_type", 1), ("guild_id", 1), ("user_id", 1)],
+            unique=True,
+            name="uniq_fc25_stats_link",
+            partialFilterExpression={"record_type": "fc25_stats_link"},
+        )
+    )
+    indexes.append(
+        collection.create_index(
+            [("record_type", 1), ("guild_id", 1), ("user_id", 1), ("fetched_at", -1)],
+            name="idx_fc25_stats_snapshot_user",
+            partialFilterExpression={"record_type": "fc25_stats_snapshot"},
+        )
+    )
 
     return indexes
 

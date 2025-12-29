@@ -23,6 +23,12 @@ COMMANDS: List[CommandInfo] = [
         example="/roster tournament:\"Summer Cup\"",
     ),
     CommandInfo(
+        name="/me",
+        category="Recruitment",
+        description="Show your stored recruit profile preview (ephemeral).",
+        permissions="Anyone (in a guild)",
+    ),
+    CommandInfo(
         name="/unlock_roster <coach> [tournament]",
         category="Roster",
         description="Unlock a coach roster for edits and clear stale submissions.",
@@ -30,9 +36,21 @@ COMMANDS: List[CommandInfo] = [
         example="/unlock_roster @CoachUser tournament:\"Summer Cup\"",
     ),
     CommandInfo(
-        name="/dev_on, /dev_off",
+        name="/player_pool [position] [archetype] [platform] [mic]",
+        category="Staff",
+        description="Search recruit profiles (ephemeral).",
+        permissions="Staff",
+    ),
+    CommandInfo(
+        name="/player_pool_index",
+        category="Staff",
+        description="Post/update a pinned Player Pool index in the recruit listing channel.",
+        permissions="Staff",
+    ),
+    CommandInfo(
+        name="/setup_channels",
         category="Operations",
-        description="Toggle test-mode routing for portals/logs.",
+        description="Create/update Offside categories + portal/listing channels in this guild.",
         permissions="Staff",
     ),
     CommandInfo(
@@ -58,7 +76,7 @@ COMMANDS: List[CommandInfo] = [
         category="Operations",
         description="Set a runtime config value (no persistence).",
         permissions="Staff",
-        example="/config_set test_mode false",
+        example="/config_set banlist_cache_ttl_seconds 600",
     ),
     CommandInfo(
         name="/config_guild_view",

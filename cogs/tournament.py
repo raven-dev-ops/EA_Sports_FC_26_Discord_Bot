@@ -274,12 +274,14 @@ class TournamentCog(commands.Cog):
                         f"[{tournament}] Match {match_id} confirmed. Winner: {match.get('winner')}",
                     )
             else:
-                msg = await send_message(
+                posted = await send_message(
                     matches_ch,
                     f"[{tournament}] Match {match_id} confirmed. Winner: {match.get('winner')}",
                 )
-                if msg:
-                    ts.set_match_message_id(match_id=match_id, field="match_message_id", message_id=msg.id)
+                if posted:
+                    ts.set_match_message_id(
+                        match_id=match_id, field="match_message_id", message_id=posted.id
+                    )
         await interaction.response.send_message(
             f"Match {match_id} confirmed. Winner: {match.get('winner')}", ephemeral=True
         )

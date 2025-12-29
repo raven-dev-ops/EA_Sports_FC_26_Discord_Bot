@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dataclasses import replace
+
 import discord
 from discord import app_commands
 from discord.ext import commands
@@ -12,18 +14,27 @@ SAFE_CONFIG_FIELDS = {
     "discord_client_id",
     "discord_public_key",
     "interactions_endpoint_url",
-    "discord_test_channel_id",
     "test_mode",
     "role_broskie_id",
     "role_super_league_coach_id",
     "role_coach_premium_id",
     "role_coach_premium_plus_id",
-    "channel_roster_portal_id",
-    "channel_coach_portal_id",
     "channel_staff_portal_id",
+    "channel_club_portal_id",
+    "channel_coach_portal_id",
+    "channel_recruit_portal_id",
+    "channel_staff_monitor_id",
+    "channel_roster_listing_id",
+    "channel_recruit_listing_id",
+    "channel_club_listing_id",
     "banlist_sheet_id",
     "banlist_range",
     "banlist_cache_ttl_seconds",
+    "fc25_stats_cache_ttl_seconds",
+    "fc25_stats_http_timeout_seconds",
+    "fc25_stats_max_concurrency",
+    "fc25_stats_rate_limit_per_guild",
+    "fc25_default_platform",
 }
 
 
@@ -109,18 +120,35 @@ class ConfigCog(commands.Cog):
         if settings is None:
             await interaction.response.send_message("Settings unavailable.", ephemeral=True)
             return
+        value = value.strip()
+        parsed: bool | int | str
         try:
             current = getattr(settings, field)
             if isinstance(current, bool):
                 parsed = value.lower() in {"1", "true", "yes", "on"}
             elif isinstance(current, int):
                 parsed = int(value)
+            elif current is None and (field.endswith("_id") or field.endswith("_seconds")):
+                parsed = int(value)
             else:
                 parsed = value
         except Exception:
             parsed = value
         # Override on bot; caller must restart to persist.
-        setattr(settings, field, parsed)
+        try:
+            new_settings = replace(settings, **{field: parsed})
+        except TypeError:
+            await interaction.response.send_message(
+                "Failed to apply config override (invalid field/value).",
+                ephemeral=True,
+            )
+            return
+        setattr(self.bot, "settings", new_settings)
+        self.settings = new_settings
+        if field == "test_mode":
+            setattr(self.bot, "test_mode", bool(parsed))
+        if field == "channel_staff_monitor_id":
+            setattr(self.bot, "staff_monitor_channel_id", int(parsed) if parsed else None)
         await interaction.response.send_message(
             f"Set `{field}` to `{parsed}` (runtime only; restart to persist).",
             ephemeral=True,

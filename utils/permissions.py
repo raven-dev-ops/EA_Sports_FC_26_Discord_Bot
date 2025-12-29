@@ -15,7 +15,8 @@ def is_staff_user(user: discord.abc.User, settings: Settings | None) -> bool:
     """
     if settings is None:
         return False
-    if getattr(user, "guild_permissions", None) and user.guild_permissions.manage_guild:
+    perms = getattr(user, "guild_permissions", None)
+    if perms and getattr(perms, "manage_guild", False):
         return True
     user_roles = {r.id for r in getattr(user, "roles", []) if hasattr(r, "id")}
     return bool(user_roles.intersection(getattr(settings, "staff_role_ids", set())))
@@ -39,8 +40,9 @@ async def enforce_command_permissions(interaction: discord.Interaction) -> bool:
         return True
     requires_staff = bool(cmd.extras.get(REQUIRES_STAFF_KEY))
     if getattr(cmd, "qualified_name", None):
-        if cmd.binding is not None:
-            cog_name = getattr(cmd.binding, "__class__", type("", (), {})).__name__
+        binding = getattr(cmd, "binding", None)
+        if binding is not None:
+            cog_name = getattr(binding, "__class__", type("", (), {})).__name__
             if cog_name in STAFF_ONLY_COGS:
                 requires_staff = True
     if not requires_staff:

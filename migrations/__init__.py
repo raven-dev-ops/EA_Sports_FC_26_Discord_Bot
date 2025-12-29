@@ -38,8 +38,26 @@ def _migration_1(context: dict) -> None:
     ensure_indexes(collection)
 
 
+def _migration_2(context: dict) -> None:
+    """
+    Ensure indexes for recruit/club records and new record types.
+    """
+    collection = context["collection"]
+    ensure_indexes(collection)
+
+
+def _migration_3(context: dict) -> None:
+    """
+    Ensure indexes for FC25 stats records.
+    """
+    collection = context["collection"]
+    ensure_indexes(collection)
+
+
 MIGRATIONS: list[tuple[int, str, MigrationFunc]] = [
     (1, "Ensure primary indexes", _migration_1),
+    (2, "Ensure recruit/club indexes", _migration_2),
+    (3, "Ensure FC25 stats indexes", _migration_3),
 ]
 
 

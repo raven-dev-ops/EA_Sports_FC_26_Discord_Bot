@@ -8,6 +8,8 @@ These Terms of Service ("Terms") govern your use of the Offside Discord Bot ("th
 
 The Bot provides tournament roster management, eligibility checks against a staff-maintained ban list, and staff/coaches notifications within a Discord server.
 
+If enabled by server staff, the Bot may also provide an optional FC25 Clubs stats integration that lets users link/unlink stats for profile display (opt-in; see `docs/fc25-stats-policy.md`).
+
 ## Eligibility
 
 You must comply with Discord's Terms of Service and be permitted to use Discord in your jurisdiction.

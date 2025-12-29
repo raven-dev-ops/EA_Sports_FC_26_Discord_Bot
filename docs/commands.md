@@ -15,11 +15,32 @@
 - Example: `/unlock_roster @CoachUser tournament:"Summer Cup"`
 
 
+## Recruitment
+
+### /me
+
+- Description: Show your stored recruit profile preview (ephemeral).
+- Permissions: Anyone (in a guild)
+
+
+## Staff
+
+### /player_pool [position] [archetype] [platform] [mic]
+
+- Description: Search recruit profiles (ephemeral).
+- Permissions: Staff
+
+### /player_pool_index
+
+- Description: Post/update a pinned Player Pool index in the recruit listing channel.
+- Permissions: Staff
+
+
 ## Operations
 
-### /dev_on, /dev_off
+### /setup_channels
 
-- Description: Toggle test-mode routing for portals/logs.
+- Description: Create/update Offside categories + portal/listing channels in this guild.
 - Permissions: Staff
 
 ### /ping
@@ -41,7 +62,7 @@
 
 - Description: Set a runtime config value (no persistence).
 - Permissions: Staff
-- Example: `/config_set test_mode false`
+- Example: `/config_set banlist_cache_ttl_seconds 600`
 
 ### /config_guild_view
 

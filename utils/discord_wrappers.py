@@ -48,11 +48,17 @@ async def fetch_channel(
     if cached is not None:
         return cached
 
+    def _as_messageable(ch: object | None) -> discord.abc.Messageable | None:
+        if isinstance(ch, discord.abc.Messageable):
+            return ch
+        return None
+
     async def _do() -> discord.abc.Messageable | None:
-        ch = client.get_channel(channel_id)
+        ch = _as_messageable(client.get_channel(channel_id))
         if ch is not None:
             return ch
-        return await client.fetch_channel(channel_id)
+        fetched = await client.fetch_channel(channel_id)
+        return _as_messageable(fetched)
 
     try:
         ch = await with_backoff(_do)

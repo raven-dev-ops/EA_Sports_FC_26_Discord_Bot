@@ -7,7 +7,8 @@ from discord.ext import commands
 
 from interactions.dashboard import build_roster_dashboard
 from interactions.views import SafeView
-from utils.discord_wrappers import send_message
+from utils.channel_routing import resolve_channel_id
+from utils.discord_wrappers import fetch_channel, send_message
 
 
 def build_coach_help_embed() -> discord.Embed:
@@ -93,12 +94,14 @@ def build_coach_portal_embed() -> discord.Embed:
 class CoachPortalView(SafeView):
     def __init__(self) -> None:
         super().__init__(timeout=None)
-        btn_dashboard = discord.ui.Button(
+        btn_dashboard: discord.ui.Button = discord.ui.Button(
             label="Open Roster Dashboard", style=discord.ButtonStyle.primary
         )
-        btn_help = discord.ui.Button(label="Coach Help", style=discord.ButtonStyle.secondary)
-        btn_dashboard.callback = self.on_dashboard
-        btn_help.callback = self.on_help
+        btn_help: discord.ui.Button = discord.ui.Button(
+            label="Coach Help", style=discord.ButtonStyle.secondary
+        )
+        setattr(btn_dashboard, "callback", self.on_dashboard)
+        setattr(btn_help, "callback", self.on_help)
         self.add_item(btn_dashboard)
         self.add_item(btn_help)
 
@@ -128,18 +131,21 @@ async def send_coach_portal_message(
         )
         return
 
-    target_channel_id = settings.channel_coach_portal_id
+    test_mode = bool(getattr(interaction.client, "test_mode", False))
+    target_channel_id = resolve_channel_id(
+        settings,
+        guild_id=getattr(interaction.guild, "id", None),
+        field="channel_coach_portal_id",
+        test_mode=test_mode,
+    )
+    if not target_channel_id:
+        await interaction.response.send_message(
+            "Coach portal channel is not configured. Ask staff to run `/setup_channels`.",
+            ephemeral=True,
+        )
+        return
 
-    async def _fetch_channel() -> discord.abc.Messageable | None:
-        ch = interaction.client.get_channel(target_channel_id)
-        if ch is not None:
-            return ch
-        try:
-            return await interaction.client.fetch_channel(target_channel_id)
-        except discord.DiscordException:
-            return None
-
-    channel = await _fetch_channel()
+    channel = await fetch_channel(interaction.client, target_channel_id)
     if channel is None:
         await interaction.response.send_message(
             "Coach portal channel not found.",
@@ -149,7 +155,8 @@ async def send_coach_portal_message(
 
     try:
         async for message in channel.history(limit=20):
-            if message.author.id == interaction.client.user.id:
+            client_user = interaction.client.user
+            if client_user and message.author.id == client_user.id:
                 if message.embeds and message.embeds[0].title in {
                     "Coach Roster Portal",
                     "Coach Portal Overview",
@@ -180,47 +187,54 @@ async def send_coach_portal_message(
     )
 
 
-async def post_coach_portal(bot: commands.Bot) -> None:
+async def post_coach_portal(bot: commands.Bot | commands.AutoShardedBot) -> None:
     settings = getattr(bot, "settings", None)
     if settings is None:
         return
 
-    target_channel_id = settings.channel_coach_portal_id
+    test_mode = bool(getattr(bot, "test_mode", False))
+    for guild in bot.guilds:
+        target_channel_id = resolve_channel_id(
+            settings,
+            guild_id=guild.id,
+            field="channel_coach_portal_id",
+            test_mode=test_mode,
+        )
+        if not target_channel_id:
+            continue
 
-    async def _fetch_channel() -> discord.abc.Messageable | None:
-        ch = bot.get_channel(target_channel_id)
-        if ch is not None:
-            return ch
+        channel = await fetch_channel(bot, target_channel_id)
+        if channel is None:
+            continue
+
+        bot_user = bot.user
+        if bot_user is None:
+            continue
         try:
-            return await bot.fetch_channel(target_channel_id)
+            async for message in channel.history(limit=20):
+                if message.author.id == bot_user.id:
+                    if message.embeds and message.embeds[0].title in {
+                        "Coach Roster Portal",
+                        "Coach Portal Overview",
+                    }:
+                        try:
+                            await message.delete()
+                        except discord.DiscordException:
+                            pass
         except discord.DiscordException:
-            return None
+            pass
 
-    channel = await _fetch_channel()
-    if channel is None:
-        return
-
-    try:
-        async for message in channel.history(limit=20):
-            if message.author.id == bot.user.id:
-                if message.embeds and message.embeds[0].title in {
-                    "Coach Roster Portal",
-                    "Coach Portal Overview",
-                }:
-                    try:
-                        await message.delete()
-                    except discord.DiscordException:
-                        pass
-    except discord.DiscordException:
-        pass
-
-    intro_embed = build_coach_intro_embed()
-    embed = build_coach_portal_embed()
-    view = CoachPortalView()
-    try:
-        await send_message(channel, embed=intro_embed)
-        await send_message(channel, embed=embed, view=view)
-        logging.info("Posted coach portal embed.")
-    except discord.DiscordException as exc:
-        logging.warning("Failed to post coach portal to channel %s: %s", target_channel_id, exc)
-        return
+        intro_embed = build_coach_intro_embed()
+        embed = build_coach_portal_embed()
+        view = CoachPortalView()
+        try:
+            await send_message(channel, embed=intro_embed)
+            await send_message(channel, embed=embed, view=view)
+            logging.info("Posted coach portal embed (guild=%s channel=%s).", guild.id, target_channel_id)
+        except discord.DiscordException as exc:
+            logging.warning(
+                "Failed to post coach portal to channel %s (guild=%s): %s",
+                target_channel_id,
+                guild.id,
+                exc,
+            )

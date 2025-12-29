@@ -75,7 +75,7 @@ def build_roster_dashboard(
             inline=False,
         )
     else:
-        display_cap = cap if cap is not None else roster.get("cap", "N/A")
+        display_cap = cap if cap is not None else (roster.get("cap", "N/A") if roster else "N/A")
         embed.add_field(
             name="Players",
             value=f"{player_count}/{display_cap}",

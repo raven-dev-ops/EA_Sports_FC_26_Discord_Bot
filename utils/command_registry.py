@@ -4,9 +4,12 @@ import logging
 from typing import Iterable
 
 import discord
+from discord.ext import commands
 
 
-def validate_commands(commands: Iterable[discord.app_commands.Command]) -> None:
+def validate_commands(
+    commands: Iterable[discord.app_commands.Command | discord.app_commands.Group],
+) -> None:
     """
     Validate the command collection for duplicate names and missing descriptions.
     Raises RuntimeError on duplicates or empty descriptions.
@@ -24,7 +27,7 @@ def validate_commands(commands: Iterable[discord.app_commands.Command]) -> None:
             raise RuntimeError(f"Command '{name}' is missing a meaningful description.")
 
 
-def validate_command_tree(bot: discord.Client) -> None:
+def validate_command_tree(bot: commands.Bot | commands.AutoShardedBot) -> None:
     """
     Convenience wrapper to validate the bot's command tree after sync.
     """

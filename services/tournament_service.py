@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Sequence, TypeVar
 
 from bson import ObjectId
 from pymongo.collection import Collection
@@ -16,6 +16,8 @@ TOURNAMENT_STATE_COMPLETED = "COMPLETED"
 MATCH_STATUS_PENDING = "PENDING"
 MATCH_STATUS_REPORTED = "REPORTED"
 MATCH_STATUS_COMPLETED = "COMPLETED"
+
+T = TypeVar("T")
 
 
 def _now():
@@ -167,8 +169,8 @@ def list_participants(tournament_name: str, *, collection: Collection | None = N
     )
 
 
-def _pairwise(items: list[Any]) -> list[tuple[Any | None, Any | None]]:
-    pairs: list[tuple[Any | None, Any | None]] = []
+def _pairwise(items: Sequence[T]) -> list[tuple[T, T | None]]:
+    pairs: list[tuple[T, T | None]] = []
     for i in range(0, len(items), 2):
         a = items[i]
         b = items[i + 1] if i + 1 < len(items) else None

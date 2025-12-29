@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 import discord
 from discord import app_commands
 from discord.ext import commands
 
 from repositories.tournament_repo import ensure_cycle_by_name, get_cycle_by_id
 from services.audit_service import AUDIT_ACTION_UNLOCKED, record_staff_action
+from services.recruitment_service import search_recruit_profiles
 from services.roster_service import (
     ROSTER_STATUS_UNLOCKED,
     get_latest_roster_for_coach,
@@ -13,6 +16,9 @@ from services.roster_service import (
     set_roster_status,
 )
 from services.submission_service import delete_submission_by_roster
+from utils.channel_routing import resolve_channel_id
+from utils.discord_wrappers import fetch_channel, send_message
+from utils.validation import normalize_platform
 
 
 class StaffCog(commands.Cog):
@@ -26,7 +32,8 @@ class StaffCog(commands.Cog):
         role_ids = {role.id for role in getattr(interaction.user, "roles", [])}
         if settings.staff_role_ids:
             return bool(role_ids.intersection(settings.staff_role_ids))
-        return bool(getattr(interaction.user, "guild_permissions", None).manage_guild)
+        perms = getattr(interaction.user, "guild_permissions", None)
+        return bool(getattr(perms, "manage_guild", False))
 
     @app_commands.command(name="unlock_roster", description="Unlock a roster for edits.")
     @app_commands.describe(
@@ -49,9 +56,9 @@ class StaffCog(commands.Cog):
         roster = None
         cycle_name = None
         if tournament:
-            cycle = ensure_cycle_by_name(tournament.strip())
-            roster = get_roster_for_coach(coach.id, cycle_id=cycle["_id"])
-            cycle_name = cycle.get("name")
+            cycle_doc = ensure_cycle_by_name(tournament.strip())
+            roster = get_roster_for_coach(coach.id, cycle_id=cycle_doc["_id"])
+            cycle_name = cycle_doc.get("name")
         else:
             roster = get_roster_for_coach(coach.id)
 
@@ -80,18 +87,15 @@ class StaffCog(commands.Cog):
         submission = delete_submission_by_roster(roster["_id"])
         if submission:
             channel_id = submission.get("staff_channel_id")
-            channel = self.bot.get_channel(channel_id)
-            if channel is None:
-                try:
-                    channel = await self.bot.fetch_channel(channel_id)
-                except discord.DiscordException:
-                    channel = None
-            if channel:
-                try:
-                    msg = await channel.fetch_message(submission.get("staff_message_id"))
-                    await msg.delete()
-                except discord.DiscordException:
-                    pass
+            message_id = submission.get("staff_message_id")
+            if isinstance(channel_id, int) and isinstance(message_id, int):
+                channel = await fetch_channel(self.bot, channel_id)
+                if channel:
+                    try:
+                        msg = await channel.fetch_message(message_id)
+                        await msg.delete()
+                    except discord.DiscordException:
+                        pass
         record_staff_action(
             roster_id=roster["_id"],
             action=AUDIT_ACTION_UNLOCKED,
@@ -105,6 +109,206 @@ class StaffCog(commands.Cog):
             ephemeral=True,
         )
 
+    @app_commands.command(
+        name="player_pool",
+        description="Search recruit profiles (staff only).",
+    )
+    @app_commands.describe(
+        position="Position filter (e.g., ST, CM)",
+        archetype="Archetype filter (free text)",
+        platform="Platform filter (PC/PS5)",
+        mic="Require mic (true/false)",
+    )
+    async def player_pool(
+        self,
+        interaction: discord.Interaction,
+        position: str | None = None,
+        archetype: str | None = None,
+        platform: str | None = None,
+        mic: bool | None = None,
+    ) -> None:
+        if not self._is_staff(interaction):
+            await interaction.response.send_message(
+                "You do not have permission to use this command.",
+                ephemeral=True,
+            )
+            return
+        guild = interaction.guild
+        if guild is None:
+            await interaction.response.send_message(
+                "This command must be used in a guild.",
+                ephemeral=True,
+            )
+            return
+
+        platform_value = None
+        if platform and platform.strip():
+            platform_value = normalize_platform(platform)
+            if platform_value is None:
+                await interaction.response.send_message(
+                    "Platform must be PC or PS5.",
+                    ephemeral=True,
+                )
+                return
+
+        results = search_recruit_profiles(
+            guild.id,
+            position=position,
+            archetype=archetype,
+            platform=platform_value,
+            mic=mic,
+            limit=50,
+            offset=0,
+        )
+
+        lines: list[str] = []
+        for profile in results:
+            line = _format_player_pool_line(guild.id, profile)
+            if not line:
+                continue
+            if sum(len(existing_line) + 1 for existing_line in lines) + len(line) > 1800:
+                break
+            lines.append(line)
+
+        header = "**Player Pool Results**\n"
+        if not lines:
+            await interaction.response.send_message(
+                header + "No matching profiles found.",
+                ephemeral=True,
+                allowed_mentions=discord.AllowedMentions.none(),
+            )
+            return
+        await interaction.response.send_message(
+            header + "\n".join(lines),
+            ephemeral=True,
+            allowed_mentions=discord.AllowedMentions.none(),
+        )
+
+    @app_commands.command(
+        name="player_pool_index",
+        description="Post/update a pinned Player Pool index in the recruit listing channel (staff only).",
+    )
+    async def player_pool_index(self, interaction: discord.Interaction) -> None:
+        if not self._is_staff(interaction):
+            await interaction.response.send_message(
+                "You do not have permission to use this command.",
+                ephemeral=True,
+            )
+            return
+        guild = interaction.guild
+        if guild is None:
+            await interaction.response.send_message(
+                "This command must be used in a guild.",
+                ephemeral=True,
+            )
+            return
+
+        settings = getattr(self.bot, "settings", None)
+        if settings is None:
+            await interaction.response.send_message(
+                "Bot configuration is not loaded.",
+                ephemeral=True,
+            )
+            return
+
+        test_mode = bool(getattr(self.bot, "test_mode", False))
+        listing_channel_id = resolve_channel_id(
+            settings,
+            guild_id=guild.id,
+            field="channel_recruit_listing_id",
+            test_mode=test_mode,
+        )
+        if not listing_channel_id:
+            await interaction.response.send_message(
+                "Recruit listing channel is not configured. Ask staff to run `/setup_channels`.",
+                ephemeral=True,
+            )
+            return
+
+        channel = await fetch_channel(self.bot, listing_channel_id)
+        if channel is None or not hasattr(channel, "send"):
+            await interaction.response.send_message(
+                "Recruit listing channel not found.",
+                ephemeral=True,
+            )
+            return
+
+        results = search_recruit_profiles(guild.id, limit=200, offset=0)
+        updated_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+        header = f"**Player Pool Index**\nLast updated: {updated_at}\n"
+        lines: list[str] = []
+        for profile in results:
+            line = _format_player_pool_line(guild.id, profile, include_link=True)
+            if not line:
+                continue
+            if len(header) + sum(len(existing_line) + 1 for existing_line in lines) + len(line) > 1900:
+                lines.append("…(truncated)")
+                break
+            lines.append(line)
+        content = header + ("\n".join(lines) if lines else "No profiles available.")
+
+        target_message: discord.Message | None = None
+        if hasattr(channel, "pins"):
+            try:
+                pins = await channel.pins()  # type: ignore[attr-defined]
+                for msg in pins:
+                    if msg.author and self.bot.user and msg.author.id == self.bot.user.id:
+                        if msg.content.startswith("**Player Pool Index**"):
+                            target_message = msg
+                            break
+            except discord.DiscordException:
+                target_message = None
+
+        if target_message is not None:
+            try:
+                await target_message.edit(content=content, allowed_mentions=discord.AllowedMentions.none())
+            except discord.DiscordException:
+                pass
+        else:
+            posted = await send_message(
+                channel,
+                content,
+                allowed_mentions=discord.AllowedMentions.none(),
+            )
+            if posted is not None and hasattr(posted, "pin"):
+                try:
+                    await posted.pin(reason="Player Pool index")
+                except discord.DiscordException:
+                    pass
+
+        await interaction.response.send_message(
+            "Player Pool index posted/updated.",
+            ephemeral=True,
+        )
+
 
 async def setup(bot: commands.Bot) -> None:
     await bot.add_cog(StaffCog(bot))
+
+
+def _profile_jump_link(guild_id: int, profile: dict) -> str | None:
+    channel_id = profile.get("listing_channel_id")
+    message_id = profile.get("listing_message_id")
+    if isinstance(channel_id, int) and isinstance(message_id, int):
+        return f"https://discord.com/channels/{guild_id}/{channel_id}/{message_id}"
+    return None
+
+
+def _format_player_pool_line(guild_id: int, profile: dict, *, include_link: bool = False) -> str | None:
+    user_id = profile.get("user_id")
+    if not isinstance(user_id, int):
+        return None
+    pos = str(profile.get("main_position") or "?")
+    arch = str(profile.get("main_archetype") or "").title()
+    plat = str(profile.get("platform") or "")
+    mic = profile.get("mic")
+    mic_text = "Mic" if mic is True else "No mic" if mic is False else ""
+    display = str(profile.get("display_name") or profile.get("user_tag") or user_id).strip()
+    parts = [f"<@{user_id}>", display, f"{pos} ({arch})".strip(), plat, mic_text]
+    parts = [p for p in parts if p]
+    line = "- " + " — ".join(parts)
+    if include_link:
+        link = _profile_jump_link(guild_id, profile)
+        if link:
+            line += f" — <{link}>"
+    return line[:200]

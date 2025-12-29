@@ -1,0 +1,20 @@
+{
+  "clubName": "Example FC",
+  "members": {
+    "PlayerOne": {
+      "gamesPlayed": 123,
+      "goals": 45,
+      "assists": 27,
+      "cleanSheets": 10,
+      "ratingAve": 8.15
+    },
+    "PlayerTwo": {
+      "name": "PlayerTwo",
+      "gamesPlayed": 12,
+      "goals": 1,
+      "assists": 3,
+      "cleanSheets": 0,
+      "ratingAve": 7.5
+    }
+  }
+}
