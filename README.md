@@ -142,6 +142,7 @@ at runtime (session-scoped).
 - Migrations and recovery run automatically at startup:
   - Schema version is tracked in `_meta.schema_version`; indexes are ensured each boot.
   - Recovery unlocks rosters that were submitted but lost their submission message record and prunes orphan submission docs.
+- Timezones: timestamps are treated as UTC by default. Use `utils.time_utils.format_dt(dt, tz="Your/Zone")` to render friendly times in a specific timezone, and supply scheduling/deadline inputs in UTC to avoid ambiguity.
 
 ## Heroku deploy
 
