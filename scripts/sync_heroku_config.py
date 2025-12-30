@@ -88,9 +88,10 @@ def _is_override_key(key: str) -> bool:
     return key.startswith("ROLE_") or key.startswith("CHANNEL_")
 
 
-def _get_auth_header() -> str | None:
-    token = os.environ.get("HEROKU_API_KEY", "").strip()
-    email = os.environ.get("HEROKU_EMAIL", "").strip()
+def _get_auth_header(*, dotenv: dict[str, str] | None = None) -> str | None:
+    dotenv = dotenv or {}
+    token = os.environ.get("HEROKU_API_KEY", "").strip() or dotenv.get("HEROKU_API_KEY", "").strip()
+    email = os.environ.get("HEROKU_EMAIL", "").strip() or dotenv.get("HEROKU_EMAIL", "").strip()
     if email and token:
         encoded = base64.b64encode(f"{email}:{token}".encode("utf-8")).decode("ascii")
         return f"Basic {encoded}"
@@ -160,14 +161,15 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    auth_header = _get_auth_header()
+    env_values = _parse_dotenv(Path(args.dotenv))
+    auth_header = _get_auth_header(dotenv=env_values)
     if not auth_header:
         print(
-            "Missing Heroku credentials. Set HEROKU_API_KEY (and optional HEROKU_EMAIL) or ensure USERPROFILE/_netrc contains api.heroku.com credentials."
+            "Missing Heroku credentials. Set HEROKU_API_KEY (and optional HEROKU_EMAIL) in the environment or in the dotenv file, "
+            "or ensure USERPROFILE/_netrc contains api.heroku.com credentials."
         )
         return 2
 
-    env_values = _parse_dotenv(Path(args.dotenv))
     whitelist = _parse_env_key_whitelist(Path(args.example))
 
     to_set: dict[str, str] = {}
