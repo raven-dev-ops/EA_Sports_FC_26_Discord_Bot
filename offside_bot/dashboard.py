@@ -22,7 +22,7 @@ from config import Settings, load_settings
 from database import get_client, get_collection, get_global_collection
 from services import entitlements_service
 from services.analytics_service import get_guild_analytics
-from services.audit_log_service import list_audit_events
+from services.audit_log_service import list_audit_events, record_audit_event
 from services.error_reporting_service import init_error_reporting, set_guild_tag
 from services.guild_config_service import get_guild_config, set_guild_config
 from services.guild_settings_schema import (
@@ -32,6 +32,13 @@ from services.guild_settings_schema import (
     PREMIUM_COACHES_PIN_ENABLED_KEY,
 )
 from services.heartbeat_service import get_worker_heartbeat
+from services.ops_tasks_service import (
+    OPS_TASK_ACTION_REPOST_PORTALS,
+    OPS_TASK_ACTION_RUN_SETUP,
+    enqueue_ops_task,
+    ensure_ops_task_indexes,
+    list_ops_tasks,
+)
 from services.stripe_webhook_service import ensure_stripe_webhook_indexes, handle_stripe_webhook
 from services.subscription_service import get_guild_subscription
 
@@ -163,6 +170,8 @@ def _guild_section_url(guild_id: str, *, section: str) -> str:
         return f"/guild/{gid}/permissions"
     if section == "audit":
         return f"/guild/{gid}/audit"
+    if section == "ops":
+        return f"/guild/{gid}/ops"
     if section == "billing":
         return f"/app/billing?guild_id={gid}"
     return f"/guild/{gid}"
@@ -210,6 +219,7 @@ def _app_shell(
         ("Settings", _guild_section_url(nav_guild, section="settings"), section == "settings"),
         ("Permissions", _guild_section_url(nav_guild, section="permissions"), section == "permissions"),
         ("Audit Log", _guild_section_url(nav_guild, section="audit"), section == "audit"),
+        ("Ops", _guild_section_url(nav_guild, section="ops"), section == "ops"),
         ("Billing", _guild_section_url(nav_guild, section="billing"), section == "billing"),
     ]
     nav_links = "\n".join(
@@ -2029,6 +2039,202 @@ async def guild_audit_csv(request: web.Request) -> web.Response:
     return web.Response(text=text, headers=headers, content_type="text/csv")
 
 
+async def guild_ops_page(request: web.Request) -> web.Response:
+    session = _require_session(request)
+    settings: Settings = request.app["settings"]
+
+    guild_id_str = request.match_info["guild_id"]
+    guild_id = _require_owned_guild(session, guild_id=guild_id_str)
+
+    installed, install_error = await _detect_bot_installed(request, guild_id=guild_id)
+    if not settings.mongodb_uri:
+        body = """
+          <h1 style="margin-top:0;">Ops</h1>
+          <div class="card"><p class="muted">MongoDB is not configured; ops tasks cannot be queued.</p></div>
+        """
+        return web.Response(
+            text=_html_page(
+                title="Ops",
+                body=_app_shell(
+                    settings=settings,
+                    session=session,
+                    section="ops",
+                    selected_guild_id=guild_id,
+                    installed=installed,
+                    content=body,
+                ),
+            ),
+            content_type="text/html",
+        )
+
+    heartbeat = get_worker_heartbeat(settings, worker="bot") or {}
+    updated_at = heartbeat.get("updated_at")
+    heartbeat_text = "missing"
+    if isinstance(updated_at, datetime):
+        if updated_at.tzinfo is None:
+            updated_at = updated_at.replace(tzinfo=timezone.utc)
+        age = (datetime.now(timezone.utc) - updated_at).total_seconds()
+        heartbeat_text = f"{updated_at.isoformat()} (age={int(age)}s)"
+
+    tasks: list[dict[str, Any]] = []
+    tasks_error: str | None = None
+    try:
+        tasks = list_ops_tasks(settings, guild_id=guild_id, limit=25)
+    except Exception as exc:
+        tasks_error = str(exc)
+        tasks = []
+
+    task_rows: list[str] = []
+    for task in tasks:
+        created_at = task.get("created_at")
+        created = created_at.isoformat() if isinstance(created_at, datetime) else str(created_at or "")
+        started_at = task.get("started_at")
+        started = started_at.isoformat() if isinstance(started_at, datetime) else str(started_at or "")
+        finished_at = task.get("finished_at")
+        finished = finished_at.isoformat() if isinstance(finished_at, datetime) else str(finished_at or "")
+        action = str(task.get("action") or "")
+        status = str(task.get("status") or "")
+        requested_by = str(task.get("requested_by_username") or task.get("requested_by_discord_id") or "")
+        error = str(task.get("error") or "")
+        task_rows.append(
+            "<tr>"
+            f"<td><code>{_escape_html(created)}</code></td>"
+            f"<td><code>{_escape_html(action)}</code></td>"
+            f"<td><code>{_escape_html(status)}</code></td>"
+            f"<td>{_escape_html(requested_by)}</td>"
+            f"<td><code>{_escape_html(started)}</code></td>"
+            f"<td><code>{_escape_html(finished)}</code></td>"
+            f"<td class='muted'>{_escape_html(error)[:200]}</td>"
+            "</tr>"
+        )
+    tasks_table = (
+        "\n".join(task_rows)
+        if task_rows
+        else "<tr><td colspan='7' class='muted'>No ops tasks yet.</td></tr>"
+    )
+
+    disabled_attr = "disabled" if installed is False else ""
+    install_note = (
+        f"<div class='card'><p class='muted'>{_escape_html(install_error or '')}</p></div>"
+        if installed is False and install_error
+        else ""
+    )
+    if tasks_error:
+        install_note += f"<div class='card'><p class='muted'>Tasks unavailable: <code>{_escape_html(tasks_error)}</code></p></div>"
+
+    body = f"""
+      <h1 style="margin-top:0;">Ops</h1>
+      {install_note}
+      <div class="row">
+        <div class="card">
+          <div><strong>Worker heartbeat</strong></div>
+          <div class="muted">{_escape_html(heartbeat_text)}</div>
+          <p class="muted" style="margin-top:10px;">If the worker is missing/stale, queued tasks will not run.</p>
+        </div>
+        <div class="card">
+          <div><strong>Actions</strong></div>
+          <div class="muted" style="margin-top:8px;">These actions run on the bot worker dyno.</div>
+          <div style="margin-top:10px; display:flex; gap:10px; flex-wrap:wrap;">
+            <form method="post" action="/api/guild/{guild_id}/ops/run_setup">
+              <input type="hidden" name="csrf" value="{_escape_html(session.csrf_token)}" />
+              <button class="btn" type="submit" {disabled_attr}>Run setup now</button>
+            </form>
+            <form method="post" action="/api/guild/{guild_id}/ops/repost_portals">
+              <input type="hidden" name="csrf" value="{_escape_html(session.csrf_token)}" />
+              <button class="btn secondary" type="submit" {disabled_attr}>Repost portals</button>
+            </form>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <h2 style="margin-top:0;">Recent tasks</h2>
+        <table>
+          <thead><tr><th>created</th><th>action</th><th>status</th><th>requested by</th><th>started</th><th>finished</th><th>error</th></tr></thead>
+          <tbody>{tasks_table}</tbody>
+        </table>
+        <p class="muted" style="margin-top:10px;">All actions are also recorded in the audit log.</p>
+      </div>
+    """
+    return web.Response(
+        text=_html_page(
+            title="Ops",
+            body=_app_shell(
+                settings=settings,
+                session=session,
+                section="ops",
+                selected_guild_id=guild_id,
+                installed=installed,
+                content=body,
+            ),
+        ),
+        content_type="text/html",
+    )
+
+
+async def _enqueue_ops_from_dashboard(
+    request: web.Request,
+    *,
+    action: str,
+) -> web.Response:
+    session = _require_session(request)
+    settings: Settings = request.app["settings"]
+    if not settings.mongodb_uri:
+        raise web.HTTPInternalServerError(text="MongoDB is not configured.")
+
+    guild_id_str = request.match_info["guild_id"]
+    guild_id = _require_owned_guild(session, guild_id=guild_id_str)
+
+    installed, _install_error = await _detect_bot_installed(request, guild_id=guild_id)
+    if installed is False:
+        raise web.HTTPBadRequest(text="Bot is not installed in this server yet. Invite it first.")
+
+    data = await request.post()
+    if str(data.get("csrf", "")) != session.csrf_token:
+        raise web.HTTPBadRequest(text="Invalid CSRF token.")
+
+    actor_id = _parse_int(session.user.get("id"))
+    actor_username = f"{session.user.get('username','')}#{session.user.get('discriminator','')}".strip("#")
+
+    task = enqueue_ops_task(
+        settings,
+        guild_id=guild_id,
+        action=action,
+        requested_by_discord_id=actor_id,
+        requested_by_username=actor_username or None,
+        source="dashboard",
+    )
+
+    try:
+        audit_col = get_collection(settings, record_type="audit_event", guild_id=guild_id)
+        record_audit_event(
+            guild_id=guild_id,
+            category="ops",
+            action="ops_task.enqueued",
+            source="dashboard",
+            actor_discord_id=actor_id,
+            actor_display_name=str(session.user.get("username") or "") or None,
+            actor_username=actor_username or None,
+            details={
+                "task_id": str(task.get("_id") or ""),
+                "task_action": str(task.get("action") or ""),
+                "task_status": str(task.get("status") or ""),
+            },
+            collection=audit_col,
+        )
+    except Exception:
+        pass
+
+    raise web.HTTPFound(f"/guild/{guild_id}/ops")
+
+
+async def guild_ops_run_setup(request: web.Request) -> web.Response:
+    return await _enqueue_ops_from_dashboard(request, action=OPS_TASK_ACTION_RUN_SETUP)
+
+
+async def guild_ops_repost_portals(request: web.Request) -> web.Response:
+    return await _enqueue_ops_from_dashboard(request, action=OPS_TASK_ACTION_REPOST_PORTALS)
+
+
 async def guild_analytics_json(request: web.Request) -> web.Response:
     session = _require_session(request)
     settings: Settings = request.app["settings"]
@@ -2348,6 +2554,7 @@ def create_app(*, settings: Settings | None = None) -> web.Application:
     app["state_collection"] = state_collection
     if app_settings.mongodb_uri:
         ensure_stripe_webhook_indexes(app_settings)
+        ensure_ops_task_indexes(app_settings)
     app["guild_metadata_cache"] = {}
     app["http"] = None
     app.on_startup.append(_on_startup)
@@ -2371,10 +2578,13 @@ def create_app(*, settings: Settings | None = None) -> web.Application:
     app.router.add_get("/guild/{guild_id}/permissions", guild_permissions_page)
     app.router.add_get("/guild/{guild_id}/audit", guild_audit_page)
     app.router.add_get("/guild/{guild_id}/audit.csv", guild_audit_csv)
+    app.router.add_get("/guild/{guild_id}/ops", guild_ops_page)
     app.router.add_get("/guild/{guild_id}/settings", guild_settings_page)
     app.router.add_post("/guild/{guild_id}/settings", guild_settings_save)
     app.router.add_get("/api/guild/{guild_id}/analytics.json", guild_analytics_json)
     app.router.add_get("/api/guild/{guild_id}/discord_metadata.json", guild_discord_metadata_json)
+    app.router.add_post("/api/guild/{guild_id}/ops/run_setup", guild_ops_run_setup)
+    app.router.add_post("/api/guild/{guild_id}/ops/repost_portals", guild_ops_repost_portals)
     app.router.add_post("/api/billing/webhook", billing_webhook)
     return app
 

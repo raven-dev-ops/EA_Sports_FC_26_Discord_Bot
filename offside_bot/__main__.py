@@ -461,6 +461,16 @@ class OffsideBot(commands.AutoShardedBot):
                 self.scheduler.add_job("worker_heartbeat", 30.0, heartbeat)
             except RuntimeError:
                 pass
+            try:
+                from services.ops_tasks_service import ensure_ops_task_indexes
+
+                ensure_ops_task_indexes(settings)
+            except Exception:
+                logging.exception("Failed to ensure ops task indexes.")
+            try:
+                self.scheduler.add_job("ops_tasks", 3.0, self._ops_tasks_job)
+            except RuntimeError:
+                pass
         if feature_enabled("metrics_log", settings):
             async def log_metrics():
                 return None
@@ -474,6 +484,90 @@ class OffsideBot(commands.AutoShardedBot):
             except RuntimeError:
                 pass
         await self.scheduler.start()
+
+    async def _ops_tasks_job(self) -> None:
+        settings = getattr(self, "settings", None)
+        if settings is None or not settings.mongodb_uri:
+            return
+        if not self.is_ready():
+            return
+
+        from services.audit_log_service import record_audit_event
+        from services.ops_tasks_service import (
+            OPS_TASK_ACTION_REPOST_PORTALS,
+            OPS_TASK_ACTION_RUN_SETUP,
+            claim_next_ops_task,
+            mark_ops_task_failed,
+            mark_ops_task_succeeded,
+        )
+
+        task = claim_next_ops_task(settings, worker="bot")
+        if not task:
+            return
+
+        task_id = str(task.get("_id") or "")
+        guild_id_raw = task.get("guild_id")
+        guild_id = int(guild_id_raw) if isinstance(guild_id_raw, int) else 0
+        action = str(task.get("action") or "").strip().lower()
+
+        if not task_id or not guild_id:
+            return
+
+        try:
+            audit_col = get_collection(settings, record_type="audit_event", guild_id=guild_id)
+            record_audit_event(
+                guild_id=guild_id,
+                category="ops",
+                action="ops_task.started",
+                source="worker",
+                details={"task_id": task_id, "task_action": action},
+                collection=audit_col,
+            )
+        except Exception:
+            pass
+
+        try:
+            guild = self.get_guild(guild_id)
+            if guild is None:
+                raise RuntimeError("Bot is not in this guild.")
+
+            if action == OPS_TASK_ACTION_RUN_SETUP:
+                async with self._auto_setup_lock:
+                    await self._auto_setup_guild(guild)
+                result = {"message": "Auto-setup complete."}
+            elif action == OPS_TASK_ACTION_REPOST_PORTALS:
+                await self.post_portals(guilds=[guild])
+                result = {"message": "Portals reposted."}
+            else:
+                raise RuntimeError(f"Unknown ops action: {action}")
+
+            mark_ops_task_succeeded(settings, task_id=task_id, result=result)
+            try:
+                audit_col = get_collection(settings, record_type="audit_event", guild_id=guild_id)
+                record_audit_event(
+                    guild_id=guild_id,
+                    category="ops",
+                    action="ops_task.completed",
+                    source="worker",
+                    details={"task_id": task_id, "task_action": action, "result": result},
+                    collection=audit_col,
+                )
+            except Exception:
+                pass
+        except Exception as exc:
+            mark_ops_task_failed(settings, task_id=task_id, error=str(exc))
+            try:
+                audit_col = get_collection(settings, record_type="audit_event", guild_id=guild_id)
+                record_audit_event(
+                    guild_id=guild_id,
+                    category="ops",
+                    action="ops_task.failed",
+                    source="worker",
+                    details={"task_id": task_id, "task_action": action, "error": str(exc)},
+                    collection=audit_col,
+                )
+            except Exception:
+                pass
 
     async def _fc25_refresh_job(self) -> None:
         from datetime import datetime, timezone

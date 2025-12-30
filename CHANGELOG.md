@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.30] - 2025-12-30
+
+### Added
+- Dashboard: Ops page (`/guild/{guild_id}/ops`) to queue “run setup” and “repost portals” actions.
+- Worker: DB-backed ops task consumer job with audit events for enqueue/start/complete/fail.
+
 ## [0.2.29] - 2025-12-30
 
 ### Added
