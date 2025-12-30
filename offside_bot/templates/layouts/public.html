@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% from "macros/ui.html" import button %}
+
+{% block body %}
+  <div class="topbar">
+    <div><a class="brand" href="/">{{ brand|default("Offside") }}</a></div>
+    <div style="display:flex; gap:10px; align-items:center;">
+      {% if right_cta %}
+        {{ right_cta|safe }}
+      {% endif %}
+    </div>
+  </div>
+
+  <main class="content" style="max-width:980px;">
+    {% block content %}{% endblock %}
+  </main>
+{% endblock %}
+

@@ -29,6 +29,9 @@ include = [
 ]
 exclude = ["docs*", "scripts*", "tests*"]
 
+[tool.setuptools.package-data]
+offside_bot = ["templates/**/*.html", "static/**/*"]
+
 [tool.ruff]
 line-length = 99
 target-version = "py312"

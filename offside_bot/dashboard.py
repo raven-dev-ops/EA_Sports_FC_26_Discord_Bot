@@ -111,55 +111,9 @@ def _insert_unique(col: Collection, doc_factory) -> str:
 
 
 def _html_page(*, title: str, body: str) -> str:
-    return f"""<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>{title}</title>
-    <style>
-      body {{ font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial; padding: 24px; color: #111; }}
-      a {{ color: #2563eb; text-decoration: none; }}
-      a:hover {{ text-decoration: underline; }}
-      .card {{ border: 1px solid #e5e7eb; border-radius: 12px; padding: 16px; margin: 12px 0; }}
-      .muted {{ color: #6b7280; }}
-      .badge {{ display:inline-block; padding:4px 10px; border-radius:999px; font-size:12px; font-weight:600; }}
-      .badge.free {{ background:#e5e7eb; color:#111827; }}
-      .badge.pro {{ background:#fde68a; color:#92400e; }}
-      table {{ border-collapse: collapse; width: 100%; }}
-      th, td {{ border-bottom: 1px solid #e5e7eb; padding: 8px 10px; text-align: left; }}
-      th {{ background: #f9fafb; }}
-      code {{ background: #f3f4f6; padding: 2px 6px; border-radius: 6px; }}
-      .row {{ display: flex; gap: 12px; flex-wrap: wrap; }}
-      .row > .card {{ flex: 1 1 360px; }}
-      .btn {{ display:inline-block; background:#111827; color:white; padding:10px 14px; border-radius:10px; }}
-      .btn:hover {{ text-decoration:none; opacity:0.9; }}
-      .btn.secondary {{ background:#374151; }}
-      .btn.blue {{ background:#2563eb; }}
-      .btn.red {{ background:#b91c1c; }}
-      .badge.warn {{ background:#fecaca; color:#991b1b; }}
-      .topbar {{ display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:18px; }}
-      .topbar .brand {{ font-weight:800; font-size:18px; color:#111827; }}
-      .layout {{ display:flex; gap:16px; align-items:flex-start; }}
-      .sidebar {{ width:220px; flex: 0 0 220px; }}
-      .sidebar .card {{ position: sticky; top: 16px; }}
-      .navlink {{ display:block; padding:10px 12px; border-radius:10px; color:#111827; }}
-      .navlink:hover {{ text-decoration:none; background:#f3f4f6; }}
-      .navlink.active {{ background:#111827; color:white; }}
-      .navlink.active:hover {{ background:#111827; }}
-      .content {{ flex: 1 1 auto; min-width: 320px; }}
-      select {{ padding:10px 12px; border-radius:10px; border:1px solid #e5e7eb; background:white; }}
-      .footer {{ margin-top: 32px; padding-top: 12px; border-top: 1px solid #e5e7eb; font-size: 12px; color: #6b7280; }}
-      .footer a {{ color: #6b7280; }}
-    </style>
-  </head>
-  <body>
-    {body}
-    <footer class="footer">
-      <a href="/terms">Terms</a> · <a href="/privacy">Privacy</a>
-    </footer>
-  </body>
-</html>"""
+    from offside_bot.web_templates import render, safe_html
+
+    return render("base.html", title=title, body=safe_html(body))
 
 
 def _guild_section_url(guild_id: str, *, section: str) -> str:
@@ -190,16 +144,21 @@ def _app_shell(
     installed: bool | None,
     content: str,
 ) -> str:
+    from offside_bot.web_templates import render, safe_html
+
     user = session.user
-    username = _escape_html(f"{user.get('username','')}#{user.get('discriminator','')}".strip("#"))
+    username = f"{user.get('username','')}#{user.get('discriminator','')}".strip("#")
 
     selected_guild_str = str(selected_guild_id) if selected_guild_id is not None else ""
-    options = "\n".join(
-        f"<option value=\"{_guild_section_url(str(g.get('id')), section=section)}\""
-        f"{' selected' if str(g.get('id')) == selected_guild_str else ''}>"
-        f"{_escape_html(g.get('name') or g.get('id'))}</option>"
+    guild_selector = [
+        {
+            "href": _guild_section_url(str(g.get("id")), section=section),
+            "label": str(g.get("name") or g.get("id") or ""),
+            "selected": str(g.get("id")) == selected_guild_str,
+        }
         for g in session.owner_guilds
-    )
+        if isinstance(g, dict)
+    ]
 
     guild_plan: str | None = None
     plan_badge = ""
@@ -218,11 +177,7 @@ def _app_shell(
                 period_end = subscription.get("period_end")
                 if isinstance(period_end, datetime) and period_end.tzinfo is None:
                     period_end = period_end.replace(tzinfo=timezone.utc)
-                expired_at = (
-                    period_end.strftime("%Y-%m-%d")
-                    if isinstance(period_end, datetime)
-                    else None
-                )
+                expired_at = period_end.strftime("%Y-%m-%d") if isinstance(period_end, datetime) else None
                 if status in {"payment_failed", "past_due", "unpaid"}:
                     title = "Payment issue"
                     detail = "Pro features are disabled until billing is resolved."
@@ -250,73 +205,47 @@ def _app_shell(
     invite_cta = ""
     if selected_guild_id is not None:
         invite_href = _invite_url(settings, guild_id=str(selected_guild_id), disable_guild_select=True)
+        safe_invite_href = _escape_html(invite_href)
         if installed is False:
             install_badge = "<span class='badge warn'>NOT INSTALLED</span>"
-            invite_cta = f"<a class='btn blue' href=\"{invite_href}\">Invite bot</a>"
+            invite_cta = f"<a class='btn blue' href=\"{safe_invite_href}\">Invite bot</a>"
         elif installed is None:
             install_badge = "<span class='badge warn'>UNKNOWN</span>"
-            invite_cta = f"<a class='btn blue' href=\"{invite_href}\">Invite bot</a>"
+            invite_cta = f"<a class='btn blue' href=\"{safe_invite_href}\">Invite bot</a>"
 
     nav_guild = str(selected_guild_id or "")
     is_pro = guild_plan == entitlements_service.PLAN_PRO
-    nav_items = [
-        ("Overview", _guild_section_url(nav_guild, section="overview"), section == "overview"),
-        ("Setup", _guild_section_url(nav_guild, section="setup"), section == "setup"),
-        ("Analytics", _guild_section_url(nav_guild, section="analytics"), section == "analytics"),
-        ("Settings", _guild_section_url(nav_guild, section="settings"), section == "settings"),
-        ("Permissions", _guild_section_url(nav_guild, section="permissions"), section == "permissions"),
-    ]
-    if is_pro:
-        nav_items.append(("Audit Log", _guild_section_url(nav_guild, section="audit"), section == "audit"))
-    nav_items.extend(
-        [
-            ("Ops", _guild_section_url(nav_guild, section="ops"), section == "ops"),
-            ("Billing", _guild_section_url(nav_guild, section="billing"), section == "billing"),
+    nav_items: list[dict[str, Any]] = []
+    if nav_guild:
+        nav_items = [
+            {"label": "Overview", "href": _guild_section_url(nav_guild, section="overview"), "active": section == "overview"},
+            {"label": "Setup", "href": _guild_section_url(nav_guild, section="setup"), "active": section == "setup"},
+            {"label": "Analytics", "href": _guild_section_url(nav_guild, section="analytics"), "active": section == "analytics"},
+            {"label": "Settings", "href": _guild_section_url(nav_guild, section="settings"), "active": section == "settings"},
+            {"label": "Permissions", "href": _guild_section_url(nav_guild, section="permissions"), "active": section == "permissions"},
         ]
-    )
-    nav_links = "\n".join(
-        f"<a class=\"navlink{' active' if active else ''}\" href=\"{href}\">{_escape_html(label)}</a>"
-        for label, href, active in nav_items
-        if nav_guild
-    ) or "<div class='muted'>Select a server to see modules.</div>"
-
-    selector_html = ""
-    if session.owner_guilds:
-        selector_html = (
-            f"<select aria-label=\"Select server\" onchange=\"window.location=this.value\">{options}</select>"
+        if is_pro:
+            nav_items.append(
+                {"label": "Audit Log", "href": _guild_section_url(nav_guild, section="audit"), "active": section == "audit"}
+            )
+        nav_items.extend(
+            [
+                {"label": "Ops", "href": _guild_section_url(nav_guild, section="ops"), "active": section == "ops"},
+                {"label": "Billing", "href": _guild_section_url(nav_guild, section="billing"), "active": section == "billing"},
+            ]
         )
 
-    topbar = f"""
-      <div class="topbar">
-        <div><a class="brand" href="/">Offside</a></div>
-        <div style="display:flex; gap:10px; align-items:center;">
-          {selector_html}
-          {plan_badge}
-          {install_badge}
-        </div>
-        <div style="display:flex; gap:10px; align-items:center;">
-          {invite_cta}
-          <span class="muted">{username}</span>
-          <a class="btn secondary" href="/logout">Logout</a>
-        </div>
-      </div>
-    """
-
-    layout = f"""
-      {topbar}
-      <div class="layout">
-        <aside class="sidebar">
-          <div class="card">
-            {nav_links}
-          </div>
-        </aside>
-        <main class="content">
-          {plan_notice}
-          {content}
-        </main>
-      </div>
-    """
-    return layout
+    return render(
+        "partials/app_shell.html",
+        username=username,
+        guild_selector=guild_selector,
+        plan_badge=safe_html(plan_badge) if plan_badge else "",
+        install_badge=safe_html(install_badge) if install_badge else "",
+        invite_cta=safe_html(invite_cta) if invite_cta else "",
+        nav_items=nav_items,
+        plan_notice=safe_html(plan_notice) if plan_notice else "",
+        content=safe_html(content),
+    )
 
 
 def _pro_locked_page(
@@ -913,16 +842,10 @@ async def index(request: web.Request) -> web.Response:
     session = request.get("session")
     if session is None:
         invite_href = _invite_url(settings)
-        body = f"""
-        <h1>Offside Dashboard</h1>
-        <p class="muted">Sign in with Discord to view analytics for servers you own or manage.</p>
-        <p><a class="btn" href="/login">Login with Discord</a></p>
-        <p><a class="btn blue" href="/install">Invite bot to a server</a></p>
-        <p class="muted">Direct invite URL:</p>
-        <p><a href="{invite_href}">{invite_href}</a></p>
-        <p class="muted">By inviting the bot you agree to the <a href="/terms">Terms</a> and <a href="/privacy">Privacy Policy</a>.</p>
-        """
-        return web.Response(text=_html_page(title="Offside Dashboard", body=body), content_type="text/html")
+        from offside_bot.web_templates import render
+
+        html = render("pages/index_public.html", title="Offside Dashboard", invite_href=invite_href)
+        return web.Response(text=html, content_type="text/html")
 
     guild_cards = []
     eligible_ids = {str(g.get("id")) for g in session.owner_guilds}
@@ -1015,12 +938,15 @@ async def terms_page(_request: web.Request) -> web.Response:
     if text is None:
         raise web.HTTPNotFound(text="TERMS_OF_SERVICE.md not found.")
     html = _markdown_to_html(text)
-    body = f"""
+    content = f"""
       <p><a href="/">&larr; Back</a></p>
       <h1>Terms of Service</h1>
       <div class="card">{html}</div>
     """
-    return web.Response(text=_html_page(title="Terms", body=body), content_type="text/html")
+    from offside_bot.web_templates import render, safe_html
+
+    page = render("pages/markdown_page.html", title="Terms", content=safe_html(content))
+    return web.Response(text=page, content_type="text/html")
 
 
 async def privacy_page(_request: web.Request) -> web.Response:
@@ -1028,12 +954,15 @@ async def privacy_page(_request: web.Request) -> web.Response:
     if text is None:
         raise web.HTTPNotFound(text="PRIVACY_POLICY.md not found.")
     html = _markdown_to_html(text)
-    body = f"""
+    content = f"""
       <p><a href="/">&larr; Back</a></p>
       <h1>Privacy Policy</h1>
       <div class="card">{html}</div>
     """
-    return web.Response(text=_html_page(title="Privacy", body=body), content_type="text/html")
+    from offside_bot.web_templates import render, safe_html
+
+    page = render("pages/markdown_page.html", title="Privacy", content=safe_html(content))
+    return web.Response(text=page, content_type="text/html")
 
 
 async def health(_request: web.Request) -> web.Response:
@@ -3653,6 +3582,15 @@ def create_app(*, settings: Settings | None = None) -> web.Application:
     app["http"] = None
     app.on_startup.append(_on_startup)
     app.on_cleanup.append(_on_cleanup)
+
+    try:
+        from offside_bot.web_templates import static_dir
+
+        static_path = static_dir()
+        if static_path.is_dir():
+            app.router.add_static("/static/", path=str(static_path), name="static")
+    except Exception:
+        pass
 
     app.router.add_get("/health", health)
     app.router.add_get("/ready", ready)

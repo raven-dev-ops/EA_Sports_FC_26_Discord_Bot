@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.35] - 2025-12-30
+
+### Added
+- Web: Jinja2 templates (`offside_bot/templates/*`) with shared layouts/partials/macros.
+- Web: static assets served under `/static/*` (CSS: `/static/app.css`).
+
+### Changed
+- Dashboard: base page wrapper + app shell now render via templates; inline CSS moved into static stylesheet.
+
 ## [0.2.34] - 2025-12-30
 
 ### Added

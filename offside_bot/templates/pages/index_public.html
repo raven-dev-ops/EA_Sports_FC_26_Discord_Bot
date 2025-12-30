@@ -1,0 +1,10 @@
+{% extends "layouts/public.html" %}
+{% from "macros/ui.html" import cta_block %}
+
+{% block content %}
+  <h1>Offside Dashboard</h1>
+  <p class="muted">Sign in with Discord to view analytics for servers you own or manage.</p>
+  {{ cta_block(invite_href) }}
+  <p class="muted">By inviting the bot you agree to the <a href="/terms">Terms</a> and <a href="/privacy">Privacy Policy</a>.</p>
+{% endblock %}
+

@@ -1,0 +1,38 @@
+<div class="topbar">
+  <div><a class="brand" href="/">Offside</a></div>
+  <div style="display:flex; gap:10px; align-items:center;">
+    {% if guild_selector %}
+      <select aria-label="Select server" onchange="window.location=this.value">
+        {% for opt in guild_selector %}
+          <option value="{{ opt.href }}" {% if opt.selected %}selected{% endif %}>{{ opt.label }}</option>
+        {% endfor %}
+      </select>
+    {% endif %}
+    {% if plan_badge %}{{ plan_badge|safe }}{% endif %}
+    {% if install_badge %}{{ install_badge|safe }}{% endif %}
+  </div>
+  <div style="display:flex; gap:10px; align-items:center;">
+    {% if invite_cta %}{{ invite_cta|safe }}{% endif %}
+    <span class="muted">{{ username }}</span>
+    <a class="btn secondary" href="/logout">Logout</a>
+  </div>
+</div>
+
+<div class="layout">
+  <aside class="sidebar">
+    <div class="card">
+      {% if nav_items %}
+        {% for item in nav_items %}
+          <a class="navlink{% if item.active %} active{% endif %}" href="{{ item.href }}">{{ item.label }}</a>
+        {% endfor %}
+      {% else %}
+        <div class="muted">Select a server to see modules.</div>
+      {% endif %}
+    </div>
+  </aside>
+  <main class="content">
+    {% if plan_notice %}{{ plan_notice|safe }}{% endif %}
+    {{ content|safe }}
+  </main>
+</div>
+

@@ -1,0 +1,25 @@
+{% macro button(text, href, variant="") -%}
+  <a class="btn {{ variant }}" href="{{ href }}">{{ text }}</a>
+{%- endmacro %}
+
+{% macro badge(text, kind="") -%}
+  <span class="badge {{ kind }}">{{ text }}</span>
+{%- endmacro %}
+
+{% macro card() -%}
+  <div class="card">{{ caller() }}</div>
+{%- endmacro %}
+
+{% macro alert(text, kind="info") -%}
+  <div class="alert {{ kind }}">{{ text }}</div>
+{%- endmacro %}
+
+{% macro cta_block(invite_href) -%}
+  <div style="display:flex; gap:10px; flex-wrap:wrap;">
+    {{ button("Login with Discord", "/login", "") }}
+    {{ button("Invite bot", "/install", "blue") }}
+  </div>
+  <p class="muted" style="margin-top:14px;">Direct invite URL:</p>
+  <p><a href="{{ invite_href }}">{{ invite_href }}</a></p>
+{%- endmacro %}
+
