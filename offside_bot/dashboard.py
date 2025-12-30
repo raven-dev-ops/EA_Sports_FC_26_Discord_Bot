@@ -8,6 +8,7 @@ import time
 import urllib.parse
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import Any
 
 from aiohttp import ClientSession, web
@@ -125,10 +126,15 @@ def _html_page(*, title: str, body: str) -> str:
       .btn.secondary {{ background:#374151; }}
       .btn.blue {{ background:#2563eb; }}
       .btn.red {{ background:#b91c1c; }}
+      .footer {{ margin-top: 32px; padding-top: 12px; border-top: 1px solid #e5e7eb; font-size: 12px; color: #6b7280; }}
+      .footer a {{ color: #6b7280; }}
     </style>
   </head>
   <body>
     {body}
+    <footer class="footer">
+      <a href="/terms">Terms</a> · <a href="/privacy">Privacy</a>
+    </footer>
   </body>
 </html>"""
 
@@ -534,6 +540,7 @@ async def index(request: web.Request) -> web.Response:
         <p><a class="btn blue" href="/install">Invite bot to a server</a></p>
         <p class="muted">Direct invite URL:</p>
         <p><a href="{invite_href}">{invite_href}</a></p>
+        <p class="muted">By inviting the bot you agree to the <a href="/terms">Terms</a> and <a href="/privacy">Privacy Policy</a>.</p>
         """
         return web.Response(text=_html_page(title="Offside Dashboard", body=body), content_type="text/html")
 
@@ -588,6 +595,50 @@ async def index(request: web.Request) -> web.Response:
       <p><a href="{invite_href}">{invite_href}</a></p>
     """
     return web.Response(text=_html_page(title="Offside Dashboard", body=body), content_type="text/html")
+
+
+def _repo_read_text(filename: str) -> str | None:
+    path = Path(__file__).resolve().parents[1] / filename
+    try:
+        return path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return None
+    except Exception:
+        return None
+
+
+def _markdown_to_html(text: str) -> str:
+    try:
+        import markdown  # type: ignore[import-not-found]
+    except Exception:
+        return f"<pre>{_escape_html(text)}</pre>"
+    return markdown.markdown(text, extensions=["extra"], output_format="html")
+
+
+async def terms_page(_request: web.Request) -> web.Response:
+    text = _repo_read_text("TERMS_OF_SERVICE.md")
+    if text is None:
+        raise web.HTTPNotFound(text="TERMS_OF_SERVICE.md not found.")
+    html = _markdown_to_html(text)
+    body = f"""
+      <p><a href="/">← Back</a></p>
+      <h1>Terms of Service</h1>
+      <div class="card">{html}</div>
+    """
+    return web.Response(text=_html_page(title="Terms", body=body), content_type="text/html")
+
+
+async def privacy_page(_request: web.Request) -> web.Response:
+    text = _repo_read_text("PRIVACY_POLICY.md")
+    if text is None:
+        raise web.HTTPNotFound(text="PRIVACY_POLICY.md not found.")
+    html = _markdown_to_html(text)
+    body = f"""
+      <p><a href="/">← Back</a></p>
+      <h1>Privacy Policy</h1>
+      <div class="card">{html}</div>
+    """
+    return web.Response(text=_html_page(title="Privacy", body=body), content_type="text/html")
 
 
 async def health(_request: web.Request) -> web.Response:
@@ -1549,6 +1600,8 @@ def create_app(*, settings: Settings | None = None) -> web.Application:
     app.router.add_get("/health", health)
     app.router.add_get("/ready", ready)
     app.router.add_get("/", index)
+    app.router.add_get("/terms", terms_page)
+    app.router.add_get("/privacy", privacy_page)
     app.router.add_get("/login", login)
     app.router.add_get("/install", install)
     app.router.add_get("/oauth/callback", oauth_callback)
