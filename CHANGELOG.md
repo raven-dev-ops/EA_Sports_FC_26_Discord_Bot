@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.19] - 2025-12-30
+
+### Added
+- Staff portal: "Verify Setup" button to re-run auto-setup and report changes for the current guild.
+- Listing channels: pinned "About" instruction embeds (prod only; idempotent).
+
+### Changed
+- Auto-setup order: coach tier roles are ensured before channel permissions are applied.
+- Channel permissions: `coach-portal` is coaches-only; public portals and listing channels are read-only (staff can still moderate).
+
 ## [0.2.18] - 2025-12-30
 
 ### Added

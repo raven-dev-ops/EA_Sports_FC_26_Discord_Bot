@@ -60,7 +60,22 @@ Roles:
 - `Coach Premium`
 - `Coach Premium+`
 
-## 6) Operational buttons
+## 6) Permissions intent (recommended)
+
+This is the default intent for auto-created channels:
+
+- `staff-portal`: staff-only (staff can post)
+- `club-managers-portal`: staff-only (staff can post)
+- `coach-portal`: coaches-only (read-only; use buttons)
+- `recruit-portal`, `club-portal`: public read-only (use buttons)
+- `roster-listing`, `recruit-listing`, `club-listing`, `premium-coaches`: public read-only (bot-managed listings)
+- `staff-monitor`: staff-only (test mode only)
+
+Notes:
+- Listing channels include a pinned bot "About" embed explaining what appears there.
+- Staff can moderate listing channels; chat is intentionally disabled to keep them clean.
+
+## 7) Operational buttons
 
 From `club-managers-portal`:
 - Use **Sync Caps (Active Cycle)** after changing coach roles manually.
@@ -70,3 +85,5 @@ From `club-managers-portal`:
 From any portal channel:
 - Use **Repost Portal (staff)** to clean up and repost the portal messages.
 
+From `staff-portal`:
+- Use **Verify Setup (staff)** to re-run auto-setup for the current guild and see an action summary.
