@@ -28,6 +28,7 @@ from services.guild_config_service import get_guild_config, set_guild_config
 from services.recovery_service import run_startup_recovery
 from services.role_setup_service import ensure_offside_roles
 from services.scheduler import Scheduler
+from services.subscription_service import ensure_subscription_indexes
 from utils.command_registry import validate_command_tree
 from utils.discord_wrappers import fetch_channel, send_message
 from utils.errors import log_interaction_error, new_error_id, send_interaction_error
@@ -557,6 +558,12 @@ def main() -> None:
         logging.error("Configuration error: %s", exc)
         raise
     logging.info("Loaded configuration (non-secret): %s", summarize_settings(settings))
+    if settings.mongodb_uri:
+        try:
+            ensure_subscription_indexes(settings)
+        except Exception:
+            logging.exception("Failed to ensure subscription indexes.")
+            raise
     if settings.mongodb_per_guild_db:
         logging.info(
             "Per-guild MongoDB mode enabled; migrations/recovery will run per guild on startup/join."
