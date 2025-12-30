@@ -36,6 +36,25 @@ DEFAULT_BOT_PERMISSIONS = 268520464
 DASHBOARD_SESSIONS_COLLECTION = "dashboard_sessions"
 DASHBOARD_OAUTH_STATES_COLLECTION = "dashboard_oauth_states"
 
+GUILD_COACH_ROLE_FIELDS: list[tuple[str, str]] = [
+    ("role_coach_id", "Coach role"),
+    ("role_coach_premium_id", "Coach Premium role"),
+    ("role_coach_premium_plus_id", "Coach Premium+ role"),
+]
+
+GUILD_CHANNEL_FIELDS: list[tuple[str, str]] = [
+    ("channel_staff_portal_id", "Staff portal channel"),
+    ("channel_club_portal_id", "Club portal channel"),
+    ("channel_manager_portal_id", "Club Managers portal channel"),
+    ("channel_coach_portal_id", "Coach portal channel"),
+    ("channel_recruit_portal_id", "Recruit portal channel"),
+    ("channel_staff_monitor_id", "Staff monitor channel"),
+    ("channel_roster_listing_id", "Roster listing channel"),
+    ("channel_recruit_listing_id", "Recruit listing channel"),
+    ("channel_club_listing_id", "Club listing channel"),
+    ("channel_premium_coaches_id", "Premium Coaches channel"),
+]
+
 
 @dataclass
 class SessionData:
@@ -561,6 +580,24 @@ def _parse_int_list(raw: str) -> list[int] | None:
     return out
 
 
+def _parse_int(value: Any) -> int | None:
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str):
+        stripped = value.strip()
+        if not stripped or not stripped.isdigit():
+            return None
+        return int(stripped)
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
 async def guild_settings_page(request: web.Request) -> web.Response:
     session = _require_session(request)
     settings: Settings = request.app["settings"]
@@ -581,13 +618,14 @@ async def guild_settings_page(request: web.Request) -> web.Response:
     staff_role_ids_value = ", ".join(str(x) for x in sorted(staff_role_ids))
 
     roles: list[dict[str, Any]] = []
-    roles_error: str | None = None
+    channels: list[dict[str, Any]] = []
+    metadata_error: str | None = None
     try:
-        roles, _channels = await _get_guild_discord_metadata(request, guild_id=guild_id)
+        roles, channels = await _get_guild_discord_metadata(request, guild_id=guild_id)
     except web.HTTPException as exc:
-        roles_error = exc.text or str(exc)
+        metadata_error = exc.text or str(exc)
     except Exception as exc:
-        roles_error = str(exc)
+        metadata_error = str(exc)
 
     if roles:
         role_options: list[str] = []
@@ -612,8 +650,8 @@ async def guild_settings_page(request: web.Request) -> web.Response:
         """
     else:
         warning = (
-            f"<p class='muted'>Unable to load roles from Discord: <code>{_escape_html(roles_error)}</code></p>"
-            if roles_error
+            f"<p class='muted'>Unable to load roles from Discord: <code>{_escape_html(metadata_error)}</code></p>"
+            if metadata_error
             else ""
         )
         staff_roles_control_html = f"""
@@ -622,6 +660,122 @@ async def guild_settings_page(request: web.Request) -> web.Response:
             <input name="staff_role_ids_csv" style="width:100%; padding:10px; margin-top:6px;" value="{_escape_html(staff_role_ids_value)}" />
             <p class="muted">Leave blank to require Manage Server (or env <code>STAFF_ROLE_IDS</code>).</p>
         """
+
+    metadata_warning_html = (
+        f"<p class='muted'>Discord metadata unavailable: <code>{_escape_html(metadata_error)}</code>. Dropdowns may fall back to manual IDs.</p>"
+        if metadata_error
+        else ""
+    )
+
+    coach_role_id = _parse_int(cfg.get("role_coach_id"))
+    premium_role_id = _parse_int(cfg.get("role_coach_premium_id"))
+    premium_plus_role_id = _parse_int(cfg.get("role_coach_premium_plus_id"))
+
+    if roles:
+        valid_role_ids = {_parse_int(r.get("id")) for r in roles}
+        valid_role_ids.discard(None)
+
+        def _role_options(selected_id: int | None) -> str:
+            default_selected = "selected" if selected_id is None else ""
+            option_lines = [f"<option value=\"\" {default_selected}>(Use default)</option>"]
+            if selected_id is not None and selected_id not in valid_role_ids:
+                option_lines.append(
+                    f"<option value=\"{selected_id}\" selected>(missing id: {selected_id})</option>"
+                )
+            for role in roles:
+                rid = _parse_int(role.get("id"))
+                if rid is None or rid == guild_id:
+                    continue
+                name = _escape_html(role.get("name") or rid)
+                selected = "selected" if rid == selected_id else ""
+                option_lines.append(f"<option value=\"{rid}\" {selected}>{name}</option>")
+            return "\n".join(option_lines)
+
+        coach_roles_control_html = f"""
+            <h3 style="margin:14px 0 6px;">Coach tiers</h3>
+            <label>Coach role</label><br/>
+            <select name="role_coach_id" style="width:100%; padding:10px; margin-top:6px;">
+              {_role_options(coach_role_id)}
+            </select>
+            <label style="display:block; margin-top:10px;">Coach Premium role</label>
+            <select name="role_coach_premium_id" style="width:100%; padding:10px; margin-top:6px;">
+              {_role_options(premium_role_id)}
+            </select>
+            <label style="display:block; margin-top:10px;">Coach Premium+ role</label>
+            <select name="role_coach_premium_plus_id" style="width:100%; padding:10px; margin-top:6px;">
+              {_role_options(premium_plus_role_id)}
+            </select>
+        """
+    else:
+        coach_roles_control_html = f"""
+            <h3 style="margin:14px 0 6px;">Coach tiers</h3>
+            <label>Coach role ID</label><br/>
+            <input name="role_coach_id" style="width:100%; padding:10px; margin-top:6px;" value="{_escape_html(coach_role_id or '')}" />
+            <label style="display:block; margin-top:10px;">Coach Premium role ID</label>
+            <input name="role_coach_premium_id" style="width:100%; padding:10px; margin-top:6px;" value="{_escape_html(premium_role_id or '')}" />
+            <label style="display:block; margin-top:10px;">Coach Premium+ role ID</label>
+            <input name="role_coach_premium_plus_id" style="width:100%; padding:10px; margin-top:6px;" value="{_escape_html(premium_plus_role_id or '')}" />
+        """
+
+    selected_channels: dict[str, int | None] = {
+        field: _parse_int(cfg.get(field)) for field, _label in GUILD_CHANNEL_FIELDS
+    }
+
+    if channels:
+        categories: dict[int, str] = {}
+        channel_labels: dict[int, str] = {}
+        valid_channel_ids: set[int] = set()
+        for ch in channels:
+            if _parse_int(ch.get("type")) == 4:
+                cid = _parse_int(ch.get("id"))
+                if cid is not None:
+                    categories[cid] = str(ch.get("name") or cid)
+
+        for ch in channels:
+            cid = _parse_int(ch.get("id"))
+            ctype = _parse_int(ch.get("type"))
+            if cid is None or ctype is None:
+                continue
+            if ctype not in {0, 5, 15}:
+                continue
+            name = str(ch.get("name") or cid)
+            parent_id = _parse_int(ch.get("parent_id"))
+            prefix = categories.get(parent_id) if parent_id else None
+            display = f"{prefix} / #{name}" if prefix else f"#{name}"
+            valid_channel_ids.add(cid)
+            channel_labels[cid] = display
+
+        def _channel_options(selected_id: int | None) -> str:
+            default_selected = "selected" if selected_id is None else ""
+            option_lines = [f"<option value=\"\" {default_selected}>(Use default)</option>"]
+            if selected_id is not None and selected_id not in valid_channel_ids:
+                option_lines.append(
+                    f"<option value=\"{selected_id}\" selected>(missing id: {selected_id})</option>"
+                )
+            for cid, label in sorted(channel_labels.items(), key=lambda kv: kv[1].lower()):
+                selected = "selected" if cid == selected_id else ""
+                option_lines.append(
+                    f"<option value=\"{cid}\" {selected}>{_escape_html(label)}</option>"
+                )
+            return "\n".join(option_lines)
+
+        channel_controls: list[str] = ['<h3 style="margin:14px 0 6px;">Channels</h3>']
+        for field, label in GUILD_CHANNEL_FIELDS:
+            selected_id = selected_channels.get(field)
+            channel_controls.append(f"<label>{_escape_html(label)}</label><br/>")
+            channel_controls.append(
+                f"<select name=\"{field}\" style=\"width:100%; padding:10px; margin-top:6px;\">{_channel_options(selected_id)}</select>"
+            )
+        channels_control_html = "\n".join(channel_controls)
+    else:
+        channel_controls = ['<h3 style="margin:14px 0 6px;">Channels</h3>']
+        for field, label in GUILD_CHANNEL_FIELDS:
+            selected_id = selected_channels.get(field)
+            channel_controls.append(f"<label>{_escape_html(label)} ID</label><br/>")
+            channel_controls.append(
+                f"<input name=\"{field}\" style=\"width:100%; padding:10px; margin-top:6px;\" value=\"{_escape_html(selected_id or '')}\" />"
+            )
+        channels_control_html = "\n".join(channel_controls)
 
     fc25_value = cfg.get("fc25_stats_enabled")
     if fc25_value is True:
@@ -645,7 +799,7 @@ async def guild_settings_page(request: web.Request) -> web.Response:
     ) or "<tr><td colspan='2' class='muted'>No config found yet (bot may not be installed).</td></tr>"
 
     body = f"""
-      <p><a href="/">ƒ+? Back</a></p>
+      <p><a href="/">&lt;- Back</a></p>
       <h1>Guild Settings</h1>
       <div class="row">
         <div class="card">
@@ -662,7 +816,10 @@ async def guild_settings_page(request: web.Request) -> web.Response:
            <h2 style="margin-top:0;">Access</h2>
            <form method="post" action="/guild/{guild_id}/settings">
              <input type="hidden" name="csrf" value="{session.csrf_token}" />
+             {metadata_warning_html}
              {staff_roles_control_html}
+             {coach_roles_control_html}
+             {channels_control_html}
              <label>FC25 stats override</label><br/>
              <select name="fc25_stats_enabled" style="width:100%; padding:10px; margin-top:6px;">
                <option value="default" {selected_default}>Default</option>
@@ -720,6 +877,53 @@ async def guild_settings_save(request: web.Request) -> web.Response:
             cfg["staff_role_ids"] = parsed_staff_csv
         else:
             cfg.pop("staff_role_ids", None)
+
+    valid_role_ids: set[int] = set()
+    valid_channel_ids: set[int] = set()
+    try:
+        roles, channels = await _get_guild_discord_metadata(request, guild_id=guild_id)
+    except Exception:
+        roles, channels = [], []
+
+    for role in roles:
+        rid = _parse_int(role.get("id"))
+        if rid is not None:
+            valid_role_ids.add(rid)
+
+    for channel in channels:
+        cid = _parse_int(channel.get("id"))
+        ctype = _parse_int(channel.get("type"))
+        if cid is None or ctype is None:
+            continue
+        if ctype in {0, 5, 15}:
+            valid_channel_ids.add(cid)
+
+    existing_int_fields: dict[str, int | None] = {
+        field: _parse_int(cfg.get(field)) for field, _label in (GUILD_COACH_ROLE_FIELDS + GUILD_CHANNEL_FIELDS)
+    }
+
+    def _apply_int_field(*, field: str, raw_value: Any, valid_ids: set[int], kind: str) -> None:
+        raw_str = str(raw_value or "").strip()
+        if not raw_str:
+            cfg.pop(field, None)
+            return
+        if not raw_str.isdigit():
+            raise web.HTTPBadRequest(text=f"{field} must be an integer.")
+        value = int(raw_str)
+        if valid_ids and value not in valid_ids and existing_int_fields.get(field) != value:
+            raise web.HTTPBadRequest(text=f"{field} must be a valid {kind} in this guild.")
+        cfg[field] = value
+
+    for field, _label in GUILD_COACH_ROLE_FIELDS:
+        _apply_int_field(field=field, raw_value=data.get(field), valid_ids=valid_role_ids, kind="role")
+
+    for field, _label in GUILD_CHANNEL_FIELDS:
+        _apply_int_field(
+            field=field,
+            raw_value=data.get(field),
+            valid_ids=valid_channel_ids,
+            kind="channel",
+        )
 
     fc25_raw = str(data.get("fc25_stats_enabled", "default")).strip().lower()
     if fc25_raw in {"", "default"}:
