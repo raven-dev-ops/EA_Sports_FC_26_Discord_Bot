@@ -7,7 +7,7 @@ import secrets
 import time
 import urllib.parse
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from aiohttp import ClientSession, web
@@ -15,7 +15,7 @@ from pymongo.collection import Collection
 from pymongo.errors import DuplicateKeyError
 
 from config import Settings, load_settings
-from database import get_global_collection
+from database import get_client, get_global_collection
 from services import entitlements_service
 from services.analytics_service import get_guild_analytics
 from services.guild_config_service import get_guild_config, set_guild_config
@@ -25,6 +25,7 @@ from services.guild_settings_schema import (
     GUILD_COACH_ROLE_FIELDS,
     PREMIUM_COACHES_PIN_ENABLED_KEY,
 )
+from services.heartbeat_service import get_worker_heartbeat
 from services.stripe_webhook_service import ensure_stripe_webhook_indexes, handle_stripe_webhook
 
 DISCORD_API_BASE = "https://discord.com/api"
@@ -427,6 +428,43 @@ async def index(request: web.Request) -> web.Response:
       <p><a href="{invite_href}">{invite_href}</a></p>
     """
     return web.Response(text=_html_page(title="Offside Dashboard", body=body), content_type="text/html")
+
+
+async def health(_request: web.Request) -> web.Response:
+    return web.json_response({"ok": True})
+
+
+async def ready(request: web.Request) -> web.Response:
+    settings: Settings = request.app["settings"]
+    if not settings.mongodb_uri:
+        return web.json_response({"ok": False, "mongo": "not_configured"}, status=503)
+    try:
+        get_client(settings).admin.command("ping")
+    except Exception as exc:
+        return web.json_response({"ok": False, "mongo": str(exc)}, status=503)
+
+    max_age_seconds = int(os.environ.get("WORKER_HEARTBEAT_MAX_AGE_SECONDS", "120").strip() or "120")
+    heartbeat = get_worker_heartbeat(settings, worker="bot")
+    updated_at = heartbeat.get("updated_at") if heartbeat else None
+    if isinstance(updated_at, datetime):
+        if updated_at.tzinfo is None:
+            updated_at = updated_at.replace(tzinfo=timezone.utc)
+        age = (datetime.now(timezone.utc) - updated_at).total_seconds()
+        if age > max_age_seconds:
+            return web.json_response(
+                {"ok": False, "mongo": "ok", "worker": "stale", "worker_age_seconds": age},
+                status=503,
+            )
+        return web.json_response(
+            {
+                "ok": True,
+                "mongo": "ok",
+                "worker": "ok",
+                "worker_age_seconds": age,
+                "ts": datetime.now(timezone.utc).isoformat(),
+            }
+        )
+    return web.json_response({"ok": False, "mongo": "ok", "worker": "missing"}, status=503)
 
 
 async def login(request: web.Request) -> web.Response:
@@ -1255,6 +1293,8 @@ def create_app(*, settings: Settings | None = None) -> web.Application:
     app.on_startup.append(_on_startup)
     app.on_cleanup.append(_on_cleanup)
 
+    app.router.add_get("/health", health)
+    app.router.add_get("/ready", ready)
     app.router.add_get("/", index)
     app.router.add_get("/login", login)
     app.router.add_get("/install", install)

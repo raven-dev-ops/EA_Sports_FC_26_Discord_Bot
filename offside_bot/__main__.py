@@ -25,6 +25,7 @@ from services.channel_setup_service import cleanup_staff_monitor_channel, ensure
 from services.fc25_stats_feature import fc25_stats_enabled
 from services.fc25_stats_service import list_links
 from services.guild_config_service import get_guild_config, set_guild_config
+from services.heartbeat_service import upsert_worker_heartbeat
 from services.recovery_service import run_startup_recovery
 from services.role_setup_service import ensure_offside_roles
 from services.scheduler import Scheduler
@@ -444,6 +445,13 @@ class OffsideBot(commands.AutoShardedBot):
 
     async def _start_scheduler(self) -> None:
         settings = getattr(self, "settings", None)
+        if settings is not None and settings.mongodb_uri:
+            async def heartbeat() -> None:
+                upsert_worker_heartbeat(settings, worker="bot")
+            try:
+                self.scheduler.add_job("worker_heartbeat", 30.0, heartbeat)
+            except RuntimeError:
+                pass
         if feature_enabled("metrics_log", settings):
             async def log_metrics():
                 return None
