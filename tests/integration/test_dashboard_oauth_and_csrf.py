@@ -9,6 +9,7 @@ import pytest
 import database
 from config.settings import Settings
 from offside_bot import dashboard
+from services import entitlements_service, subscription_service
 
 
 def _settings() -> Settings:
@@ -175,6 +176,128 @@ async def test_billing_portal_requires_csrf(monkeypatch) -> None:
         assert resp.status == 400
         text = await resp.text()
         assert "CSRF" in text
+    finally:
+        await client.close()
+
+
+@pytest.mark.asyncio
+async def test_billing_success_syncs_subscription(monkeypatch) -> None:
+    from aiohttp.test_utils import TestClient, TestServer
+
+    monkeypatch.setattr(database, "MongoClient", mongomock.MongoClient)
+    monkeypatch.setattr(database, "_CLIENT", None)
+    monkeypatch.setenv("STRIPE_SECRET_KEY", "sk_test_123")
+    entitlements_service.invalidate_all()
+
+    import sys
+    import types
+
+    period_end = int(datetime(2030, 1, 1, tzinfo=timezone.utc).timestamp())
+
+    class FakeCheckoutSession:
+        metadata = {"guild_id": "123", "plan": "pro"}
+        customer = "cus_123"
+        subscription = {"id": "sub_123", "status": "active", "current_period_end": period_end}
+
+    def fake_session_retrieve(*_args, **_kwargs):
+        return FakeCheckoutSession()
+
+    fake_stripe = types.SimpleNamespace()
+    fake_stripe.api_key = ""
+    fake_stripe.checkout = types.SimpleNamespace(
+        Session=types.SimpleNamespace(retrieve=fake_session_retrieve)
+    )
+    fake_stripe.Subscription = types.SimpleNamespace(retrieve=lambda *_args, **_kwargs: {})
+    monkeypatch.setitem(sys.modules, "stripe", fake_stripe)
+
+    app = dashboard.create_app(settings=_settings())
+    sessions = app["session_collection"]
+    sessions.insert_one(
+        {
+            "_id": "sess1",
+            "created_at": time.time(),
+            "expires_at": datetime.now(timezone.utc) + timedelta(hours=6),
+            "user": {"id": "1", "username": "alice"},
+            "owner_guilds": [{"id": "123", "name": "Managed"}],
+            "all_guilds": [{"id": "123", "name": "Managed"}],
+            "csrf_token": "csrf_good",
+        }
+    )
+
+    client = TestClient(TestServer(app))
+    await client.start_server()
+    try:
+        resp = await client.get(
+            "/app/billing/success?guild_id=123&session_id=cs_test_123",
+            headers={"Cookie": f"{dashboard.COOKIE_NAME}=sess1"},
+            allow_redirects=False,
+        )
+        assert resp.status == 200
+        html = await resp.text()
+        assert "Pro enabled for this server." in html
+        assert "badge pro" in html
+
+        doc = subscription_service.get_guild_subscription(_settings(), guild_id=123)
+        assert isinstance(doc, dict)
+        assert doc.get("plan") == "pro"
+        assert doc.get("status") == "active"
+        assert doc.get("customer_id") == "cus_123"
+        assert doc.get("subscription_id") == "sub_123"
+    finally:
+        await client.close()
+
+
+@pytest.mark.asyncio
+async def test_dashboard_shows_pro_expired_notice(monkeypatch) -> None:
+    from aiohttp.test_utils import TestClient, TestServer
+
+    monkeypatch.setattr(database, "MongoClient", mongomock.MongoClient)
+    monkeypatch.setattr(database, "_CLIENT", None)
+    entitlements_service.invalidate_all()
+
+    async def fake_detect_installed(*_args, **_kwargs):
+        return False, None
+
+    monkeypatch.setattr(dashboard, "_detect_bot_installed", fake_detect_installed)
+    monkeypatch.setattr(dashboard, "get_guild_config", lambda _gid: {})
+
+    subscription_service.upsert_guild_subscription(
+        _settings(),
+        guild_id=123,
+        plan="pro",
+        status="canceled",
+        period_end=datetime(2020, 1, 1, tzinfo=timezone.utc),
+        customer_id="cus_123",
+        subscription_id="sub_123",
+    )
+
+    app = dashboard.create_app(settings=_settings())
+    sessions = app["session_collection"]
+    sessions.insert_one(
+        {
+            "_id": "sess1",
+            "created_at": time.time(),
+            "expires_at": datetime.now(timezone.utc) + timedelta(hours=6),
+            "user": {"id": "1", "username": "alice"},
+            "owner_guilds": [{"id": "123", "name": "Managed"}],
+            "all_guilds": [{"id": "123", "name": "Managed"}],
+            "csrf_token": "csrf_good",
+        }
+    )
+
+    client = TestClient(TestServer(app))
+    await client.start_server()
+    try:
+        resp = await client.get(
+            "/guild/123/overview",
+            headers={"Cookie": f"{dashboard.COOKIE_NAME}=sess1"},
+            allow_redirects=False,
+        )
+        assert resp.status == 200
+        html = await resp.text()
+        assert "PRO EXPIRED" in html
+        assert "from=notice" in html
+        assert "/app/billing?guild_id=123" in html
     finally:
         await client.close()
 

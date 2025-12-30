@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.34] - 2025-12-30
+
+### Added
+- Billing: checkout success now syncs subscription from Stripe so Pro is enabled immediately after upgrade.
+- Dashboard: shows a “Pro expired / payment issue” banner with upgrade + billing links when a subscription is inactive.
+
 ## [0.2.33] - 2025-12-30
 
 ### Added

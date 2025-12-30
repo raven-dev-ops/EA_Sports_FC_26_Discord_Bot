@@ -203,9 +203,48 @@ def _app_shell(
 
     guild_plan: str | None = None
     plan_badge = ""
+    plan_notice = ""
     if selected_guild_id is not None:
         guild_plan = entitlements_service.get_guild_plan(settings, guild_id=selected_guild_id)
         plan_badge = f"<span class='badge {guild_plan}'>{_escape_html(guild_plan.upper())}</span>"
+        if settings.mongodb_uri and guild_plan != entitlements_service.PLAN_PRO:
+            subscription = get_guild_subscription(settings, guild_id=selected_guild_id) or {}
+            if isinstance(subscription, dict) and (
+                str(subscription.get("plan") or "").strip().lower() == entitlements_service.PLAN_PRO
+                or subscription.get("customer_id")
+                or subscription.get("subscription_id")
+            ):
+                status = str(subscription.get("status") or "").strip().lower()
+                period_end = subscription.get("period_end")
+                if isinstance(period_end, datetime) and period_end.tzinfo is None:
+                    period_end = period_end.replace(tzinfo=timezone.utc)
+                expired_at = (
+                    period_end.strftime("%Y-%m-%d")
+                    if isinstance(period_end, datetime)
+                    else None
+                )
+                if status in {"payment_failed", "past_due", "unpaid"}:
+                    title = "Payment issue"
+                    detail = "Pro features are disabled until billing is resolved."
+                else:
+                    title = "Pro expired"
+                    detail = "Pro features are disabled, but your server data is preserved."
+                suffix = f" (ended {expired_at})" if expired_at else ""
+                plan_notice = f"""
+                  <div class="card">
+                    <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
+                      <div>
+                        <div><span class="badge warn">{_escape_html(title.upper())}</span></div>
+                        <div style="margin-top:6px;"><strong>{_escape_html(title)}{_escape_html(suffix)}</strong></div>
+                        <div class="muted" style="margin-top:6px;">{_escape_html(detail)}</div>
+                      </div>
+                      <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+                        <a class="btn secondary" href="/app/billing?guild_id={selected_guild_id}">Billing</a>
+                        <a class="btn blue" href="/app/upgrade?guild_id={selected_guild_id}&from=notice&section={urllib.parse.quote(section)}">Upgrade</a>
+                      </div>
+                    </div>
+                  </div>
+                """
 
     install_badge = ""
     invite_cta = ""
@@ -272,6 +311,7 @@ def _app_shell(
           </div>
         </aside>
         <main class="content">
+          {plan_notice}
           {content}
         </main>
       </div>
@@ -3310,7 +3350,12 @@ async def billing_page(request: web.Request) -> web.Response:
     if status == "cancelled":
         status_msg = "<div class='card'><strong>Checkout cancelled.</strong></div>"
     elif status == "success":
-        status_msg = "<div class='card'><strong>Checkout complete.</strong> Activation may take a few seconds.</div>"
+        if current_plan == entitlements_service.PLAN_PRO:
+            status_msg = "<div class='card'><strong>Checkout complete.</strong> Pro is enabled.</div>"
+        else:
+            status_msg = (
+                "<div class='card'><strong>Checkout complete.</strong> Activation may take a few seconds.</div>"
+            )
 
     upgrade_disabled = "disabled" if current_plan == entitlements_service.PLAN_PRO else ""
     upgrade_text = "Already Pro" if current_plan == entitlements_service.PLAN_PRO else "Upgrade to Pro"
@@ -3451,23 +3496,112 @@ async def billing_success(request: web.Request) -> web.Response:
     session = _require_session(request)
     settings: Settings = request.app["settings"]
     gid = request.query.get("guild_id", "").strip()
+    checkout_session_id = request.query.get("session_id", "").strip()
     guild_id = _require_owned_guild(session, guild_id=gid) if gid else 0
     if not guild_id:
         raise web.HTTPBadRequest(text="Missing guild_id.")
+
+    synced = False
+    sync_error: str | None = None
+    if settings.mongodb_uri and checkout_session_id:
+        try:
+            import stripe  # type: ignore[import-not-found]
+        except Exception:
+            sync_error = "Stripe SDK is not installed."
+        else:
+            try:
+                stripe.api_key = _require_env("STRIPE_SECRET_KEY")
+                checkout = stripe.checkout.Session.retrieve(
+                    checkout_session_id,
+                    expand=["subscription"],
+                )
+                meta = getattr(checkout, "metadata", None)
+                if not isinstance(meta, dict) and isinstance(checkout, dict):
+                    meta = checkout.get("metadata")
+                meta = meta if isinstance(meta, dict) else {}
+
+                meta_gid = str(meta.get("guild_id") or "").strip()
+                if meta_gid and meta_gid.isdigit() and int(meta_gid) != guild_id:
+                    raise RuntimeError("Checkout session does not match selected guild.")
+
+                plan_raw = str(meta.get("plan") or entitlements_service.PLAN_PRO).strip().lower()
+                plan = entitlements_service.PLAN_PRO if plan_raw != entitlements_service.PLAN_PRO else plan_raw
+
+                customer_id = getattr(checkout, "customer", None)
+                if customer_id is None and isinstance(checkout, dict):
+                    customer_id = checkout.get("customer")
+
+                sub_obj = getattr(checkout, "subscription", None)
+                if sub_obj is None and isinstance(checkout, dict):
+                    sub_obj = checkout.get("subscription")
+
+                subscription_id: str | None = None
+                sub_status = "unknown"
+                period_end: datetime | None = None
+
+                if isinstance(sub_obj, str):
+                    subscription_id = sub_obj.strip() or None
+                elif isinstance(sub_obj, dict):
+                    subscription_id = str(sub_obj.get("id") or "").strip() or None
+                    sub_status = str(sub_obj.get("status") or "").strip().lower() or sub_status
+                    period_end_raw = sub_obj.get("current_period_end")
+                    if isinstance(period_end_raw, (int, float)):
+                        period_end = datetime.fromtimestamp(float(period_end_raw), tz=timezone.utc)
+                elif sub_obj is not None:
+                    subscription_id = str(getattr(sub_obj, "id", "") or "").strip() or None
+                    sub_status = str(getattr(sub_obj, "status", "") or "").strip().lower() or sub_status
+                    period_end_raw = getattr(sub_obj, "current_period_end", None)
+                    if isinstance(period_end_raw, (int, float)):
+                        period_end = datetime.fromtimestamp(float(period_end_raw), tz=timezone.utc)
+
+                if subscription_id and (sub_status == "unknown" or period_end is None):
+                    sub = stripe.Subscription.retrieve(subscription_id)
+                    if isinstance(sub, dict):
+                        sub_status = str(sub.get("status") or "").strip().lower() or sub_status
+                        period_end_raw = sub.get("current_period_end")
+                    else:
+                        sub_status = str(getattr(sub, "status", "") or "").strip().lower() or sub_status
+                        period_end_raw = getattr(sub, "current_period_end", None)
+                    if isinstance(period_end_raw, (int, float)):
+                        period_end = datetime.fromtimestamp(float(period_end_raw), tz=timezone.utc)
+
+                if sub_status == "unknown":
+                    sub_status = "active"
+
+                from services.subscription_service import upsert_guild_subscription
+
+                upsert_guild_subscription(
+                    settings,
+                    guild_id=guild_id,
+                    plan=plan,
+                    status=sub_status,
+                    period_end=period_end,
+                    customer_id=str(customer_id) if customer_id else None,
+                    subscription_id=subscription_id,
+                )
+                entitlements_service.invalidate_guild_plan(guild_id)
+                synced = True
+            except Exception as exc:
+                sync_error = str(exc)
 
     plan = entitlements_service.get_guild_plan(settings, guild_id=guild_id)
     message = (
         "Pro enabled for this server."
         if plan == entitlements_service.PLAN_PRO
-        else "Checkout complete. Waiting for activation (webhook) — refresh in a few seconds."
+        else "Checkout complete. Activation may take a few seconds. Refresh in a moment."
     )
+    if synced and plan != entitlements_service.PLAN_PRO:
+        message = "Checkout confirmed. Waiting for activation. Refresh in a moment."
+    if sync_error and plan != entitlements_service.PLAN_PRO:
+        message = f"Checkout complete. Activation pending ({sync_error})."
     body = f"""
-      <p><a href="/app/billing?guild_id={guild_id}&status=success">← Billing</a></p>
+      <p><a href="/app/billing?guild_id={guild_id}&status=success">&larr; Billing</a></p>
       <h1>Checkout Success</h1>
       <div class="card">
         <div><strong>{_escape_html(message)}</strong></div>
         <div style="margin-top:8px;">Plan: <span class="badge {plan}">{_escape_html(plan.upper())}</span></div>
         <div style="margin-top:10px; display:flex; gap:10px; flex-wrap:wrap;">
+          <a class="btn secondary" href="/app/billing?guild_id={guild_id}">View billing</a>
           <a class="btn" href="/guild/{guild_id}">Analytics</a>
           <a class="btn secondary" href="/guild/{guild_id}/settings">Settings</a>
         </div>
