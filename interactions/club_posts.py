@@ -214,6 +214,9 @@ class ClubAdApprovalView(discord.ui.View):
                 owner_id=self.owner_id,
                 action=CLUB_AD_ACTION_APPROVED,
                 staff_discord_id=interaction.user.id,
+                staff_display_name=getattr(interaction.user, "display_name", None),
+                staff_username=str(interaction.user),
+                source="club_posts",
             )
         except Exception:
             pass
@@ -302,6 +305,9 @@ class ClubAdRejectModal(discord.ui.Modal, title="Reject Club Ad"):
                 owner_id=self.owner_id,
                 action=CLUB_AD_ACTION_REJECTED,
                 staff_discord_id=interaction.user.id,
+                staff_display_name=getattr(interaction.user, "display_name", None),
+                staff_username=str(interaction.user),
+                source="club_posts",
                 reason=reason or None,
             )
         except Exception:

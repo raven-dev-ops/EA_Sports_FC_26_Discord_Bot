@@ -69,11 +69,23 @@ def _migration_4(context: dict) -> None:
     ensure_offside_indexes(db)
 
 
+def _migration_5(context: dict) -> None:
+    """
+    Ensure indexes for audit events and any newly-added collections.
+    """
+    collection = context.get("collection")
+    if collection is not None:
+        ensure_indexes(collection)
+    db = context["db"]
+    ensure_offside_indexes(db)
+
+
 MIGRATIONS: list[tuple[int, str, MigrationFunc]] = [
     (1, "Ensure primary indexes", _migration_1),
     (2, "Ensure recruit/club indexes", _migration_2),
     (3, "Ensure FC25 stats indexes", _migration_3),
     (4, "Ensure multi-collection Offside indexes", _migration_4),
+    (5, "Ensure audit/index updates", _migration_5),
 ]
 
 

@@ -414,7 +414,15 @@ class AdminPortalView(SafeView):
 
         if updated != existing:
             try:
-                set_guild_config(guild.id, updated, collection=collection)
+                set_guild_config(
+                    guild.id,
+                    updated,
+                    actor_discord_id=interaction.user.id,
+                    actor_display_name=getattr(interaction.user, "display_name", None),
+                    actor_username=str(interaction.user),
+                    source="admin_portal.verify_setup",
+                    collection=collection,
+                )
             except Exception:
                 logging.exception("Verify Setup: failed to persist guild config (guild=%s).", guild.id)
                 actions.append("Could not persist updated guild config to MongoDB.")

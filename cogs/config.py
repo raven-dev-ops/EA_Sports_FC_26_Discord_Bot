@@ -140,7 +140,14 @@ class ConfigCog(commands.Cog):
             cfg.pop(field, None)
         else:
             cfg[field] = parsed
-        set_guild_config(guild.id, cfg)
+        set_guild_config(
+            guild.id,
+            cfg,
+            actor_discord_id=interaction.user.id,
+            actor_display_name=getattr(interaction.user, "display_name", None),
+            actor_username=str(interaction.user),
+            source="bot_command",
+        )
         await interaction.response.send_message(
             f"Set `{field}` override for this guild.", ephemeral=True
         )

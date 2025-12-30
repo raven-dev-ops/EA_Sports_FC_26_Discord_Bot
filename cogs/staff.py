@@ -99,6 +99,8 @@ class StaffCog(commands.Cog):
         record_staff_action(
             roster_id=roster["_id"],
             action=AUDIT_ACTION_UNLOCKED,
+            guild_id=getattr(interaction, "guild_id", None),
+            source="staff_command",
             staff_discord_id=interaction.user.id,
             staff_display_name=getattr(interaction.user, "display_name", None),
             staff_username=str(interaction.user),

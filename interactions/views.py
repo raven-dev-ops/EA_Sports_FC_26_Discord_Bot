@@ -747,6 +747,8 @@ class StaffReviewView(SafeView):
         record_staff_action(
             roster_id=self.roster_id,
             action=AUDIT_ACTION_APPROVED if approved else AUDIT_ACTION_REJECTED,
+            guild_id=getattr(interaction, "guild_id", None),
+            source="staff_review",
             staff_discord_id=interaction.user.id,
             staff_display_name=getattr(interaction.user, "display_name", None),
             staff_username=str(interaction.user),

@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import asyncio
+import csv
+import io
+import json
 import logging
 import os
 import secrets
@@ -16,9 +19,10 @@ from pymongo.collection import Collection
 from pymongo.errors import DuplicateKeyError
 
 from config import Settings, load_settings
-from database import get_client, get_global_collection
+from database import get_client, get_collection, get_global_collection
 from services import entitlements_service
 from services.analytics_service import get_guild_analytics
+from services.audit_log_service import list_audit_events
 from services.error_reporting_service import init_error_reporting, set_guild_tag
 from services.guild_config_service import get_guild_config, set_guild_config
 from services.guild_settings_schema import (
@@ -1248,7 +1252,16 @@ async def guild_settings_save(request: web.Request) -> web.Response:
         raise web.HTTPBadRequest(text="fc25_stats_enabled must be default/true/false.")
 
     try:
-        set_guild_config(guild_id, cfg)
+        actor_id = _parse_int(session.user.get("id"))
+        actor_username = f"{session.user.get('username','')}#{session.user.get('discriminator','')}".strip("#")
+        set_guild_config(
+            guild_id,
+            cfg,
+            actor_discord_id=actor_id,
+            actor_display_name=str(session.user.get("username") or "") or None,
+            actor_username=actor_username or None,
+            source="dashboard",
+        )
     except Exception as exc:
         raise web.HTTPInternalServerError(text=f"Failed to save settings: {exc}") from exc
 
@@ -1284,6 +1297,7 @@ async def guild_page(request: web.Request) -> web.Response:
           <div class="muted">Generated: {analytics.generated_at.isoformat()}</div>
           <div style="margin-top:10px;"><a href="/api/guild/{guild_id}/analytics.json">Download JSON</a></div>
           <div style="margin-top:10px;"><a class="btn secondary" href="/guild/{guild_id}/settings">Settings</a></div>
+          <div style="margin-top:10px;"><a class="btn secondary" href="/guild/{guild_id}/audit">Audit Log</a></div>
         </div>
       </div>
       <div class="row">
@@ -1298,6 +1312,138 @@ async def guild_page(request: web.Request) -> web.Response:
       </div>
     """
     return web.Response(text=_html_page(title="Guild Analytics", body=body), content_type="text/html")
+
+
+async def guild_audit_page(request: web.Request) -> web.Response:
+    session = _require_session(request)
+    settings: Settings = request.app["settings"]
+
+    guild_id_str = request.match_info["guild_id"]
+    guild_id = _require_owned_guild(session, guild_id=guild_id_str)
+
+    limit = _parse_int(request.query.get("limit")) or 200
+    limit = max(1, min(500, limit))
+
+    try:
+        col = get_collection(settings, record_type="audit_event", guild_id=guild_id)
+        events = list_audit_events(guild_id=guild_id, limit=limit, collection=col)
+    except Exception as exc:
+        raise web.HTTPInternalServerError(text=f"Failed to load audit events: {exc}") from exc
+
+    rows: list[str] = []
+    for ev in events:
+        created = ev.get("created_at")
+        created_text = created.isoformat() if isinstance(created, datetime) else str(created or "")
+        category = str(ev.get("category") or "")
+        action = str(ev.get("action") or "")
+        source = str(ev.get("source") or "")
+
+        actor = str(ev.get("actor_display_name") or "") or str(ev.get("actor_username") or "")
+        actor_id = ev.get("actor_discord_id")
+        if not actor and isinstance(actor_id, int):
+            actor = str(actor_id)
+
+        details_raw = ev.get("details")
+        details_text = ""
+        if details_raw is not None:
+            try:
+                details_text = json.dumps(details_raw, default=str, sort_keys=True)
+            except Exception:
+                details_text = str(details_raw)
+        details_short = details_text
+        if len(details_short) > 240:
+            details_short = details_short[:237] + "..."
+
+        rows.append(
+            "<tr>"
+            f"<td><code>{_escape_html(created_text)}</code></td>"
+            f"<td><code>{_escape_html(category)}</code></td>"
+            f"<td><code>{_escape_html(action)}</code></td>"
+            f"<td>{_escape_html(actor) or '&mdash;'}</td>"
+            f"<td><code>{_escape_html(source)}</code></td>"
+            f"<td title=\"{_escape_html(details_text)}\"><code>{_escape_html(details_short)}</code></td>"
+            "</tr>"
+        )
+
+    table_body = "\n".join(rows) if rows else "<tr><td colspan='6' class='muted'>No events yet.</td></tr>"
+
+    body = f"""
+      <p><a href="/guild/{guild_id}">ƒ+? Back</a></p>
+      <h1>Audit Log</h1>
+      <div class="row">
+        <div class="card">
+          <div><strong>Guild</strong></div>
+          <div class="muted">ID: <code>{guild_id}</code></div>
+          <div class="muted">Showing latest: <code>{limit}</code></div>
+          <div style="margin-top:10px;"><a href="/guild/{guild_id}/audit.csv?limit={limit}">Download CSV</a></div>
+        </div>
+      </div>
+      <div class="card">
+        <table>
+          <thead><tr><th>created_at</th><th>category</th><th>action</th><th>actor</th><th>source</th><th>details</th></tr></thead>
+          <tbody>{table_body}</tbody>
+        </table>
+      </div>
+    """
+    return web.Response(text=_html_page(title="Audit Log", body=body), content_type="text/html")
+
+
+async def guild_audit_csv(request: web.Request) -> web.Response:
+    session = _require_session(request)
+    settings: Settings = request.app["settings"]
+
+    guild_id_str = request.match_info["guild_id"]
+    guild_id = _require_owned_guild(session, guild_id=guild_id_str)
+
+    limit = _parse_int(request.query.get("limit")) or 500
+    limit = max(1, min(500, limit))
+
+    try:
+        col = get_collection(settings, record_type="audit_event", guild_id=guild_id)
+        events = list_audit_events(guild_id=guild_id, limit=limit, collection=col)
+    except Exception as exc:
+        raise web.HTTPInternalServerError(text=f"Failed to load audit events: {exc}") from exc
+
+    output = io.StringIO(newline="")
+    writer = csv.writer(output)
+    writer.writerow(
+        [
+            "created_at",
+            "category",
+            "action",
+            "source",
+            "actor_discord_id",
+            "actor_display_name",
+            "actor_username",
+            "details",
+        ]
+    )
+    for ev in events:
+        created = ev.get("created_at")
+        created_text = created.isoformat() if isinstance(created, datetime) else str(created or "")
+        details_raw = ev.get("details")
+        details_text = ""
+        if details_raw is not None:
+            try:
+                details_text = json.dumps(details_raw, default=str, sort_keys=True)
+            except Exception:
+                details_text = str(details_raw)
+        writer.writerow(
+            [
+                created_text,
+                str(ev.get("category") or ""),
+                str(ev.get("action") or ""),
+                str(ev.get("source") or ""),
+                str(ev.get("actor_discord_id") or ""),
+                str(ev.get("actor_display_name") or ""),
+                str(ev.get("actor_username") or ""),
+                details_text,
+            ]
+        )
+
+    text = output.getvalue()
+    headers = {"Content-Disposition": f"attachment; filename=audit_{guild_id}.csv"}
+    return web.Response(text=text, headers=headers, content_type="text/csv")
 
 
 async def guild_analytics_json(request: web.Request) -> web.Response:
@@ -1612,6 +1758,8 @@ def create_app(*, settings: Settings | None = None) -> web.Application:
     app.router.add_get("/app/billing/success", billing_success)
     app.router.add_get("/app/billing/cancel", billing_cancel)
     app.router.add_get("/guild/{guild_id}", guild_page)
+    app.router.add_get("/guild/{guild_id}/audit", guild_audit_page)
+    app.router.add_get("/guild/{guild_id}/audit.csv", guild_audit_csv)
     app.router.add_get("/guild/{guild_id}/settings", guild_settings_page)
     app.router.add_post("/guild/{guild_id}/settings", guild_settings_save)
     app.router.add_get("/api/guild/{guild_id}/analytics.json", guild_analytics_json)

@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.27] - 2025-12-30
+
+### Added
+- Ops: audit log events (`audit_events`) for config changes, billing webhooks, and staff actions.
+- Dashboard: audit log viewer (`/guild/{guild_id}/audit`) with CSV export (`/guild/{guild_id}/audit.csv`).
+
+### Changed
+- Migrations: schema version bumped to 5 to ensure new indexes.
+
 ## [0.2.26] - 2025-12-30
 
 ### Added

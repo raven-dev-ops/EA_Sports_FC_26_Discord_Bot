@@ -14,6 +14,7 @@ from pymongo.collection import Collection
 from config import Settings
 from database import get_global_collection
 from services import entitlements_service
+from services.audit_log_service import record_audit_event
 from services.subscription_service import (
     get_guild_subscription_by_subscription_id,
     upsert_guild_subscription,
@@ -312,6 +313,24 @@ def handle_stripe_webhook(
             }
         },
     )
+
+    if guild_id is not None:
+        try:
+            record_audit_event(
+                guild_id=guild_id,
+                category="billing",
+                action=event_type,
+                source="stripe_webhook",
+                details={
+                    "event_id": event_id,
+                    "event_type": event_type,
+                    "handled": handled,
+                    "status": "processed",
+                },
+            )
+        except Exception:
+            pass
+
     return StripeWebhookResult(
         event_id=event_id,
         event_type=event_type,

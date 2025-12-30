@@ -257,6 +257,8 @@ async def _set_coach_tier(
         record_staff_action(
             roster_id=roster["_id"],
             action=AUDIT_ACTION_TIER_CHANGED,
+            guild_id=getattr(interaction, "guild_id", None),
+            source="manager_portal",
             staff_discord_id=interaction.user.id,
             staff_display_name=getattr(interaction.user, "display_name", None),
             staff_username=str(interaction.user),
@@ -273,6 +275,8 @@ async def _set_coach_tier(
             record_staff_action(
                 roster_id=roster["_id"],
                 action=AUDIT_ACTION_CAP_SYNC_SKIPPED,
+                guild_id=getattr(interaction, "guild_id", None),
+                source="manager_portal",
                 staff_discord_id=interaction.user.id,
                 staff_display_name=getattr(interaction.user, "display_name", None),
                 staff_username=str(interaction.user),
@@ -293,6 +297,8 @@ async def _set_coach_tier(
             record_staff_action(
                 roster_id=roster["_id"],
                 action=AUDIT_ACTION_CAP_SYNCED,
+                guild_id=getattr(interaction, "guild_id", None),
+                source="manager_portal",
                 staff_discord_id=interaction.user.id,
                 staff_display_name=getattr(interaction.user, "display_name", None),
                 staff_username=str(interaction.user),
@@ -360,6 +366,8 @@ async def _unlock_roster(
     record_staff_action(
         roster_id=roster["_id"],
         action=AUDIT_ACTION_UNLOCKED,
+        guild_id=getattr(interaction, "guild_id", None),
+        source="manager_portal",
         staff_discord_id=interaction.user.id,
         staff_display_name=getattr(interaction.user, "display_name", None),
         staff_username=str(interaction.user),
@@ -670,7 +678,14 @@ class ManagerPortalView(SafeView):
         enabled = _parse_bool(cfg.get(PREMIUM_PIN_ENABLED_KEY))
         cfg[PREMIUM_PIN_ENABLED_KEY] = not enabled
         try:
-            set_guild_config(guild.id, cfg)
+            set_guild_config(
+                guild.id,
+                cfg,
+                actor_discord_id=interaction.user.id,
+                actor_display_name=getattr(interaction.user, "display_name", None),
+                actor_username=str(interaction.user),
+                source="manager_portal.toggle_premium_pin",
+            )
         except Exception:
             await interaction.response.send_message(
                 "Failed to persist the pin setting.",
@@ -890,6 +905,8 @@ class ManagerPortalView(SafeView):
                 record_staff_action(
                     roster_id=roster_id,
                     action=AUDIT_ACTION_CAP_SYNC_SKIPPED,
+                    guild_id=getattr(interaction, "guild_id", None),
+                    source="manager_portal",
                     staff_discord_id=interaction.user.id,
                     staff_display_name=getattr(interaction.user, "display_name", None),
                     staff_username=str(interaction.user),
@@ -911,6 +928,8 @@ class ManagerPortalView(SafeView):
             record_staff_action(
                 roster_id=roster_id,
                 action=AUDIT_ACTION_CAP_SYNCED,
+                guild_id=getattr(interaction, "guild_id", None),
+                source="manager_portal",
                 staff_discord_id=interaction.user.id,
                 staff_display_name=getattr(interaction.user, "display_name", None),
                 staff_username=str(interaction.user),

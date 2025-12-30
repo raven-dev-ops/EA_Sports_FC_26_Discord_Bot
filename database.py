@@ -32,6 +32,7 @@ COLLECTION_BY_RECORD_TYPE: dict[str, str] = {
     "roster_player": "roster_players",
     "submission_message": "submission_messages",
     "roster_audit": "roster_audits",
+    "audit_event": "audit_events",
     "recruit_profile": "recruit_profiles",
     "club_ad": "club_ads",
     "club_ad_audit": "club_ad_audits",
@@ -190,6 +191,13 @@ def ensure_indexes(collection: Collection) -> list[str]:
     indexes: list[str] = []
 
     indexes.append(collection.create_index([("record_type", 1)]))
+    indexes.append(
+        collection.create_index(
+            [("record_type", 1), ("guild_id", 1), ("created_at", -1)],
+            name="idx_audit_event",
+            partialFilterExpression={"record_type": "audit_event"},
+        )
+    )
     indexes.append(
         collection.create_index(
             [("record_type", 1), ("guild_id", 1), ("user_id", 1)],
@@ -423,6 +431,20 @@ def ensure_offside_indexes(db: Database) -> list[str]:
         roster_audits.create_index(
             [("roster_id", 1), ("created_at", -1)],
             name="idx_roster_audit",
+        )
+    )
+
+    audit_events = db[COLLECTION_BY_RECORD_TYPE["audit_event"]]
+    indexes.append(
+        audit_events.create_index(
+            [("guild_id", 1), ("created_at", -1)],
+            name="idx_audit_events_guild",
+        )
+    )
+    indexes.append(
+        audit_events.create_index(
+            [("category", 1), ("created_at", -1)],
+            name="idx_audit_events_category",
         )
     )
 

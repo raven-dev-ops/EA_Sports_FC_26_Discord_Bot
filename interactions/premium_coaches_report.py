@@ -252,7 +252,7 @@ async def force_rebuild_premium_coaches_report(
         cfg.pop(PREMIUM_MESSAGE_ID_KEY, None)
         cfg.pop(PREMIUM_PINNED_MESSAGE_ID_KEY, None)
         try:
-            set_guild_config(guild_id, cfg)
+            set_guild_config(guild_id, cfg, source="premium_coaches_report")
         except Exception:
             logging.debug("Failed to clear premium coaches message ids (guild=%s).", guild_id)
 
@@ -349,7 +349,7 @@ async def upsert_premium_coaches_report(
             )
             if updated:
                 try:
-                    set_guild_config(guild_id, cfg)
+                    set_guild_config(guild_id, cfg, source="premium_coaches_report")
                 except Exception:
                     logging.debug(
                         "Failed to persist premium coaches pin settings (guild=%s).", guild_id
@@ -369,7 +369,7 @@ async def upsert_premium_coaches_report(
         cfg=cfg,
     )
     try:
-        set_guild_config(guild_id, cfg)
+        set_guild_config(guild_id, cfg, source="premium_coaches_report")
     except Exception:
         logging.debug("Failed to persist premium coaches config (guild=%s).", guild_id)
 

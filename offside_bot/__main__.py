@@ -327,7 +327,7 @@ class OffsideBot(commands.AutoShardedBot):
 
         if updated != existing:
             try:
-                set_guild_config(guild.id, updated, collection=collection)
+                set_guild_config(guild.id, updated, source="auto_setup", collection=collection)
             except Exception:
                 logging.exception("Auto-setup (guild=%s): failed to persist guild config.", guild.id)
 
@@ -380,7 +380,7 @@ class OffsideBot(commands.AutoShardedBot):
                 logging.info("Test-mode cleanup (guild=%s): %s", guild.id, action)
             if updated != existing:
                 try:
-                    set_guild_config(guild.id, updated, collection=collection)
+                    set_guild_config(guild.id, updated, source="test_mode_cleanup", collection=collection)
                 except Exception:
                     logging.exception("Failed to persist guild cleanup (guild=%s).", guild.id)
 
