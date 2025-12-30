@@ -16,6 +16,7 @@ from interactions.admin_portal import post_admin_portal
 from interactions.club_portal import post_club_portal
 from interactions.coach_portal import post_coach_portal
 from interactions.fc25_stats_modals import refresh_fc25_stats_for_user
+from interactions.listing_instructions import post_listing_channel_instructions
 from interactions.manager_portal import post_manager_portal
 from interactions.premium_coaches_report import post_premium_coaches_report
 from interactions.recruit_portal import post_recruit_portal
@@ -218,6 +219,12 @@ class OffsideBot(commands.AutoShardedBot):
             logging.info("Posted premium coaches report embed.")
         except Exception:
             logging.exception("Failed to post premium coaches report.")
+        await asyncio.sleep(0.5)
+        try:
+            await post_listing_channel_instructions(self, guilds=guilds)
+            logging.info("Posted listing channel instruction embeds.")
+        except Exception:
+            logging.exception("Failed to post listing channel instruction embeds.")
 
     async def _auto_setup_guild(self, guild: discord.Guild) -> None:
         settings = getattr(self, "settings", None)
