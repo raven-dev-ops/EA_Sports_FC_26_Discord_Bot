@@ -2,14 +2,15 @@
 Seed demo/test data into MongoDB for local development.
 
 Usage:
-  # Required:
+  # Option A: rely on environment variables
   set MONGODB_URI=...
-
-  # Optional:
   set MONGODB_DB_NAME=OffsideDiscordBot
-  set MONGODB_COLLECTION=offside_records  # legacy single-collection mode
+  set MONGODB_COLLECTION=Isaac_Elera  # legacy single-collection mode (optional)
 
-  python -m scripts.seed_test_data --guild-id 123
+  python -m scripts.seed_test_data --guild-id 123 --tag offside-demo --purge
+
+  # Option B: load variables from a .env file (recommended for local dev)
+  python -m scripts.seed_test_data --env-file .env --collection Isaac_Elera --guild-id 123 --tag offside-demo --purge
 """
 
 from __future__ import annotations
@@ -18,11 +19,13 @@ import argparse
 import logging
 import os
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import Any
 
 from config.settings import Settings
 from database import DEFAULT_DB_NAME, get_collection
 from migrations import apply_migrations
+from utils.env_file import load_env_file
 
 
 def _build_settings(*, mongo_uri: str, db_name: str | None, collection_name: str | None) -> Settings:
@@ -60,6 +63,24 @@ def _build_settings(*, mongo_uri: str, db_name: str | None, collection_name: str
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Seed demo/test data for Offside Bot.")
+    parser.add_argument(
+        "--env-file",
+        type=str,
+        default=None,
+        help="Optional path to a .env file to load (defaults to .env when present).",
+    )
+    parser.add_argument(
+        "--db-name",
+        type=str,
+        default=None,
+        help="Override MONGODB_DB_NAME (default OffsideDiscordBot).",
+    )
+    parser.add_argument(
+        "--collection",
+        type=str,
+        default=None,
+        help="Override MONGODB_COLLECTION (e.g., Isaac_Elera for legacy single-collection mode).",
+    )
     parser.add_argument("--guild-id", type=int, default=123, help="Guild ID to associate with demo data.")
     parser.add_argument(
         "--tag",
@@ -88,11 +109,16 @@ def main() -> None:
     args = _parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
+    env_path = Path(args.env_file) if args.env_file else Path(".env")
+    if env_path.exists():
+        load_env_file(env_path, override=False)
+
     mongo_uri = os.environ.get("MONGODB_URI", "").strip()
-    db_name = os.environ.get("MONGODB_DB_NAME", "").strip() or None
-    collection_name = os.environ.get("MONGODB_COLLECTION", "").strip() or None
     if not mongo_uri:
-        raise SystemExit("Set MONGODB_URI.")
+        raise SystemExit("Set MONGODB_URI (or pass --env-file).")
+
+    db_name = (args.db_name or os.environ.get("MONGODB_DB_NAME", "").strip()) or None
+    collection_name = (args.collection or os.environ.get("MONGODB_COLLECTION", "").strip()) or None
 
     if db_name is None:
         db_name = DEFAULT_DB_NAME
@@ -702,4 +728,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

@@ -19,19 +19,27 @@ GROUP_FIXTURE_RECORD_TYPE = "group_fixture"
 
 
 def _groups(collection: Collection | None) -> Collection:
-    return collection or get_collection(record_type=GROUP_RECORD_TYPE)
+    if collection is None:
+        return get_collection(record_type=GROUP_RECORD_TYPE)
+    return collection
 
 
 def _group_teams(collection: Collection | None) -> Collection:
-    return collection or get_collection(record_type=GROUP_TEAM_RECORD_TYPE)
+    if collection is None:
+        return get_collection(record_type=GROUP_TEAM_RECORD_TYPE)
+    return collection
 
 
 def _group_matches(collection: Collection | None) -> Collection:
-    return collection or get_collection(record_type=GROUP_MATCH_RECORD_TYPE)
+    if collection is None:
+        return get_collection(record_type=GROUP_MATCH_RECORD_TYPE)
+    return collection
 
 
 def _group_fixtures(collection: Collection | None) -> Collection:
-    return collection or get_collection(record_type=GROUP_FIXTURE_RECORD_TYPE)
+    if collection is None:
+        return get_collection(record_type=GROUP_FIXTURE_RECORD_TYPE)
+    return collection
 
 
 def ensure_group(

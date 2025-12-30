@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.22] - 2025-12-30
+
+### Added
+- Seed tooling: `scripts.seed_test_data` supports `--env-file`, `--db-name`, and `--collection` overrides.
+- Testing: optional live MongoDB smoke test (`tests/e2e/test_live_mongo_smoke.py`) gated by `LIVE_MONGO_SMOKE=1`.
+
+### Fixed
+- Services: avoid `pymongo.collection.Collection` truthiness checks when passing explicit collection handles.
+
 ## [0.2.21] - 2025-12-30
 
 ### Added

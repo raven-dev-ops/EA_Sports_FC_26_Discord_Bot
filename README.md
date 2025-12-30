@@ -106,7 +106,7 @@ Recommended:
 - `MONGODB_DB_NAME` (defaults to `OffsideDiscordBot`)
 
 Optional:
-- `MONGODB_COLLECTION` (legacy single-collection mode)
+- `MONGODB_COLLECTION` (legacy single-collection mode; e.g., `Isaac_Elera`)
 - `STAFF_ROLE_IDS` (comma-separated role IDs)
 - `TEST_MODE` (defaults to `true`, set `false` for production)
 - Role env overrides (optional; primary source is per-guild config created by auto-setup):
@@ -176,7 +176,7 @@ staff monitor channel (`channel_staff_monitor_id`) only.
 - Lint/format: `ruff check .` (and `ruff format .` if you want formatting).
 - Type check: `mypy .`
 - Tests: `python -m pytest`
-- Seed demo data: `python -m scripts.seed_test_data --guild-id <id> --purge`
+- Seed demo data: `python -m scripts.seed_test_data --env-file .env --collection Isaac_Elera --guild-id <id> --purge`
 - Register commands: `python -m scripts.register_commands --guild <id>` during dev; use `--global` for production sync after validation.
 - Logging: structured key/value logging with command context (guild/channel/user/command); set `LOG_LEVEL=DEBUG` for verbose output in staging.
 - Signals & shutdown: SIGTERM/SIGINT trigger a graceful shutdown and close the Mongo client; Discord backoff helpers use timeouts and honor `retry_after`.
@@ -195,7 +195,8 @@ staff monitor channel (`channel_staff_monitor_id`) only.
 ## Testing
 
 - Run the full suite: `python -m pytest` (or `py -3.12 -m pytest` on Windows).
-- Tests use `mongomock` and do not hit live services.
+- Tests use `mongomock` by default and do not hit live services.
+- Optional live MongoDB smoke test: `LIVE_MONGO_SMOKE=1 python -m pytest -q tests/e2e/test_live_mongo_smoke.py`
 
 ## Notes
 

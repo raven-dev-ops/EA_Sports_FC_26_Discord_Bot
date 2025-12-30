@@ -20,15 +20,21 @@ SUBMISSION_RECORD_TYPE = "submission_message"
 
 
 def _team_rosters(collection: Collection | None) -> Collection:
-    return collection or get_collection(record_type=TEAM_ROSTER_RECORD_TYPE)
+    if collection is None:
+        return get_collection(record_type=TEAM_ROSTER_RECORD_TYPE)
+    return collection
 
 
 def _roster_players(collection: Collection | None) -> Collection:
-    return collection or get_collection(record_type=ROSTER_PLAYER_RECORD_TYPE)
+    if collection is None:
+        return get_collection(record_type=ROSTER_PLAYER_RECORD_TYPE)
+    return collection
 
 
 def _submission_messages(collection: Collection | None) -> Collection:
-    return collection or get_collection(record_type=SUBMISSION_RECORD_TYPE)
+    if collection is None:
+        return get_collection(record_type=SUBMISSION_RECORD_TYPE)
+    return collection
 
 
 def get_roster_for_coach(

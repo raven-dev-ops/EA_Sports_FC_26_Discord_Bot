@@ -29,15 +29,21 @@ MATCH_RECORD_TYPE = "tournament_match"
 
 
 def _tournaments(collection: Collection | None) -> Collection:
-    return collection or get_collection(record_type=TOURNAMENT_RECORD_TYPE)
+    if collection is None:
+        return get_collection(record_type=TOURNAMENT_RECORD_TYPE)
+    return collection
 
 
 def _participants(collection: Collection | None) -> Collection:
-    return collection or get_collection(record_type=PARTICIPANT_RECORD_TYPE)
+    if collection is None:
+        return get_collection(record_type=PARTICIPANT_RECORD_TYPE)
+    return collection
 
 
 def _matches(collection: Collection | None) -> Collection:
-    return collection or get_collection(record_type=MATCH_RECORD_TYPE)
+    if collection is None:
+        return get_collection(record_type=MATCH_RECORD_TYPE)
+    return collection
 
 
 def list_tournaments(*, collection: Collection | None = None) -> list[dict[str, Any]]:
