@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import http.client
 import json
 import os
 import subprocess
@@ -8,6 +9,7 @@ import time
 from pathlib import Path
 from typing import Any
 from urllib.error import HTTPError, URLError
+from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 
 
@@ -66,11 +68,23 @@ def _create_source(*, token: str) -> tuple[str, str]:
 
 
 def _upload_source(*, put_url: str, archive_path: Path) -> None:
+    parsed = urlparse(put_url)
+    if parsed.scheme != "https" or not parsed.netloc:
+        raise RuntimeError("Unexpected Heroku source_blob put_url format.")
+    path = parsed.path + (f"?{parsed.query}" if parsed.query else "")
+
     payload = archive_path.read_bytes()
-    # Heroku returns a pre-signed S3 URL; avoid adding headers that can break the signature.
-    req = Request(put_url, data=payload, method="PUT")
-    with urlopen(req, timeout=120) as resp:
+    conn = http.client.HTTPSConnection(parsed.netloc, timeout=120)
+    try:
+        # Heroku returns a legacy S3 pre-signed URL (sigv2) that is sensitive to Content-Type.
+        # Avoid sending a default Content-Type header to prevent signature mismatch.
+        conn.request("PUT", path, body=payload, headers={"Content-Length": str(len(payload))})
+        resp = conn.getresponse()
         resp.read()
+        if resp.status >= 400:
+            raise RuntimeError(f"Source upload failed: HTTP {resp.status} {resp.reason}")
+    finally:
+        conn.close()
 
 
 def _git_sha(*, ref: str) -> str:
