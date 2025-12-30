@@ -985,6 +985,91 @@ async def support_page(_request: web.Request) -> web.Response:
     return web.Response(text=page, content_type="text/html")
 
 
+async def pricing_page(request: web.Request) -> web.Response:
+    session = request.get("session")
+    billing = str(request.query.get("billing") or "monthly").strip().lower()
+    if billing not in {"monthly", "yearly"}:
+        billing = "monthly"
+
+    pro_monthly_price = os.environ.get("PRICING_PRO_MONTHLY_USD", "9").strip() or "9"
+    pro_cta_href = "/app/billing"
+    if session is None:
+        pro_cta_href = "/login?next=/app/billing"
+
+    features = [
+        {
+            "name": "Dashboards + setup wizard",
+            "description": "Auto-setup, portal dashboards, listing channels, and guided setup checks.",
+            "free": True,
+            "pro": True,
+            "enterprise": True,
+        },
+        {
+            "name": "Roster + recruiting workflows",
+            "description": "Rosters, recruiting, clubs, and staff workflows inside Discord.",
+            "free": True,
+            "pro": True,
+            "enterprise": True,
+        },
+        {
+            "name": "Analytics",
+            "description": "Per-server collection analytics and operational visibility.",
+            "free": True,
+            "pro": True,
+            "enterprise": True,
+        },
+        {
+            "name": "Premium coach tiers",
+            "description": "Premium caps (22/25) and premium coach tier management.",
+            "free": False,
+            "pro": entitlements_service.FEATURE_PREMIUM_COACH_TIERS in entitlements_service.PRO_FEATURE_KEYS,
+            "enterprise": True,
+        },
+        {
+            "name": "Premium Coaches report",
+            "description": "Premium coach listing embed and related controls.",
+            "free": False,
+            "pro": entitlements_service.FEATURE_PREMIUM_COACHES_REPORT in entitlements_service.PRO_FEATURE_KEYS,
+            "enterprise": True,
+        },
+        {
+            "name": "FC25 stats integration",
+            "description": "Link accounts and refresh player stats (feature flagged).",
+            "free": False,
+            "pro": entitlements_service.FEATURE_FC25_STATS in entitlements_service.PRO_FEATURE_KEYS,
+            "enterprise": True,
+        },
+        {
+            "name": "Banlist checks",
+            "description": "Google Sheets-driven banlist checks during roster actions.",
+            "free": False,
+            "pro": entitlements_service.FEATURE_BANLIST in entitlements_service.PRO_FEATURE_KEYS,
+            "enterprise": True,
+        },
+        {
+            "name": "Tournament automation",
+            "description": "Staff tournament automation tooling.",
+            "free": False,
+            "pro": entitlements_service.FEATURE_TOURNAMENT_AUTOMATION in entitlements_service.PRO_FEATURE_KEYS,
+            "enterprise": True,
+        },
+    ]
+
+    from offside_bot.web_templates import render
+
+    html = render(
+        "pages/pricing.html",
+        title="Pricing",
+        billing=billing,
+        toggle_monthly_href="/pricing?billing=monthly",
+        toggle_yearly_href="/pricing?billing=yearly",
+        pro_monthly_price=pro_monthly_price,
+        pro_cta_href=pro_cta_href,
+        features=features,
+    )
+    return web.Response(text=html, content_type="text/html")
+
+
 async def health(_request: web.Request) -> web.Response:
     return web.json_response({"ok": True})
 
@@ -3615,6 +3700,7 @@ def create_app(*, settings: Settings | None = None) -> web.Application:
     app.router.add_get("/health", health)
     app.router.add_get("/ready", ready)
     app.router.add_get("/", index)
+    app.router.add_get("/pricing", pricing_page)
     app.router.add_get("/terms", terms_page)
     app.router.add_get("/privacy", privacy_page)
     app.router.add_get("/support", support_page)

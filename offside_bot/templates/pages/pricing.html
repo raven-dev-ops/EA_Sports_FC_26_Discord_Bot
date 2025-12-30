@@ -1,0 +1,118 @@
+{% extends "layouts/public.html" %}
+{% from "macros/ui.html" import button, badge %}
+
+{% block content %}
+  <h1>Pricing</h1>
+  <p class="muted">Start free. Upgrade when you need premium features.</p>
+
+  <div class="card" style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
+    <div>
+      <strong>Billing</strong>
+      <div class="muted" style="margin-top:6px;">Yearly pricing is coming soon.</div>
+    </div>
+    <div style="display:flex; gap:10px; flex-wrap:wrap;">
+      <a class="btn secondary" href="{{ toggle_monthly_href }}">{{ "Monthly" if billing != "monthly" else "Monthly ✓" }}</a>
+      <a class="btn secondary" href="{{ toggle_yearly_href }}">{{ "Yearly (soon)" if billing != "yearly" else "Yearly ✓ (soon)" }}</a>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="card">
+      <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
+        <strong>Free</strong>
+        {{ badge("FREE", "free") }}
+      </div>
+      <div style="font-size:28px; font-weight:800; margin-top:8px;">$0</div>
+      <div class="muted">for every server</div>
+      <ul style="margin-top:12px;">
+        <li>Dashboards + setup wizard</li>
+        <li>Roster + recruiting workflows</li>
+        <li>Basic analytics</li>
+      </ul>
+      <div style="margin-top:12px;">
+        {{ button("Add to Discord", "/install", "blue") }}
+      </div>
+    </div>
+
+    <div class="card">
+      <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
+        <strong>Pro</strong>
+        {{ badge("PRO", "pro") }}
+      </div>
+      <div style="font-size:28px; font-weight:800; margin-top:8px;">
+        {% if billing == "yearly" %}
+          Coming soon
+        {% else %}
+          ${{ pro_monthly_price }}
+        {% endif %}
+      </div>
+      <div class="muted">{% if billing == "yearly" %}Yearly billing coming soon{% else %}per server / month{% endif %}</div>
+      <ul style="margin-top:12px;">
+        <li>Premium coach tiers</li>
+        <li>Premium coaches report</li>
+        <li>FC25 stats integration</li>
+        <li>Banlist checks</li>
+        <li>Tournament automation</li>
+      </ul>
+      <div style="margin-top:12px;">
+        {{ button("Upgrade", pro_cta_href, "blue") }}
+      </div>
+    </div>
+
+    <div class="card">
+      <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
+        <strong>Enterprise</strong>
+        {{ badge("CONTACT", "ok") }}
+      </div>
+      <div style="font-size:28px; font-weight:800; margin-top:8px;">Custom</div>
+      <div class="muted">for large communities</div>
+      <ul style="margin-top:12px;">
+        <li>Custom onboarding + support</li>
+        <li>Multi-server admin workflows</li>
+        <li>SLA / dedicated infra (optional)</li>
+      </ul>
+      <div style="margin-top:12px;">
+        {{ button("Contact", "https://github.com/raven-dev-ops/EA_Sports_FC_26_Discord_Bot/issues", "secondary") }}
+      </div>
+    </div>
+  </div>
+
+  <h2>Compare plans</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Feature</th>
+        <th>Free</th>
+        <th>Pro</th>
+        <th>Enterprise</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for feat in features %}
+        <tr>
+          <td>
+            <strong>{{ feat.name }}</strong>
+            <div class="muted">{{ feat.description }}</div>
+          </td>
+          <td>{{ "✓" if feat.free else "—" }}</td>
+          <td>{{ "✓" if feat.pro else "—" }}</td>
+          <td>{{ "✓" if feat.enterprise else "—" }}</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <div class="card">
+    <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
+      <div>
+        <div><strong>Ready to upgrade?</strong></div>
+        <div class="muted" style="margin-top:6px;">Pro upgrades are managed in the dashboard billing page.</div>
+      </div>
+      <div style="display:flex; gap:10px; flex-wrap:wrap;">
+        {{ button("Billing", pro_cta_href, "secondary") }}
+        {{ button("Login", "/login", "") }}
+      </div>
+    </div>
+  </div>
+{% endblock %}
+

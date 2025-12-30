@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.37] - 2025-12-30
+
+### Added
+- Web: pricing page (`/pricing`) with plan cards and a feature comparison table aligned to entitlements feature keys.
+
 ## [0.2.36] - 2025-12-30
 
 ### Added
