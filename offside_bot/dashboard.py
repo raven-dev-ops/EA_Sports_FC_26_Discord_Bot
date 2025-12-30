@@ -59,6 +59,7 @@ class SessionData:
     created_at: float
     user: dict[str, Any]
     owner_guilds: list[dict[str, Any]]
+    all_guilds: list[dict[str, Any]]
     csrf_token: str
 
 
@@ -279,12 +280,21 @@ async def session_middleware(request: web.Request, handler):
         if isinstance(created_at, (int, float)) and time.time() - float(created_at) <= SESSION_TTL_SECONDS:
             user = doc.get("user")
             owner_guilds = doc.get("owner_guilds")
+            all_guilds = doc.get("all_guilds")
             csrf_token = doc.get("csrf_token")
-            if isinstance(user, dict) and isinstance(owner_guilds, list) and isinstance(csrf_token, str) and csrf_token:
+            if (
+                isinstance(user, dict)
+                and isinstance(owner_guilds, list)
+                and isinstance(csrf_token, str)
+                and csrf_token
+            ):
+                if not isinstance(all_guilds, list):
+                    all_guilds = owner_guilds
                 session = SessionData(
                     created_at=float(created_at),
                     user=user,
                     owner_guilds=[g for g in owner_guilds if isinstance(g, dict)],
+                    all_guilds=[g for g in all_guilds if isinstance(g, dict)],
                     csrf_token=csrf_token,
                 )
         if session is None:
@@ -470,6 +480,21 @@ def _invite_url(
     return f"{AUTHORIZE_URL}?{urllib.parse.urlencode(params)}"
 
 
+PERM_ADMINISTRATOR = 1 << 3
+PERM_MANAGE_GUILD = 1 << 5
+
+
+def _guild_is_eligible(guild: dict[str, Any]) -> bool:
+    if guild.get("owner") is True:
+        return True
+    perms_raw = guild.get("permissions")
+    try:
+        perms = int(perms_raw) if perms_raw is not None else 0
+    except (TypeError, ValueError):
+        perms = 0
+    return bool(perms & (PERM_ADMINISTRATOR | PERM_MANAGE_GUILD))
+
+
 async def index(request: web.Request) -> web.Response:
     settings: Settings = request.app["settings"]
     session = request.get("session")
@@ -477,7 +502,7 @@ async def index(request: web.Request) -> web.Response:
         invite_href = _invite_url(settings)
         body = f"""
         <h1>Offside Dashboard</h1>
-        <p class="muted">Sign in with Discord to view analytics for guilds you own.</p>
+        <p class="muted">Sign in with Discord to view analytics for servers you own or manage.</p>
         <p><a class="btn" href="/login">Login with Discord</a></p>
         <p><a class="btn blue" href="/install">Invite bot to a server</a></p>
         <p class="muted">Direct invite URL:</p>
@@ -488,27 +513,42 @@ async def index(request: web.Request) -> web.Response:
     user = session.user
     username = _escape_html(f"{user.get('username','')}#{user.get('discriminator','')}".strip("#"))
     guild_cards = []
-    for g in session.owner_guilds:
+    eligible_ids = {str(g.get("id")) for g in session.owner_guilds}
+    for g in session.all_guilds:
         gid = g.get("id")
         name = _escape_html(g.get("name") or gid)
         gid_str = str(gid)
+        eligible = gid_str in eligible_ids
         plan_badge = ""
-        if gid_str.isdigit():
+        if eligible and gid_str.isdigit():
             plan = entitlements_service.get_guild_plan(settings, guild_id=int(gid_str))
             plan_badge = f"<span class='badge {plan}'>{_escape_html(plan.upper())}</span>"
+
+        actions = ""
+        if eligible:
+            actions = (
+                f"<div style='margin-top:10px; display:flex; gap:10px; flex-wrap:wrap;'>"
+                f"<a class='btn' href='/guild/{gid_str}'>Analytics</a>"
+                f"<a class='btn secondary' href='/guild/{gid_str}/settings'>Settings</a>"
+                f"<a class='btn secondary' href='/app/billing?guild_id={gid_str}'>Billing</a>"
+                f"<a class='btn blue' href='/install?guild_id={gid_str}'>Invite bot</a>"
+                f"</div>"
+            )
+        else:
+            actions = (
+                "<div class='card' style='border:0; padding:0; margin-top:10px;'>"
+                "<div class='muted'>Not eligible: requires <strong>Manage Server</strong> permission (or ownership).</div>"
+                "</div>"
+            )
+
         guild_cards.append(
             f"<div class='card'><div style='display:flex; gap:10px; align-items:center; justify-content:space-between;'>"
             f"<strong>{name}</strong>{plan_badge}</div>"
             f"<div class='muted'>Guild ID: <code>{gid}</code></div>"
-            f"<div style='margin-top:10px; display:flex; gap:10px; flex-wrap:wrap;'>"
-            f"<a class='btn' href='/guild/{gid_str}'>Analytics</a>"
-            f"<a class='btn secondary' href='/guild/{gid_str}/settings'>Settings</a>"
-            f"<a class='btn secondary' href='/app/billing?guild_id={gid_str}'>Billing</a>"
-            f"<a class='btn blue' href='/install?guild_id={gid_str}'>Invite bot</a>"
-            f"</div>"
+            f"{actions}"
             f"</div>"
         )
-    cards_html = "\n".join(guild_cards) if guild_cards else "<p>No owned guilds found.</p>"
+    cards_html = "\n".join(guild_cards) if guild_cards else "<p>No servers found.</p>"
     invite_href = _invite_url(settings)
     body = f"""
       <h1>Offside Dashboard</h1>
@@ -644,7 +684,8 @@ async def oauth_callback(request: web.Request) -> web.Response:
 
     user = await _discord_get_json(http, url=ME_URL, access_token=access_token)
     guilds = await _discord_get_json(http, url=MY_GUILDS_URL, access_token=access_token)
-    owner_guilds = [g for g in guilds if isinstance(g, dict) and g.get("owner") is True]
+    all_guilds = [g for g in guilds if isinstance(g, dict)]
+    owner_guilds = [g for g in all_guilds if _guild_is_eligible(g)]
 
     installed_guild_id = request.query.get("guild_id", "").strip()
     if installed_guild_id.isdigit():
@@ -664,6 +705,7 @@ async def oauth_callback(request: web.Request) -> web.Response:
             "expires_at": expires_at,
             "user": user,
             "owner_guilds": owner_guilds,
+            "all_guilds": all_guilds,
             "csrf_token": csrf_token,
         },
     )
@@ -698,7 +740,7 @@ def _require_owned_guild(session: SessionData, *, guild_id: str) -> int:
     for g in session.owner_guilds:
         if str(g.get("id")) == str(guild_id):
             return gid_int
-    raise web.HTTPForbidden(text="You do not own this guild.")
+    raise web.HTTPForbidden(text="You do not have access to this guild.")
 
 
 def _parse_int_list(raw: str) -> list[int] | None:
