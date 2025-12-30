@@ -27,6 +27,7 @@ from services.guild_settings_schema import (
 )
 from services.heartbeat_service import get_worker_heartbeat
 from services.stripe_webhook_service import ensure_stripe_webhook_indexes, handle_stripe_webhook
+from services.subscription_service import get_guild_subscription
 
 DISCORD_API_BASE = "https://discord.com/api"
 AUTHORIZE_URL = "https://discord.com/oauth2/authorize"
@@ -1282,6 +1283,8 @@ async def billing_page(request: web.Request) -> web.Response:
         return web.Response(text=_html_page(title="Billing", body=body), content_type="text/html")
 
     current_plan = entitlements_service.get_guild_plan(settings, guild_id=guild_id)
+    subscription = get_guild_subscription(settings, guild_id=guild_id) if settings.mongodb_uri else None
+    customer_id = str(subscription.get("customer_id") or "") if subscription else ""
     options = "\n".join(
         f"<option value=\"{_escape_html(g.get('id'))}\""
         f"{' selected' if str(g.get('id')) == str(guild_id) else ''}>"
@@ -1299,6 +1302,20 @@ async def billing_page(request: web.Request) -> web.Response:
     upgrade_disabled = "disabled" if current_plan == entitlements_service.PLAN_PRO else ""
     upgrade_text = "Already Pro" if current_plan == entitlements_service.PLAN_PRO else "Upgrade to Pro"
 
+    manage_card = ""
+    if customer_id:
+        manage_card = f"""
+          <div class="card">
+            <h2 style="margin-top:0;">Manage subscription</h2>
+            <p class="muted">Update payment method, view invoices, or cancel your subscription.</p>
+            <form method="post" action="/app/billing/portal">
+              <input type="hidden" name="csrf" value="{_escape_html(session.csrf_token)}" />
+              <input type="hidden" name="guild_id" value="{guild_id}" />
+              <button class="btn secondary" type="submit">Open Stripe Billing Portal</button>
+            </form>
+          </div>
+        """
+
     body = f"""
       <p><a href="/">← Back</a></p>
       <h1>Billing</h1>
@@ -1307,6 +1324,7 @@ async def billing_page(request: web.Request) -> web.Response:
         <div><strong>Current plan</strong></div>
         <div style="margin-top:6px;"><span class="badge {current_plan}">{_escape_html(current_plan.upper())}</span></div>
       </div>
+      {manage_card}
       <div class="card">
         <h2 style="margin-top:0;">Upgrade this server</h2>
         <form method="post" action="/app/billing/checkout">
@@ -1324,6 +1342,44 @@ async def billing_page(request: web.Request) -> web.Response:
       </div>
     """
     return web.Response(text=_html_page(title="Billing", body=body), content_type="text/html")
+
+
+async def billing_portal(request: web.Request) -> web.Response:
+    session = _require_session(request)
+    settings: Settings = request.app["settings"]
+    if not settings.mongodb_uri:
+        raise web.HTTPInternalServerError(text="MongoDB is not configured.")
+
+    data = await request.post()
+    if str(data.get("csrf", "")) != session.csrf_token:
+        raise web.HTTPBadRequest(text="Invalid CSRF token.")
+
+    guild_id = _require_owned_guild(session, guild_id=str(data.get("guild_id") or ""))
+
+    subscription = get_guild_subscription(settings, guild_id=guild_id) or {}
+    customer_id = str(subscription.get("customer_id") or "").strip()
+    if not customer_id:
+        raise web.HTTPBadRequest(
+            text="No Stripe customer found for this server yet. Complete checkout first."
+        )
+
+    secret_key = _require_env("STRIPE_SECRET_KEY")
+    return_url = f"{_public_base_url(request)}/app/billing?guild_id={guild_id}"
+
+    try:
+        import stripe  # type: ignore[import-not-found]
+    except Exception as exc:
+        raise web.HTTPInternalServerError(text="Stripe SDK is not installed.") from exc
+
+    stripe.api_key = secret_key
+    portal = stripe.billing_portal.Session.create(
+        customer=customer_id,
+        return_url=return_url,
+    )
+    url = getattr(portal, "url", None) or (portal.get("url") if isinstance(portal, dict) else None)
+    if not url:
+        raise web.HTTPInternalServerError(text="Stripe did not return a billing portal URL.")
+    raise web.HTTPFound(str(url))
 
 
 async def billing_checkout(request: web.Request) -> web.Response:
@@ -1444,6 +1500,7 @@ def create_app(*, settings: Settings | None = None) -> web.Application:
     app.router.add_get("/oauth/callback", oauth_callback)
     app.router.add_get("/logout", logout)
     app.router.add_get("/app/billing", billing_page)
+    app.router.add_post("/app/billing/portal", billing_portal)
     app.router.add_post("/app/billing/checkout", billing_checkout)
     app.router.add_get("/app/billing/success", billing_success)
     app.router.add_get("/app/billing/cancel", billing_cancel)
