@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.38] - 2025-12-30
+
+### Docs
+- `.env.example`: added `PRICING_PRO_MONTHLY_USD` for marketing pricing display.
+
 ## [0.2.37] - 2025-12-30
 
 ### Added
