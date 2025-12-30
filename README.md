@@ -118,6 +118,12 @@ Optional:
 - Channel env overrides (optional; primary source is per-guild config created by auto-setup):
   - `CHANNEL_STAFF_PORTAL_ID`, `CHANNEL_MANAGER_PORTAL_ID`, `CHANNEL_CLUB_PORTAL_ID`, `CHANNEL_COACH_PORTAL_ID`, `CHANNEL_RECRUIT_PORTAL_ID`
   - `CHANNEL_STAFF_MONITOR_ID` (test-mode sink)
+
+Optional (billing / Pro plan):
+- `STRIPE_SECRET_KEY`
+- `STRIPE_WEBHOOK_SECRET`
+- `STRIPE_PRICE_PRO_ID`
+- Setup guide: `docs/billing.md`
   - `CHANNEL_ROSTER_LISTING_ID` (fallback to legacy `CHANNEL_ROSTER_PORTAL_ID`)
   - `CHANNEL_RECRUIT_LISTING_ID`, `CHANNEL_CLUB_LISTING_ID`, `CHANNEL_PREMIUM_COACHES_ID`
 - `BANLIST_SHEET_ID`

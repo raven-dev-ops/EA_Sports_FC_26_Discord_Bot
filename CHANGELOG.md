@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.24] - 2025-12-30
+
+### Added
+- Billing: Stripe Billing Portal integration (self-serve subscription management) in the web dashboard.
+- Docs: Stripe billing configuration guide (`docs/billing.md`).
+
+### Fixed
+- Typing: widened Discord channel permission overwrites typing for newer discord.py stubs.
+
 ## [0.2.23] - 2025-12-30
 
 ### Added
