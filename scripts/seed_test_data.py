@@ -23,12 +23,19 @@ from pathlib import Path
 from typing import Any
 
 from config.settings import Settings
-from database import DEFAULT_DB_NAME, get_collection
+from database import DEFAULT_DB_NAME, get_collection, guild_db_context
 from migrations import apply_migrations
 from utils.env_file import load_env_file
 
 
-def _build_settings(*, mongo_uri: str, db_name: str | None, collection_name: str | None) -> Settings:
+def _build_settings(
+    *,
+    mongo_uri: str,
+    db_name: str | None,
+    collection_name: str | None,
+    per_guild_db: bool,
+    guild_db_prefix: str,
+) -> Settings:
     return Settings(
         discord_token="seed",
         discord_application_id=1,
@@ -54,6 +61,8 @@ def _build_settings(*, mongo_uri: str, db_name: str | None, collection_name: str
         mongodb_uri=mongo_uri,
         mongodb_db_name=db_name,
         mongodb_collection=collection_name,
+        mongodb_per_guild_db=bool(per_guild_db),
+        mongodb_guild_db_prefix=str(guild_db_prefix or ""),
         banlist_sheet_id=None,
         banlist_range=None,
         banlist_cache_ttl_seconds=300,
@@ -119,36 +128,54 @@ def main() -> None:
 
     db_name = (args.db_name or os.environ.get("MONGODB_DB_NAME", "").strip()) or None
     collection_name = (args.collection or os.environ.get("MONGODB_COLLECTION", "").strip()) or None
+    per_guild_db = os.environ.get("MONGODB_PER_GUILD_DB", "").strip().lower() in {"1", "true", "yes", "on"}
+    guild_db_prefix = os.environ.get("MONGODB_GUILD_DB_PREFIX", "").strip()
 
     if db_name is None:
         db_name = DEFAULT_DB_NAME
 
-    settings = _build_settings(mongo_uri=mongo_uri, db_name=db_name, collection_name=collection_name)
-    apply_migrations(settings=settings, logger=logging.getLogger(__name__))
-
+    settings = _build_settings(
+        mongo_uri=mongo_uri,
+        db_name=db_name,
+        collection_name=collection_name,
+        per_guild_db=per_guild_db,
+        guild_db_prefix=guild_db_prefix,
+    )
     guild_id = int(args.guild_id)
+    if settings.mongodb_per_guild_db:
+        with guild_db_context(guild_id):
+            apply_migrations(settings=settings, logger=logging.getLogger(__name__))
+    else:
+        apply_migrations(settings=settings, logger=logging.getLogger(__name__))
+
     seed_tag = str(args.tag).strip() or "offside-demo"
     now = datetime.now(timezone.utc)
 
     collections: dict[str, Any] = {
-        "guild_settings": get_collection(settings, record_type="guild_settings"),
-        "tournament_cycles": get_collection(settings, record_type="tournament_cycle"),
-        "team_rosters": get_collection(settings, record_type="team_roster"),
-        "roster_players": get_collection(settings, record_type="roster_player"),
-        "submission_messages": get_collection(settings, record_type="submission_message"),
-        "roster_audits": get_collection(settings, record_type="roster_audit"),
-        "recruit_profiles": get_collection(settings, record_type="recruit_profile"),
-        "club_ads": get_collection(settings, record_type="club_ad"),
-        "club_ad_audits": get_collection(settings, record_type="club_ad_audit"),
-        "fc25_stats_links": get_collection(settings, record_type="fc25_stats_link"),
-        "fc25_stats_snapshots": get_collection(settings, record_type="fc25_stats_snapshot"),
-        "tournaments": get_collection(settings, record_type="tournament"),
-        "tournament_participants": get_collection(settings, record_type="tournament_participant"),
-        "tournament_matches": get_collection(settings, record_type="tournament_match"),
-        "tournament_groups": get_collection(settings, record_type="tournament_group"),
-        "group_teams": get_collection(settings, record_type="group_team"),
-        "group_matches": get_collection(settings, record_type="group_match"),
-        "group_fixtures": get_collection(settings, record_type="group_fixture"),
+        "guild_settings": get_collection(settings, record_type="guild_settings", guild_id=guild_id),
+        "tournament_cycles": get_collection(settings, record_type="tournament_cycle", guild_id=guild_id),
+        "team_rosters": get_collection(settings, record_type="team_roster", guild_id=guild_id),
+        "roster_players": get_collection(settings, record_type="roster_player", guild_id=guild_id),
+        "submission_messages": get_collection(
+            settings, record_type="submission_message", guild_id=guild_id
+        ),
+        "roster_audits": get_collection(settings, record_type="roster_audit", guild_id=guild_id),
+        "recruit_profiles": get_collection(settings, record_type="recruit_profile", guild_id=guild_id),
+        "club_ads": get_collection(settings, record_type="club_ad", guild_id=guild_id),
+        "club_ad_audits": get_collection(settings, record_type="club_ad_audit", guild_id=guild_id),
+        "fc25_stats_links": get_collection(settings, record_type="fc25_stats_link", guild_id=guild_id),
+        "fc25_stats_snapshots": get_collection(
+            settings, record_type="fc25_stats_snapshot", guild_id=guild_id
+        ),
+        "tournaments": get_collection(settings, record_type="tournament", guild_id=guild_id),
+        "tournament_participants": get_collection(
+            settings, record_type="tournament_participant", guild_id=guild_id
+        ),
+        "tournament_matches": get_collection(settings, record_type="tournament_match", guild_id=guild_id),
+        "tournament_groups": get_collection(settings, record_type="tournament_group", guild_id=guild_id),
+        "group_teams": get_collection(settings, record_type="group_team", guild_id=guild_id),
+        "group_matches": get_collection(settings, record_type="group_match", guild_id=guild_id),
+        "group_fixtures": get_collection(settings, record_type="group_fixture", guild_id=guild_id),
     }
 
     if args.purge:

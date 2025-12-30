@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.23] - 2025-12-30
+
+### Added
+- MongoDB: optional per-guild database mode (`MONGODB_PER_GUILD_DB`, `MONGODB_GUILD_DB_PREFIX`) for stronger multi-tenant isolation.
+- Dashboard: `python -m offside_bot.dashboard` (Discord OAuth2 login + guild analytics).
+- Analytics: `services/analytics_service.py` and tests for per-guild DB routing.
+- Scripts: `python -m scripts.migrate --guild-id <id>` support for per-guild DB mode.
+
+### Changed
+- Bot startup: when per-guild DB mode is enabled, migrations/recovery are applied per guild on startup/join.
+
 ## [0.2.22] - 2025-12-30
 
 ### Added

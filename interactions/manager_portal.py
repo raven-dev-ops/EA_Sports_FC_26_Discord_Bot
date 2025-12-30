@@ -717,9 +717,9 @@ class ManagerPortalView(SafeView):
             return
 
         try:
-            cycle_collection = get_collection(settings, record_type="tournament_cycle")
-            team_rosters = get_collection(settings, record_type="team_roster")
-            roster_players = get_collection(settings, record_type="roster_player")
+            cycle_collection = get_collection(settings, record_type="tournament_cycle", guild_id=guild.id)
+            team_rosters = get_collection(settings, record_type="team_roster", guild_id=guild.id)
+            roster_players = get_collection(settings, record_type="roster_player", guild_id=guild.id)
         except Exception:
             await interaction.followup.send(
                 embed=make_embed(

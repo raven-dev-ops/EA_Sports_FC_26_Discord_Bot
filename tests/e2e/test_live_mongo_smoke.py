@@ -51,6 +51,8 @@ def _build_settings(*, mongo_uri: str, db_name: str, collection_name: str) -> Se
         mongodb_uri=mongo_uri,
         mongodb_db_name=db_name,
         mongodb_collection=collection_name,
+        mongodb_per_guild_db=False,
+        mongodb_guild_db_prefix="",
         banlist_sheet_id=None,
         banlist_range=None,
         banlist_cache_ttl_seconds=300,
@@ -181,4 +183,3 @@ def test_live_mongo_seed_and_smoke() -> None:
     finally:
         collection.delete_many({"seed_tag": seed_tag})
         close_client()
-

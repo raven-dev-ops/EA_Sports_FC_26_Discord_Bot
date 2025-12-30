@@ -18,7 +18,7 @@ def get_link(
     collection: Collection | None = None,
 ) -> dict[str, Any] | None:
     if collection is None:
-        collection = get_collection(record_type=LINK_RECORD_TYPE)
+        collection = get_collection(record_type=LINK_RECORD_TYPE, guild_id=guild_id)
     return collection.find_one(
         {"record_type": LINK_RECORD_TYPE, "guild_id": guild_id, "user_id": user_id}
     )
@@ -32,7 +32,7 @@ def list_links(
     collection: Collection | None = None,
 ) -> list[dict[str, Any]]:
     if collection is None:
-        collection = get_collection(record_type=LINK_RECORD_TYPE)
+        collection = get_collection(record_type=LINK_RECORD_TYPE, guild_id=guild_id)
     query: dict[str, Any] = {"record_type": LINK_RECORD_TYPE, "guild_id": guild_id}
     if verified_only:
         query["verified"] = True
@@ -55,7 +55,7 @@ def upsert_link(
     collection: Collection | None = None,
 ) -> dict[str, Any]:
     if collection is None:
-        collection = get_collection(record_type=LINK_RECORD_TYPE)
+        collection = get_collection(record_type=LINK_RECORD_TYPE, guild_id=guild_id)
     now = datetime.now(timezone.utc)
     filter_doc = {"record_type": LINK_RECORD_TYPE, "guild_id": guild_id, "user_id": user_id}
     update_doc = {
@@ -91,7 +91,7 @@ def delete_link(
     collection: Collection | None = None,
 ) -> bool:
     if collection is None:
-        collection = get_collection(record_type=LINK_RECORD_TYPE)
+        collection = get_collection(record_type=LINK_RECORD_TYPE, guild_id=guild_id)
     result = collection.delete_one(
         {"record_type": LINK_RECORD_TYPE, "guild_id": guild_id, "user_id": user_id}
     )
@@ -105,7 +105,7 @@ def delete_snapshots(
     collection: Collection | None = None,
 ) -> int:
     if collection is None:
-        collection = get_collection(record_type=SNAPSHOT_RECORD_TYPE)
+        collection = get_collection(record_type=SNAPSHOT_RECORD_TYPE, guild_id=guild_id)
     result = collection.delete_many(
         {"record_type": SNAPSHOT_RECORD_TYPE, "guild_id": guild_id, "user_id": user_id}
     )
@@ -124,7 +124,7 @@ def save_snapshot(
     collection: Collection | None = None,
 ) -> dict[str, Any]:
     if collection is None:
-        collection = get_collection(record_type=SNAPSHOT_RECORD_TYPE)
+        collection = get_collection(record_type=SNAPSHOT_RECORD_TYPE, guild_id=guild_id)
     if fetched_at is None:
         fetched_at = datetime.now(timezone.utc)
     doc = {
@@ -160,7 +160,7 @@ def get_latest_snapshot(
     collection: Collection | None = None,
 ) -> dict[str, Any] | None:
     if collection is None:
-        collection = get_collection(record_type=SNAPSHOT_RECORD_TYPE)
+        collection = get_collection(record_type=SNAPSHOT_RECORD_TYPE, guild_id=guild_id)
     return collection.find_one(
         {"record_type": SNAPSHOT_RECORD_TYPE, "guild_id": guild_id, "user_id": user_id},
         sort=[("fetched_at", -1)],

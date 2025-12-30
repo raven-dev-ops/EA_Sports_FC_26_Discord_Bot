@@ -21,6 +21,8 @@ Auto-setup and per-guild IDs require MongoDB:
 - `MONGODB_URI`
 - `MONGODB_DB_NAME` (optional; defaults to `OffsideDiscordBot`)
 - `MONGODB_COLLECTION` (optional; legacy single-collection mode, e.g., `Isaac_Elera`)
+- `MONGODB_PER_GUILD_DB` (optional; when true, each guild uses its own MongoDB database)
+- `MONGODB_GUILD_DB_PREFIX` (optional; prefix for per-guild database names)
 
 ## 3) Configure staff access (recommended)
 

@@ -9,14 +9,14 @@ from database import get_collection
 RECORD_TYPE = "guild_settings"
 
 
-def _collection(collection: Optional[Collection] = None) -> Collection:
-    if collection is None:
-        return get_collection(record_type=RECORD_TYPE)
-    return collection
+def _collection(guild_id: int, collection: Optional[Collection] = None) -> Collection:
+    if collection is not None:
+        return collection
+    return get_collection(record_type=RECORD_TYPE, guild_id=guild_id)
 
 
 def get_guild_config(guild_id: int, *, collection: Optional[Collection] = None) -> dict[str, Any]:
-    col = _collection(collection)
+    col = _collection(guild_id, collection)
     doc = col.find_one({"record_type": RECORD_TYPE, "guild_id": guild_id}) or {}
     return doc.get("settings", {})
 
@@ -27,7 +27,7 @@ def set_guild_config(
     *,
     collection: Optional[Collection] = None,
 ) -> None:
-    col = _collection(collection)
+    col = _collection(guild_id, collection)
     col.update_one(
         {"record_type": RECORD_TYPE, "guild_id": guild_id},
         {"$set": {"settings": settings}},

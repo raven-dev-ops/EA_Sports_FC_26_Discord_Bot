@@ -33,6 +33,8 @@ class Settings:
     mongodb_uri: str | None
     mongodb_db_name: str | None
     mongodb_collection: str | None
+    mongodb_per_guild_db: bool
+    mongodb_guild_db_prefix: str
     banlist_sheet_id: str | None
     banlist_range: str | None
     banlist_cache_ttl_seconds: int
@@ -153,6 +155,8 @@ def load_settings() -> Settings:
     shard_count = _optional_int(constants.SHARD_COUNT_ENV)
     feature_flags = _optional_str_set(constants.FEATURE_FLAGS_ENV)
     staff_role_ids = _optional_int_set(constants.STAFF_ROLE_IDS_ENV)
+    mongodb_per_guild_db = _optional_bool(constants.MONGODB_PER_GUILD_DB_ENV, default=False)
+    mongodb_guild_db_prefix = os.getenv(constants.MONGODB_GUILD_DB_PREFIX_ENV, "").strip()
 
     channel_staff_portal_id = _optional_int(constants.CHANNEL_STAFF_PORTAL_ID_ENV)
     channel_club_portal_id = _optional_int(constants.CHANNEL_CLUB_PORTAL_ID_ENV)
@@ -224,6 +228,8 @@ def load_settings() -> Settings:
         mongodb_uri=_optional_str(constants.MONGODB_URI_ENV),
         mongodb_db_name=_optional_str(constants.MONGODB_DB_NAME_ENV),
         mongodb_collection=_optional_str(constants.MONGODB_COLLECTION_ENV),
+        mongodb_per_guild_db=mongodb_per_guild_db,
+        mongodb_guild_db_prefix=mongodb_guild_db_prefix,
         banlist_sheet_id=_optional_str(constants.BANLIST_SHEET_ID_ENV),
         banlist_range=_optional_str(constants.BANLIST_RANGE_ENV),
         banlist_cache_ttl_seconds=_optional_int_default(
@@ -284,4 +290,6 @@ def summarize_settings(settings: Settings) -> dict[str, object]:
         "mongodb_uri_present": bool(settings.mongodb_uri),
         "mongodb_db_name": settings.mongodb_db_name,
         "mongodb_collection": settings.mongodb_collection,
+        "mongodb_per_guild_db": settings.mongodb_per_guild_db,
+        "mongodb_guild_db_prefix": settings.mongodb_guild_db_prefix,
     }

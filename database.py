@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import logging
 import re
-from typing import Iterable
+from contextlib import contextmanager
+from contextvars import ContextVar
+from typing import Iterable, Iterator
 
 from pymongo import MongoClient
 from pymongo.collection import Collection
@@ -12,6 +14,7 @@ from config import Settings, load_settings
 
 INVALID_DB_NAME_PATTERN = re.compile(r'[\\/\.\s"$\x00]')
 _CLIENT: MongoClient | None = None
+_CURRENT_GUILD_ID: ContextVar[int | None] = ContextVar("offside_current_guild_id", default=None)
 
 DEFAULT_DB_NAME = "OffsideDiscordBot"
 
@@ -67,6 +70,35 @@ def _settings_or_default(settings: Settings | None) -> Settings:
     return settings or load_settings()
 
 
+def get_current_guild_id() -> int | None:
+    return _CURRENT_GUILD_ID.get()
+
+
+def set_current_guild_id(guild_id: int | None) -> None:
+    _CURRENT_GUILD_ID.set(guild_id)
+
+
+@contextmanager
+def guild_db_context(guild_id: int | None) -> Iterator[None]:
+    token = _CURRENT_GUILD_ID.set(guild_id)
+    try:
+        yield
+    finally:
+        _CURRENT_GUILD_ID.reset(token)
+
+
+def _resolve_db_name(settings: Settings, *, guild_id: int | None) -> str:
+    if settings.mongodb_per_guild_db:
+        resolved = guild_id if guild_id is not None else _CURRENT_GUILD_ID.get()
+        if resolved is None:
+            raise RuntimeError(
+                "guild_id is required when MONGODB_PER_GUILD_DB is enabled (set context or pass guild_id)."
+            )
+        prefix = settings.mongodb_guild_db_prefix or ""
+        return f"{prefix}{resolved}"
+    return settings.mongodb_db_name or DEFAULT_DB_NAME
+
+
 def get_client(settings: Settings | None = None) -> MongoClient:
     global _CLIENT
     if _CLIENT is not None:
@@ -77,9 +109,9 @@ def get_client(settings: Settings | None = None) -> MongoClient:
     return _CLIENT
 
 
-def get_database(settings: Settings | None = None) -> Database:
+def get_database(settings: Settings | None = None, *, guild_id: int | None = None) -> Database:
     settings = _settings_or_default(settings)
-    db_name = settings.mongodb_db_name or DEFAULT_DB_NAME
+    db_name = _resolve_db_name(settings, guild_id=guild_id)
     db_name = _normalize_db_name(db_name)
     return get_client(settings)[db_name]
 
@@ -89,6 +121,7 @@ def get_collection(
     *,
     name: str | None = None,
     record_type: str | None = None,
+    guild_id: int | None = None,
 ) -> Collection:
     settings = _settings_or_default(settings)
     if name is not None and record_type is not None:
@@ -105,7 +138,9 @@ def get_collection(
             name = mapped
     if name is None:
         name = settings.mongodb_collection or LEGACY_DEFAULT_COLLECTION_NAME
-    return get_database(settings)[name]
+    db_name = _resolve_db_name(settings, guild_id=guild_id)
+    db = get_client(settings)[_normalize_db_name(db_name)]
+    return db[name]
 
 
 def get_collection_for_record_type(

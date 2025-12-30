@@ -11,7 +11,7 @@ from discord.ext import commands
 
 from config import Settings, load_settings
 from config.settings import summarize_settings
-from database import close_client, get_collection
+from database import close_client, get_collection, guild_db_context, set_current_guild_id
 from interactions.admin_portal import post_admin_portal
 from interactions.club_portal import post_club_portal
 from interactions.coach_portal import post_coach_portal
@@ -92,6 +92,14 @@ async def mark_command_start(interaction: discord.Interaction) -> bool:
     return True
 
 
+async def set_guild_db_context(interaction: discord.Interaction) -> bool:
+    """
+    Bind the current task to the interaction's guild for per-guild database routing.
+    """
+    set_current_guild_id(interaction.guild_id)
+    return True
+
+
 class DiscordLogFilter(logging.Filter):
     def filter(self, record: logging.LogRecord) -> bool:
         return not record.name.startswith(("discord", "asyncio"))
@@ -162,7 +170,12 @@ async def load_cogs(bot: BotLike) -> None:
 
 class OffsideCommandTree(discord.app_commands.CommandTree):
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        for check in (mark_command_start, enforce_safe_inputs, enforce_command_permissions):
+        for check in (
+            set_guild_db_context,
+            mark_command_start,
+            enforce_safe_inputs,
+            enforce_command_permissions,
+        ):
             try:
                 ok = await check(interaction)
             except Exception:
@@ -249,11 +262,27 @@ class OffsideBot(commands.AutoShardedBot):
         test_mode = bool(getattr(self, "test_mode", False))
         actions: list[str] = []
 
-        try:
-            collection = get_collection(settings, record_type="guild_settings")
-        except Exception:
-            logging.exception("Auto-setup skipped (guild=%s): failed to connect to MongoDB.", guild.id)
-            return
+        with guild_db_context(guild.id):
+            if settings.mongodb_per_guild_db:
+                try:
+                    latest = apply_migrations(settings=settings, logger=logging.getLogger(__name__))
+                    logging.info("Schema migrations complete (guild=%s; version=%s).", guild.id, latest)
+                except Exception:
+                    logging.exception("Auto-setup skipped (guild=%s): migrations failed.", guild.id)
+                    return
+                try:
+                    run_startup_recovery(logger=logging.getLogger(__name__))
+                except Exception:
+                    logging.exception("Auto-setup (guild=%s): startup recovery failed.", guild.id)
+
+            try:
+                collection = get_collection(settings, record_type="guild_settings", guild_id=guild.id)
+            except Exception:
+                logging.exception(
+                    "Auto-setup skipped (guild=%s): failed to connect to MongoDB.",
+                    guild.id,
+                )
+                return
 
         existing: dict[str, Any] = {}
         try:
@@ -320,13 +349,14 @@ class OffsideBot(commands.AutoShardedBot):
         settings = getattr(self, "settings", None)
         if settings is None or not settings.mongodb_uri:
             return
-        try:
-            collection = get_collection(settings, record_type="guild_settings")
-        except Exception:
-            return
         for guild in self.guilds:
             me = guild.me
             if me is None or not me.guild_permissions.manage_channels:
+                continue
+
+            try:
+                collection = get_collection(settings, record_type="guild_settings", guild_id=guild.id)
+            except Exception:
                 continue
             existing = {}
             try:
@@ -429,10 +459,6 @@ class OffsideBot(commands.AutoShardedBot):
             return
         if not settings.mongodb_uri:
             return
-        try:
-            collection = get_collection(settings, record_type="fc25_stats_link")
-        except Exception:
-            return
 
         min_age_seconds = max(300, int(settings.fc25_stats_cache_ttl_seconds))
         max_per_guild = max(1, min(10, int(settings.fc25_stats_rate_limit_per_guild) // 2))
@@ -441,6 +467,10 @@ class OffsideBot(commands.AutoShardedBot):
 
         for guild in self.guilds:
             if not fc25_stats_enabled(settings, guild_id=guild.id):
+                continue
+            try:
+                collection = get_collection(settings, record_type="fc25_stats_link", guild_id=guild.id)
+            except Exception:
                 continue
             try:
                 links = list_links(guild.id, verified_only=True, limit=200, collection=collection)
@@ -522,18 +552,23 @@ def main() -> None:
         logging.error("Configuration error: %s", exc)
         raise
     logging.info("Loaded configuration (non-secret): %s", summarize_settings(settings))
-    # Run migrations and recovery before starting the bot.
-    try:
-        latest = apply_migrations(settings=settings, logger=logging.getLogger(__name__))
-        logging.info("Schema migrations complete; current version %s.", latest)
-    except Exception:
-        logging.exception("Failed during migrations.")
-        raise
-    try:
-        run_startup_recovery(logger=logging.getLogger(__name__))
-    except Exception:
-        logging.exception("Startup recovery encountered an error.")
-        raise
+    if settings.mongodb_per_guild_db:
+        logging.info(
+            "Per-guild MongoDB mode enabled; migrations/recovery will run per guild on startup/join."
+        )
+    else:
+        # Run migrations and recovery before starting the bot (shared DB mode).
+        try:
+            latest = apply_migrations(settings=settings, logger=logging.getLogger(__name__))
+            logging.info("Schema migrations complete; current version %s.", latest)
+        except Exception:
+            logging.exception("Failed during migrations.")
+            raise
+        try:
+            run_startup_recovery(logger=logging.getLogger(__name__))
+        except Exception:
+            logging.exception("Startup recovery encountered an error.")
+            raise
 
     bot = build_bot(settings)
     install_signal_handlers(bot)

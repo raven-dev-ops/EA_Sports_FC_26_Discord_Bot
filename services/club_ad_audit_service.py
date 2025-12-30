@@ -23,7 +23,7 @@ def record_club_ad_action(
     collection: Collection | None = None,
 ) -> dict[str, Any]:
     if collection is None:
-        collection = get_collection(record_type=RECORD_TYPE)
+        collection = get_collection(record_type=RECORD_TYPE, guild_id=guild_id)
     now = datetime.now(timezone.utc)
     doc = {
         "record_type": RECORD_TYPE,

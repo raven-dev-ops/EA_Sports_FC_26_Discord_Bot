@@ -33,6 +33,8 @@ def _settings() -> Settings:
         mongodb_uri="mongodb://localhost",
         mongodb_db_name="testdb",
         mongodb_collection="testcol",
+        mongodb_per_guild_db=False,
+        mongodb_guild_db_prefix="",
         banlist_sheet_id=None,
         banlist_range=None,
         banlist_cache_ttl_seconds=300,

@@ -275,9 +275,9 @@ async def upsert_premium_coaches_report(
         return
 
     try:
-        cycle_collection = get_collection(settings, record_type="tournament_cycle")
-        team_rosters = get_collection(settings, record_type="team_roster")
-        roster_players = get_collection(settings, record_type="roster_player")
+        cycle_collection = get_collection(settings, record_type="tournament_cycle", guild_id=guild_id)
+        team_rosters = get_collection(settings, record_type="team_roster", guild_id=guild_id)
+        roster_players = get_collection(settings, record_type="roster_player", guild_id=guild_id)
     except Exception:
         return
 
