@@ -374,7 +374,11 @@ class SetCoachTierModal(discord.ui.Modal, title="Set Coach Tier"):
     )
 
     async def on_submit(self, interaction: discord.Interaction) -> None:
-        if not is_staff_user(interaction.user, getattr(interaction.client, "settings", None)):
+        if not is_staff_user(
+            interaction.user,
+            getattr(interaction.client, "settings", None),
+            guild_id=getattr(interaction, "guild_id", None),
+        ):
             await interaction.response.send_message("Not authorized.", ephemeral=True)
             return
         coach_id = _parse_discord_id(self.coach_id.value)
@@ -417,7 +421,11 @@ class UnlockRosterManagerModal(discord.ui.Modal, title="Unlock Roster"):
     )
 
     async def on_submit(self, interaction: discord.Interaction) -> None:
-        if not is_staff_user(interaction.user, getattr(interaction.client, "settings", None)):
+        if not is_staff_user(
+            interaction.user,
+            getattr(interaction.client, "settings", None),
+            guild_id=getattr(interaction, "guild_id", None),
+        ):
             await interaction.response.send_message("Not authorized.", ephemeral=True)
             return
         coach_id = _parse_discord_id(self.coach_id.value)
@@ -455,7 +463,11 @@ class DeleteRosterManagerModal(discord.ui.Modal, title="Delete Roster"):
     )
 
     async def on_submit(self, interaction: discord.Interaction) -> None:
-        if not is_staff_user(interaction.user, getattr(interaction.client, "settings", None)):
+        if not is_staff_user(
+            interaction.user,
+            getattr(interaction.client, "settings", None),
+            guild_id=getattr(interaction, "guild_id", None),
+        ):
             await interaction.response.send_message("Not authorized.", ephemeral=True)
             return
 
@@ -544,13 +556,21 @@ class ManagerPortalView(SafeView):
             self.add_item(button)
 
     async def on_set_tier(self, interaction: discord.Interaction) -> None:
-        if not is_staff_user(interaction.user, getattr(interaction.client, "settings", None)):
+        if not is_staff_user(
+            interaction.user,
+            getattr(interaction.client, "settings", None),
+            guild_id=getattr(interaction, "guild_id", None),
+        ):
             await interaction.response.send_message("Not authorized.", ephemeral=True)
             return
         await interaction.response.send_modal(SetCoachTierModal())
 
     async def on_unlock(self, interaction: discord.Interaction) -> None:
-        if not is_staff_user(interaction.user, getattr(interaction.client, "settings", None)):
+        if not is_staff_user(
+            interaction.user,
+            getattr(interaction.client, "settings", None),
+            guild_id=getattr(interaction, "guild_id", None),
+        ):
             await interaction.response.send_message("Not authorized.", ephemeral=True)
             return
         await interaction.response.send_modal(UnlockRosterManagerModal())
@@ -563,7 +583,7 @@ class ManagerPortalView(SafeView):
                 ephemeral=True,
             )
             return
-        if not is_staff_user(interaction.user, settings):
+        if not is_staff_user(interaction.user, settings, guild_id=getattr(interaction, "guild_id", None)):
             await interaction.response.send_message("Not authorized.", ephemeral=True)
             return
         guild = interaction.guild
@@ -597,7 +617,7 @@ class ManagerPortalView(SafeView):
                 ephemeral=True,
             )
             return
-        if not is_staff_user(interaction.user, settings):
+        if not is_staff_user(interaction.user, settings, guild_id=getattr(interaction, "guild_id", None)):
             await interaction.response.send_message("Not authorized.", ephemeral=True)
             return
         guild = interaction.guild
@@ -649,7 +669,7 @@ class ManagerPortalView(SafeView):
                 ephemeral=True,
             )
             return
-        if not is_staff_user(interaction.user, settings):
+        if not is_staff_user(interaction.user, settings, guild_id=getattr(interaction, "guild_id", None)):
             await interaction.response.send_message("Not authorized.", ephemeral=True)
             return
         guild = interaction.guild
@@ -684,7 +704,7 @@ class ManagerPortalView(SafeView):
                 ephemeral=True,
             )
             return
-        if not is_staff_user(interaction.user, settings):
+        if not is_staff_user(interaction.user, settings, guild_id=getattr(interaction, "guild_id", None)):
             await interaction.response.send_message("Not authorized.", ephemeral=True)
             return
         guild = interaction.guild
@@ -878,7 +898,7 @@ class ManagerPortalView(SafeView):
                 ephemeral=True,
             )
             return
-        if not is_staff_user(interaction.user, settings):
+        if not is_staff_user(interaction.user, settings, guild_id=getattr(interaction, "guild_id", None)):
             await interaction.response.send_message("Not authorized.", ephemeral=True)
             return
         guild = interaction.guild
@@ -900,7 +920,11 @@ class ManagerPortalView(SafeView):
         await post_manager_portal(interaction.client, guilds=[guild])
 
     async def on_delete_roster(self, interaction: discord.Interaction) -> None:
-        if not is_staff_user(interaction.user, getattr(interaction.client, "settings", None)):
+        if not is_staff_user(
+            interaction.user,
+            getattr(interaction.client, "settings", None),
+            guild_id=getattr(interaction, "guild_id", None),
+        ):
             await interaction.response.send_message("Not authorized.", ephemeral=True)
             return
         perms = getattr(interaction.user, "guild_permissions", None)

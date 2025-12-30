@@ -376,7 +376,7 @@ class RecruitPortalView(SafeView):
         self, interaction: discord.Interaction, button: discord.ui.Button
     ) -> None:
         settings = getattr(interaction.client, "settings", None)
-        if not is_staff_user(interaction.user, settings):
+        if not is_staff_user(interaction.user, settings, guild_id=getattr(interaction, "guild_id", None)):
             await interaction.response.send_message("Not authorized.", ephemeral=True)
             return
         guild = interaction.guild

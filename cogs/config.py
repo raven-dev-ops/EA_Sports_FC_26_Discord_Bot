@@ -47,7 +47,7 @@ class ConfigCog(commands.Cog):
 
     @app_commands.command(name="config_view", description="View current bot configuration (non-secret).")
     async def config_view(self, interaction: discord.Interaction) -> None:
-        if not is_staff_user(interaction.user, self.settings):
+        if not is_staff_user(interaction.user, self.settings, guild_id=getattr(interaction, "guild_id", None)):
             await interaction.response.send_message("Not authorized.", ephemeral=True)
             return
         settings = getattr(self.bot, "settings", None)
@@ -64,7 +64,7 @@ class ConfigCog(commands.Cog):
         name="config_guild_view", description="View per-guild overrides (staff only)."
     )
     async def config_guild_view(self, interaction: discord.Interaction) -> None:
-        if not is_staff_user(interaction.user, self.settings):
+        if not is_staff_user(interaction.user, self.settings, guild_id=getattr(interaction, "guild_id", None)):
             await interaction.response.send_message("Not authorized.", ephemeral=True)
             return
         guild = interaction.guild
@@ -87,7 +87,7 @@ class ConfigCog(commands.Cog):
     async def config_guild_set(
         self, interaction: discord.Interaction, field: str, value: str
     ) -> None:
-        if not is_staff_user(interaction.user, self.settings):
+        if not is_staff_user(interaction.user, self.settings, guild_id=getattr(interaction, "guild_id", None)):
             await interaction.response.send_message("Not authorized.", ephemeral=True)
             return
         guild = interaction.guild
@@ -110,7 +110,7 @@ class ConfigCog(commands.Cog):
     @app_commands.command(name="config_set", description="Set a runtime config value (staff only).")
     @app_commands.describe(field="Config field", value="New value")
     async def config_set(self, interaction: discord.Interaction, field: str, value: str) -> None:
-        if not is_staff_user(interaction.user, self.settings):
+        if not is_staff_user(interaction.user, self.settings, guild_id=getattr(interaction, "guild_id", None)):
             await interaction.response.send_message("Not authorized.", ephemeral=True)
             return
         field = field.strip()

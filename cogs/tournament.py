@@ -19,7 +19,7 @@ class TournamentCog(commands.Cog):
         self.settings = getattr(bot, "settings", None)
 
     def _require_staff(self, interaction: discord.Interaction) -> bool:
-        if is_staff_user(interaction.user, self.settings):
+        if is_staff_user(interaction.user, self.settings, guild_id=getattr(interaction, "guild_id", None)):
             return True
         return False
 

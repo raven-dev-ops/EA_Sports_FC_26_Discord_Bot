@@ -126,7 +126,7 @@ class CoachPortalView(SafeView):
 
     async def on_repost_portal(self, interaction: discord.Interaction) -> None:
         settings = getattr(interaction.client, "settings", None)
-        if not is_staff_user(interaction.user, settings):
+        if not is_staff_user(interaction.user, settings, guild_id=getattr(interaction, "guild_id", None)):
             await interaction.response.send_message("Not authorized.", ephemeral=True)
             return
         guild = interaction.guild
