@@ -317,3 +317,91 @@ async def test_permissions_page_renders(monkeypatch) -> None:
         assert "staff-portal" in html
     finally:
         await client.close()
+
+
+@pytest.mark.asyncio
+async def test_overview_page_renders(monkeypatch) -> None:
+    from aiohttp.test_utils import TestClient, TestServer
+
+    monkeypatch.setattr(database, "MongoClient", mongomock.MongoClient)
+    monkeypatch.setattr(database, "_CLIENT", None)
+
+    async def fake_bot_get_json(*_args, url: str, **_kwargs):
+        if url.endswith("/guilds/123"):
+            return {"id": "123", "name": "Managed"}
+        if url.endswith("/guilds/123/roles"):
+            return [
+                {"id": "123", "name": "@everyone", "permissions": "0", "position": 0},
+                {"id": "11", "name": "Coach", "permissions": "0", "position": 1},
+                {"id": "12", "name": "Coach Premium", "permissions": "0", "position": 2},
+                {"id": "13", "name": "Coach Premium+", "permissions": "0", "position": 3},
+            ]
+        if url.endswith("/guilds/123/channels"):
+            return [
+                {"id": "20", "type": 0, "name": "staff-portal", "position": 1, "permission_overwrites": []},
+                {"id": "21", "type": 0, "name": "club-managers-portal", "position": 2, "permission_overwrites": []},
+                {"id": "22", "type": 0, "name": "club-portal", "position": 3, "permission_overwrites": []},
+                {"id": "23", "type": 0, "name": "coach-portal", "position": 4, "permission_overwrites": []},
+                {"id": "24", "type": 0, "name": "recruit-portal", "position": 5, "permission_overwrites": []},
+                {"id": "30", "type": 0, "name": "staff-monitor", "position": 6, "permission_overwrites": []},
+                {"id": "31", "type": 0, "name": "roster-listing", "position": 7, "permission_overwrites": []},
+                {"id": "32", "type": 0, "name": "recruit-listing", "position": 8, "permission_overwrites": []},
+                {"id": "33", "type": 0, "name": "club-listing", "position": 9, "permission_overwrites": []},
+                {"id": "34", "type": 0, "name": "premium-coaches", "position": 10, "permission_overwrites": []},
+            ]
+        if "/channels/" in url and "/messages" in url:
+            return [{"id": "m1", "author": {"id": "1"}}]
+        raise AssertionError(f"Unexpected bot Discord URL: {url}")
+
+    monkeypatch.setattr(dashboard, "_discord_bot_get_json", fake_bot_get_json)
+    monkeypatch.setattr(
+        dashboard,
+        "get_guild_config",
+        lambda _gid: {
+            "role_coach_id": 11,
+            "role_coach_premium_id": 12,
+            "role_coach_premium_plus_id": 13,
+            "channel_staff_portal_id": 20,
+            "channel_manager_portal_id": 21,
+            "channel_club_portal_id": 22,
+            "channel_coach_portal_id": 23,
+            "channel_recruit_portal_id": 24,
+            "channel_staff_monitor_id": 30,
+            "channel_roster_listing_id": 31,
+            "channel_recruit_listing_id": 32,
+            "channel_club_listing_id": 33,
+            "channel_premium_coaches_id": 34,
+        },
+    )
+
+    app = dashboard.create_app(settings=_settings())
+    sessions = app["session_collection"]
+    sessions.insert_one(
+        {
+            "_id": "sess1",
+            "created_at": time.time(),
+            "expires_at": datetime.now(timezone.utc) + timedelta(hours=6),
+            "user": {"id": "1", "username": "alice"},
+            "owner_guilds": [{"id": "123", "name": "Managed"}],
+            "all_guilds": [{"id": "123", "name": "Managed"}],
+            "csrf_token": "csrf_good",
+        }
+    )
+
+    client = TestClient(TestServer(app))
+    await client.start_server()
+    try:
+        resp = await client.get(
+            "/guild/123/overview",
+            headers={"Cookie": f"{dashboard.COOKIE_NAME}=sess1"},
+            allow_redirects=False,
+        )
+        assert resp.status == 200
+        html = await resp.text()
+        assert "Setup checklist" in html
+        assert "Quick actions" in html
+        assert "/api/guild/123/ops/run_setup" in html
+        assert "/api/guild/123/ops/repost_portals" in html
+        assert "Dashboard and listing embeds detected." in html
+    finally:
+        await client.close()

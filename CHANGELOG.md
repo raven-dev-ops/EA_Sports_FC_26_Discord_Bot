@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.31] - 2025-12-30
+
+### Added
+- Dashboard: guild overview page (`/guild/{guild_id}/overview`) with setup checklist, quick actions, and key stats.
+
+### Changed
+- Dashboard: server cards and install flow default to Overview.
+
 ## [0.2.30] - 2025-12-30
 
 ### Added

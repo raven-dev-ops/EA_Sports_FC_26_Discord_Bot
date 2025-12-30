@@ -164,6 +164,8 @@ def _html_page(*, title: str, body: str) -> str:
 
 def _guild_section_url(guild_id: str, *, section: str) -> str:
     gid = urllib.parse.quote(str(guild_id))
+    if section == "overview":
+        return f"/guild/{gid}/overview"
     if section == "settings":
         return f"/guild/{gid}/settings"
     if section == "permissions":
@@ -215,6 +217,7 @@ def _app_shell(
 
     nav_guild = str(selected_guild_id or "")
     nav_items = [
+        ("Overview", _guild_section_url(nav_guild, section="overview"), section == "overview"),
         ("Analytics", _guild_section_url(nav_guild, section="analytics"), section == "analytics"),
         ("Settings", _guild_section_url(nav_guild, section="settings"), section == "settings"),
         ("Permissions", _guild_section_url(nav_guild, section="permissions"), section == "permissions"),
@@ -796,7 +799,8 @@ async def index(request: web.Request) -> web.Response:
         if eligible:
             actions = (
                 f"<div style='margin-top:10px; display:flex; gap:10px; flex-wrap:wrap;'>"
-                f"<a class='btn' href='/guild/{gid_str}'>Analytics</a>"
+                f"<a class='btn' href='/guild/{gid_str}/overview'>Overview</a>"
+                f"<a class='btn secondary' href='/guild/{gid_str}'>Analytics</a>"
                 f"<a class='btn secondary' href='/guild/{gid_str}/settings'>Settings</a>"
                 f"<a class='btn secondary' href='/app/billing?guild_id={gid_str}'>Billing</a>"
                 f"<a class='btn blue' href='/install?guild_id={gid_str}'>Invite bot</a>"
@@ -839,7 +843,7 @@ async def index(request: web.Request) -> web.Response:
     body = _app_shell(
         settings=settings,
         session=session,
-        section="analytics",
+        section="overview",
         selected_guild_id=selected_guild_id,
         installed=installed,
         content=content,
@@ -958,7 +962,7 @@ async def install(request: web.Request) -> web.Response:
     if requested_guild_id.isdigit():
         extra["guild_id"] = requested_guild_id
         extra["disable_guild_select"] = "true"
-        next_path = f"/guild/{requested_guild_id}"
+        next_path = f"/guild/{requested_guild_id}/overview"
 
     states: Collection = request.app["state_collection"]
     expires_at = _utc_now() + timedelta(seconds=STATE_TTL_SECONDS)
@@ -1592,6 +1596,350 @@ async def guild_page(request: web.Request) -> web.Response:
                 settings=settings,
                 session=session,
                 section="analytics",
+                selected_guild_id=guild_id,
+                installed=installed,
+                content=body,
+            ),
+        ),
+        content_type="text/html",
+    )
+
+
+async def _channel_has_recent_bot_message(
+    http: ClientSession,
+    *,
+    bot_token: str,
+    channel_id: int,
+    bot_user_id: int,
+    limit: int = 10,
+) -> tuple[bool | None, str | None]:
+    url = f"{DISCORD_API_BASE}/channels/{channel_id}/messages?limit={int(limit)}"
+    try:
+        data = await _discord_bot_get_json(http, url=url, bot_token=bot_token)
+    except web.HTTPForbidden as exc:
+        return None, exc.text or "Forbidden."
+    except web.HTTPNotFound:
+        return False, "Channel not found."
+    except web.HTTPException as exc:
+        return None, exc.text or str(exc)
+    except Exception as exc:
+        return None, str(exc)
+
+    if not isinstance(data, list):
+        return None, "Discord returned an invalid messages payload."
+    for message in data:
+        if not isinstance(message, dict):
+            continue
+        author = message.get("author")
+        if not isinstance(author, dict):
+            continue
+        if str(author.get("id")) == str(bot_user_id):
+            return True, None
+    return False, None
+
+
+async def guild_overview_page(request: web.Request) -> web.Response:
+    session = _require_session(request)
+    settings: Settings = request.app["settings"]
+
+    guild_id_str = request.match_info["guild_id"]
+    guild_id = _require_owned_guild(session, guild_id=guild_id_str)
+
+    invite_href = _invite_url(settings, guild_id=str(guild_id), disable_guild_select=True)
+    installed, install_error = await _detect_bot_installed(request, guild_id=guild_id)
+
+    cfg: dict[str, Any] = {}
+    config_error: str | None = None
+    if settings.mongodb_uri:
+        try:
+            cfg = get_guild_config(guild_id)
+        except Exception as exc:
+            cfg = {}
+            config_error = str(exc)
+    else:
+        config_error = "MongoDB is not configured."
+
+    roles: list[dict[str, Any]] = []
+    channels: list[dict[str, Any]] = []
+    metadata_error: str | None = None
+    if installed is True:
+        try:
+            roles, channels = await _get_guild_discord_metadata(request, guild_id=guild_id)
+        except web.HTTPException as exc:
+            metadata_error = exc.text or str(exc)
+        except Exception as exc:
+            metadata_error = str(exc)
+
+    roles_by_id: dict[int, dict[str, Any]] = {}
+    for role_doc in roles:
+        rid = _parse_int(role_doc.get("id"))
+        if rid is not None:
+            roles_by_id[rid] = role_doc
+
+    channel_ids: set[int] = set()
+    for channel_doc in channels:
+        cid = _parse_int(channel_doc.get("id"))
+        if cid is not None:
+            channel_ids.add(cid)
+
+    def _badge(label: str, kind: str) -> str:
+        return f"<span class='badge {kind}'>{_escape_html(label)}</span>"
+
+    def _check_row(*, name: str, status: str, details: str, href: str) -> str:
+        return (
+            "<tr>"
+            f"<td><strong>{_escape_html(name)}</strong></td>"
+            f"<td>{status}</td>"
+            f"<td class='muted'>{_escape_html(details)}</td>"
+            f"<td><a href=\"{_escape_html(href)}\">Fix</a></td>"
+            "</tr>"
+        )
+
+    install_status = _badge("OK", "ok") if installed is True else _badge("WARN", "warn")
+    install_details = "Installed and reachable via bot token."
+    install_fix = f"/guild/{guild_id}/settings"
+    if installed is False:
+        install_details = install_error or "Bot is not installed in this server yet."
+        install_fix = invite_href
+    elif installed is None:
+        install_status = _badge("UNKNOWN", "warn")
+        install_details = install_error or "Unable to verify install status."
+        install_fix = f"/guild/{guild_id}/permissions"
+
+    missing_role_fields: list[str] = []
+    missing_roles_in_discord: list[str] = []
+    for field, _label in GUILD_COACH_ROLE_FIELDS:
+        value = _parse_int(cfg.get(field))
+        if value is None:
+            missing_role_fields.append(field)
+        elif roles and value not in roles_by_id:
+            missing_roles_in_discord.append(field)
+
+    roles_status = _badge("OK", "ok")
+    roles_details = "All required coach roles are configured."
+    if config_error:
+        roles_status = _badge("UNKNOWN", "warn")
+        roles_details = f"Settings unavailable: {config_error}"
+    elif installed is not True:
+        roles_status = _badge("WARN", "warn")
+        roles_details = "Install the bot to validate roles."
+    elif metadata_error:
+        roles_status = _badge("UNKNOWN", "warn")
+        roles_details = f"Unable to load Discord roles: {metadata_error}"
+    elif missing_role_fields or missing_roles_in_discord:
+        roles_status = _badge("WARN", "warn")
+        parts: list[str] = []
+        if missing_role_fields:
+            parts.append(f"Missing in settings: {', '.join(missing_role_fields)}")
+        if missing_roles_in_discord:
+            parts.append(f"Not found in Discord: {', '.join(missing_roles_in_discord)}")
+        roles_details = " · ".join(parts) or "Roles are not fully configured."
+
+    required_channel_fields = [
+        (field, label)
+        for field, label in GUILD_CHANNEL_FIELDS
+        if field != "channel_staff_monitor_id" or settings.test_mode
+    ]
+    missing_channel_fields: list[str] = []
+    missing_channels_in_discord: list[str] = []
+    for field, _label in required_channel_fields:
+        value = _parse_int(cfg.get(field))
+        if value is None:
+            missing_channel_fields.append(field)
+        elif channels and value not in channel_ids:
+            missing_channels_in_discord.append(field)
+
+    channels_status = _badge("OK", "ok")
+    channels_details = "All required channels are configured."
+    if config_error:
+        channels_status = _badge("UNKNOWN", "warn")
+        channels_details = f"Settings unavailable: {config_error}"
+    elif installed is not True:
+        channels_status = _badge("WARN", "warn")
+        channels_details = "Install the bot to validate channels."
+    elif metadata_error:
+        channels_status = _badge("UNKNOWN", "warn")
+        channels_details = f"Unable to load Discord channels: {metadata_error}"
+    elif missing_channel_fields or missing_channels_in_discord:
+        channels_status = _badge("WARN", "warn")
+        parts = []
+        if missing_channel_fields:
+            parts.append(f"Missing in settings: {', '.join(missing_channel_fields)}")
+        if missing_channels_in_discord:
+            parts.append(f"Not found in Discord: {', '.join(missing_channels_in_discord)}")
+        channels_details = " · ".join(parts) or "Channels are not fully configured."
+
+    posts_status = _badge("OK", "ok")
+    posts_details = "Dashboard and listing embeds detected."
+    if config_error:
+        posts_status = _badge("UNKNOWN", "warn")
+        posts_details = f"Settings unavailable: {config_error}"
+    elif installed is not True:
+        posts_status = _badge("WARN", "warn")
+        posts_details = "Install the bot to validate posted embeds."
+    else:
+        http = request.app.get("http")
+        if not isinstance(http, ClientSession):
+            posts_status = _badge("UNKNOWN", "warn")
+            posts_details = "Dashboard HTTP client is not ready yet."
+        else:
+            bot_user_id = int(settings.discord_application_id)
+            post_fields = [
+                "channel_staff_portal_id",
+                "channel_manager_portal_id",
+                "channel_club_portal_id",
+                "channel_coach_portal_id",
+                "channel_recruit_portal_id",
+                "channel_roster_listing_id",
+                "channel_recruit_listing_id",
+                "channel_club_listing_id",
+                "channel_premium_coaches_id",
+            ]
+            missing_posts: list[str] = []
+            unknown_posts: list[str] = []
+            missing_config: list[str] = []
+            for field in post_fields:
+                channel_id = _parse_int(cfg.get(field))
+                if channel_id is None:
+                    missing_config.append(field)
+                    continue
+                ok, err = await _channel_has_recent_bot_message(
+                    http,
+                    bot_token=settings.discord_token,
+                    channel_id=channel_id,
+                    bot_user_id=bot_user_id,
+                    limit=10,
+                )
+                if ok is True:
+                    continue
+                if ok is False:
+                    missing_posts.append(field)
+                else:
+                    unknown_posts.append(field)
+                    if err:
+                        posts_details = f"Unable to read messages in some channels: {err}"
+
+            if missing_config:
+                posts_status = _badge("WARN", "warn")
+                posts_details = f"Missing channel settings: {', '.join(missing_config)}"
+            elif unknown_posts:
+                posts_status = _badge("UNKNOWN", "warn")
+                posts_details = "Unable to verify some channels (missing Read Message History?)."
+            elif missing_posts:
+                posts_status = _badge("WARN", "warn")
+                posts_details = f"Missing embeds in: {', '.join(missing_posts)}"
+
+    checks = "\n".join(
+        [
+            _check_row(
+                name="Bot installed",
+                status=install_status,
+                details=install_details,
+                href=install_fix,
+            ),
+            _check_row(
+                name="Coach roles",
+                status=roles_status,
+                details=roles_details,
+                href=f"/guild/{guild_id}/settings",
+            ),
+            _check_row(
+                name="Channels",
+                status=channels_status,
+                details=channels_details,
+                href=f"/guild/{guild_id}/settings",
+            ),
+            _check_row(
+                name="Portals posted",
+                status=posts_status,
+                details=posts_details,
+                href=f"/guild/{guild_id}/ops",
+            ),
+        ]
+    )
+
+    db_name = "not_configured"
+    submissions_display = "—"
+    approvals_display = "—"
+    tournaments_display = "—"
+    if settings.mongodb_uri:
+        analytics = get_guild_analytics(settings, guild_id=guild_id)
+        db_name = analytics.db_name
+        submissions_display = str(int(analytics.record_type_counts.get("submission_message", 0)))
+        tournaments_display = str(int(analytics.record_type_counts.get("tournament", 0)))
+        try:
+            roster_audits = get_collection(settings, record_type="roster_audit", guild_id=guild_id)
+            approvals_display = str(
+                int(roster_audits.count_documents({"record_type": "roster_audit", "action": "APPROVED"}))
+            )
+        except Exception:
+            approvals_display = "0"
+
+    disabled_attr = "disabled" if installed is False else ""
+    actions_block = ""
+    if not settings.mongodb_uri:
+        actions_block = "<div class='card'><p class='muted'>MongoDB is not configured; ops actions are unavailable.</p></div>"
+    else:
+        actions_block = f"""
+          <div class="card">
+            <div><strong>Quick actions</strong></div>
+            <div class="muted" style="margin-top:8px;">Run setup and repost portals from the bot worker.</div>
+            <div style="margin-top:10px; display:flex; gap:10px; flex-wrap:wrap;">
+              <form method="post" action="/api/guild/{guild_id}/ops/run_setup">
+                <input type="hidden" name="csrf" value="{_escape_html(session.csrf_token)}" />
+                <button class="btn" type="submit" {disabled_attr}>Run setup now</button>
+              </form>
+              <form method="post" action="/api/guild/{guild_id}/ops/repost_portals">
+                <input type="hidden" name="csrf" value="{_escape_html(session.csrf_token)}" />
+                <button class="btn secondary" type="submit" {disabled_attr}>Repost portals</button>
+              </form>
+              <a class="btn secondary" href="/guild/{guild_id}/settings">Open settings</a>
+            </div>
+          </div>
+        """
+
+    body = f"""
+      <h1 style="margin-top:0;">Overview</h1>
+      <div class="row">
+        <div class="card">
+          <div><strong>Guild</strong></div>
+          <div class="muted">ID: <code>{guild_id}</code></div>
+          <div class="muted">MongoDB DB: <code>{_escape_html(db_name)}</code></div>
+          <div class="muted">Test mode: <code>{'true' if settings.test_mode else 'false'}</code></div>
+        </div>
+        {actions_block}
+      </div>
+      <div class="card">
+        <h2 style="margin-top:0;">Setup checklist</h2>
+        <table>
+          <thead><tr><th>item</th><th>status</th><th>details</th><th></th></tr></thead>
+          <tbody>{checks}</tbody>
+        </table>
+      </div>
+      <div class="row">
+        <div class="card">
+          <div class="muted">Roster submissions</div>
+          <div style="font-size:32px; font-weight:800;">{_escape_html(submissions_display)}</div>
+        </div>
+        <div class="card">
+          <div class="muted">Approvals</div>
+          <div style="font-size:32px; font-weight:800;">{_escape_html(approvals_display)}</div>
+        </div>
+        <div class="card">
+          <div class="muted">Tournaments created</div>
+          <div style="font-size:32px; font-weight:800;">{_escape_html(tournaments_display)}</div>
+        </div>
+      </div>
+      <p class="muted">Need help? Use the Permissions and Ops pages to troubleshoot setup.</p>
+    """
+
+    return web.Response(
+        text=_html_page(
+            title="Overview",
+            body=_app_shell(
+                settings=settings,
+                session=session,
+                section="overview",
                 selected_guild_id=guild_id,
                 installed=installed,
                 content=body,
@@ -2575,6 +2923,7 @@ def create_app(*, settings: Settings | None = None) -> web.Application:
     app.router.add_get("/app/billing/success", billing_success)
     app.router.add_get("/app/billing/cancel", billing_cancel)
     app.router.add_get("/guild/{guild_id}", guild_page)
+    app.router.add_get("/guild/{guild_id}/overview", guild_overview_page)
     app.router.add_get("/guild/{guild_id}/permissions", guild_permissions_page)
     app.router.add_get("/guild/{guild_id}/audit", guild_audit_page)
     app.router.add_get("/guild/{guild_id}/audit.csv", guild_audit_csv)
