@@ -199,10 +199,11 @@ def _app_shell(
         for g in session.owner_guilds
     )
 
+    guild_plan: str | None = None
     plan_badge = ""
     if selected_guild_id is not None:
-        plan = entitlements_service.get_guild_plan(settings, guild_id=selected_guild_id)
-        plan_badge = f"<span class='badge {plan}'>{_escape_html(plan.upper())}</span>"
+        guild_plan = entitlements_service.get_guild_plan(settings, guild_id=selected_guild_id)
+        plan_badge = f"<span class='badge {guild_plan}'>{_escape_html(guild_plan.upper())}</span>"
 
     install_badge = ""
     invite_cta = ""
@@ -216,15 +217,21 @@ def _app_shell(
             invite_cta = f"<a class='btn blue' href=\"{invite_href}\">Invite bot</a>"
 
     nav_guild = str(selected_guild_id or "")
+    is_pro = guild_plan == entitlements_service.PLAN_PRO
     nav_items = [
         ("Overview", _guild_section_url(nav_guild, section="overview"), section == "overview"),
         ("Analytics", _guild_section_url(nav_guild, section="analytics"), section == "analytics"),
         ("Settings", _guild_section_url(nav_guild, section="settings"), section == "settings"),
         ("Permissions", _guild_section_url(nav_guild, section="permissions"), section == "permissions"),
-        ("Audit Log", _guild_section_url(nav_guild, section="audit"), section == "audit"),
-        ("Ops", _guild_section_url(nav_guild, section="ops"), section == "ops"),
-        ("Billing", _guild_section_url(nav_guild, section="billing"), section == "billing"),
     ]
+    if is_pro:
+        nav_items.append(("Audit Log", _guild_section_url(nav_guild, section="audit"), section == "audit"))
+    nav_items.extend(
+        [
+            ("Ops", _guild_section_url(nav_guild, section="ops"), section == "ops"),
+            ("Billing", _guild_section_url(nav_guild, section="billing"), section == "billing"),
+        ]
+    )
     nav_links = "\n".join(
         f"<a class=\"navlink{' active' if active else ''}\" href=\"{href}\">{_escape_html(label)}</a>"
         for label, href, active in nav_items
@@ -267,6 +274,97 @@ def _app_shell(
       </div>
     """
     return layout
+
+
+def _pro_locked_page(
+    *,
+    settings: Settings,
+    session: SessionData,
+    guild_id: int,
+    installed: bool | None,
+    section: str,
+    title: str,
+    message: str,
+) -> web.Response:
+    upgrade_href = f"/app/upgrade?guild_id={guild_id}&from=locked&section={urllib.parse.quote(section)}"
+    benefits = [
+        ("Premium coach tiers", "Coach Premium and Coach Premium+ roles, caps, and workflow."),
+        ("Premium Coaches report", "Public listing embed of Premium coaches and openings."),
+        ("FC stats integration", "FC25/FC26 stats lookup, caching, and richer player profiles."),
+        ("Banlist integration", "Google Sheets-driven banlist checks and moderation tooling."),
+        ("Tournament automation", "Automated brackets, fixtures, and match reporting workflows."),
+    ]
+    benefits_html = "\n".join(
+        f"<li><strong>{_escape_html(name)}</strong> — {_escape_html(desc)}</li>"
+        for name, desc in benefits
+    )
+    body = f"""
+      <h1 style="margin-top:0;">{_escape_html(title)}</h1>
+      <div class="card">
+        <div style="display:flex; gap:10px; align-items:center; justify-content:space-between;">
+          <div><strong>Pro feature</strong></div>
+          <span class="badge warn">LOCKED</span>
+        </div>
+        <p class="muted" style="margin-top:8px;">{_escape_html(message)}</p>
+        <div style="margin-top:10px; display:flex; gap:10px; flex-wrap:wrap;">
+          <a class="btn blue" href="{_escape_html(upgrade_href)}">Upgrade to Pro</a>
+          <a class="btn secondary" href="/app/billing?guild_id={guild_id}">Billing</a>
+          <a class="btn secondary" href="/guild/{guild_id}/overview">Back to overview</a>
+        </div>
+      </div>
+      <div class="card">
+        <h2 style="margin-top:0;">What you get with Pro</h2>
+        <ul>
+          {benefits_html}
+        </ul>
+      </div>
+    """
+    return web.Response(
+        text=_html_page(
+            title=title,
+            body=_app_shell(
+                settings=settings,
+                session=session,
+                section=section,
+                selected_guild_id=guild_id,
+                installed=installed,
+                content=body,
+            ),
+        ),
+        content_type="text/html",
+    )
+
+
+async def upgrade_redirect(request: web.Request) -> web.Response:
+    session = _require_session(request)
+    settings: Settings = request.app["settings"]
+
+    gid = request.query.get("guild_id", "").strip()
+    guild_id = _require_owned_guild(session, guild_id=gid) if gid else 0
+    if not guild_id:
+        raise web.HTTPBadRequest(text="Missing guild_id.")
+
+    from_value = str(request.query.get("from") or "").strip() or "unknown"
+    section = str(request.query.get("section") or "").strip() or "unknown"
+    try:
+        actor_id = _parse_int(session.user.get("id"))
+        actor_username = f"{session.user.get('username','')}#{session.user.get('discriminator','')}".strip("#")
+        audit_col = get_collection(settings, record_type="audit_event", guild_id=guild_id)
+        record_audit_event(
+            guild_id=guild_id,
+            category="billing",
+            action="upgrade.clicked",
+            source="dashboard",
+            actor_discord_id=actor_id,
+            actor_display_name=str(session.user.get("username") or "") or None,
+            actor_username=actor_username or None,
+            details={"from": from_value, "section": section, "path": request.path_qs},
+            collection=audit_col,
+        )
+    except Exception:
+        pass
+
+    raise web.HTTPFound(f"/app/billing?guild_id={guild_id}")
 
 
 def _require_env(name: str) -> str:
@@ -1165,6 +1263,13 @@ async def guild_settings_page(request: web.Request) -> web.Response:
     except Exception:
         cfg = {}
 
+    guild_plan = entitlements_service.get_guild_plan(settings, guild_id=guild_id)
+    is_pro = guild_plan == entitlements_service.PLAN_PRO
+    premium_tiers_enabled = is_pro
+    premium_report_enabled = is_pro
+    fc25_stats_enabled = is_pro
+    upgrade_href = f"/app/upgrade?guild_id={guild_id}&from=settings&section=settings"
+
     staff_role_ids_raw = cfg.get("staff_role_ids")
     staff_role_ids: set[int] = set()
     if isinstance(staff_role_ids_raw, list):
@@ -1230,6 +1335,12 @@ async def guild_settings_page(request: web.Request) -> web.Response:
     coach_role_id = _parse_int(cfg.get("role_coach_id"))
     premium_role_id = _parse_int(cfg.get("role_coach_premium_id"))
     premium_plus_role_id = _parse_int(cfg.get("role_coach_premium_plus_id"))
+    premium_tiers_disabled_attr = "disabled" if not premium_tiers_enabled else ""
+    premium_tiers_note = (
+        f"<p class='muted'>Premium coach tiers require Pro. <a href=\"{_escape_html(upgrade_href)}\">Upgrade</a></p>"
+        if not premium_tiers_enabled
+        else ""
+    )
 
     if roles:
         valid_role_ids = {_parse_int(r.get("id")) for r in roles}
@@ -1258,13 +1369,14 @@ async def guild_settings_page(request: web.Request) -> web.Response:
               {_role_options(coach_role_id)}
             </select>
             <label style="display:block; margin-top:10px;">Coach Premium role</label>
-            <select name="role_coach_premium_id" style="width:100%; padding:10px; margin-top:6px;">
+            <select name="role_coach_premium_id" {premium_tiers_disabled_attr} style="width:100%; padding:10px; margin-top:6px;">
               {_role_options(premium_role_id)}
             </select>
             <label style="display:block; margin-top:10px;">Coach Premium+ role</label>
-            <select name="role_coach_premium_plus_id" style="width:100%; padding:10px; margin-top:6px;">
+            <select name="role_coach_premium_plus_id" {premium_tiers_disabled_attr} style="width:100%; padding:10px; margin-top:6px;">
               {_role_options(premium_plus_role_id)}
             </select>
+            {premium_tiers_note}
         """
     else:
         coach_roles_control_html = f"""
@@ -1272,9 +1384,10 @@ async def guild_settings_page(request: web.Request) -> web.Response:
             <label>Coach role ID</label><br/>
             <input name="role_coach_id" style="width:100%; padding:10px; margin-top:6px;" value="{_escape_html(coach_role_id or '')}" />
             <label style="display:block; margin-top:10px;">Coach Premium role ID</label>
-            <input name="role_coach_premium_id" style="width:100%; padding:10px; margin-top:6px;" value="{_escape_html(premium_role_id or '')}" />
+            <input name="role_coach_premium_id" {premium_tiers_disabled_attr} style="width:100%; padding:10px; margin-top:6px;" value="{_escape_html(premium_role_id or '')}" />
             <label style="display:block; margin-top:10px;">Coach Premium+ role ID</label>
-            <input name="role_coach_premium_plus_id" style="width:100%; padding:10px; margin-top:6px;" value="{_escape_html(premium_plus_role_id or '')}" />
+            <input name="role_coach_premium_plus_id" {premium_tiers_disabled_attr} style="width:100%; padding:10px; margin-top:6px;" value="{_escape_html(premium_plus_role_id or '')}" />
+            {premium_tiers_note}
         """
 
     selected_channels: dict[str, int | None] = {
@@ -1339,10 +1452,17 @@ async def guild_settings_page(request: web.Request) -> web.Response:
 
     premium_pin_enabled = _parse_bool(cfg.get(PREMIUM_COACHES_PIN_ENABLED_KEY))
     premium_pin_checked = "checked" if premium_pin_enabled else ""
+    premium_report_disabled_attr = "disabled" if not premium_report_enabled else ""
+    premium_report_note = (
+        f"<p class='muted'>Premium Coaches report controls require Pro. <a href=\"{_escape_html(upgrade_href)}\">Upgrade</a></p>"
+        if not premium_report_enabled
+        else ""
+    )
     premium_pin_control_html = f"""
             <h3 style="margin:14px 0 6px;">Premium Coaches</h3>
-            <label><input type="checkbox" name="{PREMIUM_COACHES_PIN_ENABLED_KEY}" value="1" {premium_pin_checked} /> Pin listing message</label>
+            <label><input type="checkbox" name="{PREMIUM_COACHES_PIN_ENABLED_KEY}" value="1" {premium_pin_checked} {premium_report_disabled_attr} /> Pin listing message</label>
             <p class="muted">Pins the bot's Premium Coaches listing message in the Premium Coaches channel (requires Manage Messages).</p>
+            {premium_report_note}
         """
 
     fc25_value = cfg.get(FC25_STATS_ENABLED_KEY)
@@ -1356,6 +1476,12 @@ async def guild_settings_page(request: web.Request) -> web.Response:
     selected_default = "selected" if fc25_selected == "default" else ""
     selected_true = "selected" if fc25_selected == "true" else ""
     selected_false = "selected" if fc25_selected == "false" else ""
+    fc25_disabled_attr = "disabled" if not fc25_stats_enabled else ""
+    fc25_note = (
+        f"<p class='muted'>FC25 stats controls require Pro. <a href=\"{_escape_html(upgrade_href)}\">Upgrade</a></p>"
+        if not fc25_stats_enabled
+        else ""
+    )
 
     invite_href = _invite_url(settings, guild_id=str(guild_id), disable_guild_select=True)
     saved = request.query.get("saved", "").strip()
@@ -1387,18 +1513,19 @@ async def guild_settings_page(request: web.Request) -> web.Response:
              {metadata_warning_html}
              {staff_roles_control_html}
              {coach_roles_control_html}
-             {channels_control_html}
-             {premium_pin_control_html}
-             <label>FC25 stats override</label><br/>
-             <select name="fc25_stats_enabled" style="width:100%; padding:10px; margin-top:6px;">
-               <option value="default" {selected_default}>Default</option>
-               <option value="true" {selected_true}>Enabled</option>
-              <option value="false" {selected_false}>Disabled</option>
-            </select>
-            <div style="margin-top:12px;">
-              <button class="btn" type="submit">Save</button>
-            </div>
-          </form>
+              {channels_control_html}
+              {premium_pin_control_html}
+              <label>FC25 stats override</label><br/>
+              <select name="fc25_stats_enabled" {fc25_disabled_attr} style="width:100%; padding:10px; margin-top:6px;">
+                <option value="default" {selected_default}>Default</option>
+                <option value="true" {selected_true}>Enabled</option>
+               <option value="false" {selected_false}>Disabled</option>
+             </select>
+             {fc25_note}
+             <div style="margin-top:12px;">
+               <button class="btn" type="submit">Save</button>
+             </div>
+           </form>
         </div>
         <div class="card">
           <h2 style="margin-top:0;">Current Config</h2>
@@ -1424,6 +1551,7 @@ async def guild_settings_page(request: web.Request) -> web.Response:
 
 async def guild_settings_save(request: web.Request) -> web.Response:
     session = _require_session(request)
+    settings: Settings = request.app["settings"]
     guild_id_str = request.match_info["guild_id"]
     guild_id = _require_owned_guild(session, guild_id=guild_id_str)
 
@@ -1434,6 +1562,12 @@ async def guild_settings_save(request: web.Request) -> web.Response:
     data = await request.post()
     if str(data.get("csrf", "")) != session.csrf_token:
         raise web.HTTPBadRequest(text="Invalid CSRF token.")
+
+    plan = entitlements_service.get_guild_plan(settings, guild_id=guild_id)
+    is_pro = plan == entitlements_service.PLAN_PRO
+    premium_tiers_enabled = is_pro
+    premium_report_enabled = is_pro
+    fc25_stats_enabled = is_pro
 
     cfg: dict[str, Any] = {}
     try:
@@ -1500,7 +1634,15 @@ async def guild_settings_save(request: web.Request) -> web.Response:
             raise web.HTTPBadRequest(text=f"{field} must be a valid {kind} in this guild.")
         cfg[field] = value
 
+    if not premium_tiers_enabled:
+        for field in ("role_coach_premium_id", "role_coach_premium_plus_id"):
+            attempted = str(data.get(field) or "").strip()
+            if attempted:
+                raise web.HTTPForbidden(text="Premium coach tiers require Pro.")
+
     for field, _label in GUILD_COACH_ROLE_FIELDS:
+        if field in {"role_coach_premium_id", "role_coach_premium_plus_id"} and not premium_tiers_enabled:
+            continue
         _apply_int_field(field=field, raw_value=data.get(field), valid_ids=valid_role_ids, kind="role")
 
     for field, _label in GUILD_CHANNEL_FIELDS:
@@ -1511,21 +1653,30 @@ async def guild_settings_save(request: web.Request) -> web.Response:
             kind="channel",
         )
 
-    pin_enabled = data.get(PREMIUM_COACHES_PIN_ENABLED_KEY) is not None
-    if pin_enabled:
-        cfg[PREMIUM_COACHES_PIN_ENABLED_KEY] = True
+    if premium_report_enabled:
+        pin_enabled = data.get(PREMIUM_COACHES_PIN_ENABLED_KEY) is not None
+        if pin_enabled:
+            cfg[PREMIUM_COACHES_PIN_ENABLED_KEY] = True
+        else:
+            cfg.pop(PREMIUM_COACHES_PIN_ENABLED_KEY, None)
     else:
-        cfg.pop(PREMIUM_COACHES_PIN_ENABLED_KEY, None)
+        if data.get(PREMIUM_COACHES_PIN_ENABLED_KEY) is not None:
+            raise web.HTTPForbidden(text="Premium Coaches report controls require Pro.")
 
-    fc25_raw = str(data.get(FC25_STATS_ENABLED_KEY, "default")).strip().lower()
-    if fc25_raw in {"", "default"}:
-        cfg.pop(FC25_STATS_ENABLED_KEY, None)
-    elif fc25_raw in {"1", "true", "yes", "on"}:
-        cfg[FC25_STATS_ENABLED_KEY] = True
-    elif fc25_raw in {"0", "false", "no", "off"}:
-        cfg[FC25_STATS_ENABLED_KEY] = False
+    if fc25_stats_enabled:
+        fc25_raw = str(data.get(FC25_STATS_ENABLED_KEY, "default")).strip().lower()
+        if fc25_raw in {"", "default"}:
+            cfg.pop(FC25_STATS_ENABLED_KEY, None)
+        elif fc25_raw in {"1", "true", "yes", "on"}:
+            cfg[FC25_STATS_ENABLED_KEY] = True
+        elif fc25_raw in {"0", "false", "no", "off"}:
+            cfg[FC25_STATS_ENABLED_KEY] = False
+        else:
+            raise web.HTTPBadRequest(text="fc25_stats_enabled must be default/true/false.")
     else:
-        raise web.HTTPBadRequest(text="fc25_stats_enabled must be default/true/false.")
+        fc25_raw = str(data.get(FC25_STATS_ENABLED_KEY) or "").strip().lower()
+        if fc25_raw not in {"", "default"}:
+            raise web.HTTPForbidden(text="FC25 stats controls require Pro.")
 
     try:
         actor_id = _parse_int(session.user.get("id"))
@@ -2249,6 +2400,17 @@ async def guild_audit_page(request: web.Request) -> web.Response:
     guild_id = _require_owned_guild(session, guild_id=guild_id_str)
 
     installed, _install_error = await _detect_bot_installed(request, guild_id=guild_id)
+    plan = entitlements_service.get_guild_plan(settings, guild_id=guild_id)
+    if plan != entitlements_service.PLAN_PRO:
+        return _pro_locked_page(
+            settings=settings,
+            session=session,
+            guild_id=guild_id,
+            installed=installed,
+            section="audit",
+            title="Audit Log",
+            message="The Audit Log is available on the Pro plan.",
+        )
     limit = _parse_int(request.query.get("limit")) or 200
     limit = max(1, min(500, limit))
 
@@ -2335,6 +2497,10 @@ async def guild_audit_csv(request: web.Request) -> web.Response:
 
     guild_id_str = request.match_info["guild_id"]
     guild_id = _require_owned_guild(session, guild_id=guild_id_str)
+
+    plan = entitlements_service.get_guild_plan(settings, guild_id=guild_id)
+    if plan != entitlements_service.PLAN_PRO:
+        raise web.HTTPForbidden(text="Audit Log export is available on the Pro plan.")
 
     limit = _parse_int(request.query.get("limit")) or 500
     limit = max(1, min(500, limit))
@@ -2917,6 +3083,7 @@ def create_app(*, settings: Settings | None = None) -> web.Application:
     app.router.add_get("/install", install)
     app.router.add_get("/oauth/callback", oauth_callback)
     app.router.add_get("/logout", logout)
+    app.router.add_get("/app/upgrade", upgrade_redirect)
     app.router.add_get("/app/billing", billing_page)
     app.router.add_post("/app/billing/portal", billing_portal)
     app.router.add_post("/app/billing/checkout", billing_checkout)

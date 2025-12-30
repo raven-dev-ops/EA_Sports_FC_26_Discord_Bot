@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.32] - 2025-12-30
+
+### Added
+- Dashboard: Pro-locked screens (Audit Log) with upgrade CTA and benefit list.
+- Dashboard: `/app/upgrade` redirect that records upgrade clicks (audit event `billing/upgrade.clicked`).
+
+### Changed
+- Dashboard nav: hides Pro-only modules for Free guilds.
+- Settings: Pro-only controls are disabled on Free and rejected on save (Premium tiers, Premium Coaches pin, FC25 stats override).
+
 ## [0.2.31] - 2025-12-30
 
 ### Added

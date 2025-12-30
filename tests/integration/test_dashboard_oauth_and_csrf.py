@@ -405,3 +405,136 @@ async def test_overview_page_renders(monkeypatch) -> None:
         assert "Dashboard and listing embeds detected." in html
     finally:
         await client.close()
+
+
+@pytest.mark.asyncio
+async def test_audit_page_is_locked_for_free_plan(monkeypatch) -> None:
+    from aiohttp.test_utils import TestClient, TestServer
+
+    monkeypatch.setattr(database, "MongoClient", mongomock.MongoClient)
+    monkeypatch.setattr(database, "_CLIENT", None)
+
+    async def fake_bot_get_json(*_args, url: str, **_kwargs):
+        if url.endswith("/guilds/123"):
+            return {"id": "123", "name": "Managed"}
+        raise AssertionError(f"Unexpected bot Discord URL: {url}")
+
+    monkeypatch.setattr(dashboard, "_discord_bot_get_json", fake_bot_get_json)
+
+    app = dashboard.create_app(settings=_settings())
+    sessions = app["session_collection"]
+    sessions.insert_one(
+        {
+            "_id": "sess1",
+            "created_at": time.time(),
+            "expires_at": datetime.now(timezone.utc) + timedelta(hours=6),
+            "user": {"id": "1", "username": "alice"},
+            "owner_guilds": [{"id": "123", "name": "Managed"}],
+            "all_guilds": [{"id": "123", "name": "Managed"}],
+            "csrf_token": "csrf_good",
+        }
+    )
+
+    client = TestClient(TestServer(app))
+    await client.start_server()
+    try:
+        resp = await client.get(
+            "/guild/123/audit",
+            headers={"Cookie": f"{dashboard.COOKIE_NAME}=sess1"},
+            allow_redirects=False,
+        )
+        assert resp.status == 200
+        html = await resp.text()
+        assert "Pro feature" in html
+        assert "Upgrade to Pro" in html
+        assert "/app/upgrade?guild_id=123" in html
+    finally:
+        await client.close()
+
+
+@pytest.mark.asyncio
+async def test_upgrade_redirect_records_audit_event(monkeypatch) -> None:
+    from aiohttp.test_utils import TestClient, TestServer
+
+    monkeypatch.setattr(database, "MongoClient", mongomock.MongoClient)
+    monkeypatch.setattr(database, "_CLIENT", None)
+
+    app = dashboard.create_app(settings=_settings())
+    sessions = app["session_collection"]
+    sessions.insert_one(
+        {
+            "_id": "sess1",
+            "created_at": time.time(),
+            "expires_at": datetime.now(timezone.utc) + timedelta(hours=6),
+            "user": {"id": "1", "username": "alice"},
+            "owner_guilds": [{"id": "123", "name": "Managed"}],
+            "all_guilds": [{"id": "123", "name": "Managed"}],
+            "csrf_token": "csrf_good",
+        }
+    )
+
+    client = TestClient(TestServer(app))
+    await client.start_server()
+    try:
+        resp = await client.get(
+            "/app/upgrade?guild_id=123&from=locked&section=audit",
+            headers={"Cookie": f"{dashboard.COOKIE_NAME}=sess1"},
+            allow_redirects=False,
+        )
+        assert resp.status == 302
+        assert resp.headers.get("Location") == "/app/billing?guild_id=123"
+
+        col = database.get_collection(_settings(), record_type="audit_event", guild_id=123)
+        doc = col.find_one({"record_type": "audit_event", "guild_id": 123, "action": "upgrade.clicked"})
+        assert isinstance(doc, dict)
+        assert doc.get("details", {}).get("from") == "locked"
+        assert doc.get("details", {}).get("section") == "audit"
+    finally:
+        await client.close()
+
+
+@pytest.mark.asyncio
+async def test_settings_save_blocks_fc25_override_for_free(monkeypatch) -> None:
+    from aiohttp.test_utils import TestClient, TestServer
+
+    monkeypatch.setattr(database, "MongoClient", mongomock.MongoClient)
+    monkeypatch.setattr(database, "_CLIENT", None)
+
+    async def fake_detect_installed(*_args, **_kwargs):
+        return True, None
+
+    async def fake_metadata(*_args, **_kwargs):
+        return [], []
+
+    monkeypatch.setattr(dashboard, "_detect_bot_installed", fake_detect_installed)
+    monkeypatch.setattr(dashboard, "_get_guild_discord_metadata", fake_metadata)
+    monkeypatch.setattr(dashboard, "get_guild_config", lambda _gid: {})
+
+    app = dashboard.create_app(settings=_settings())
+    sessions = app["session_collection"]
+    sessions.insert_one(
+        {
+            "_id": "sess1",
+            "created_at": time.time(),
+            "expires_at": datetime.now(timezone.utc) + timedelta(hours=6),
+            "user": {"id": "1", "username": "alice"},
+            "owner_guilds": [{"id": "123", "name": "Managed"}],
+            "all_guilds": [{"id": "123", "name": "Managed"}],
+            "csrf_token": "csrf_good",
+        }
+    )
+
+    client = TestClient(TestServer(app))
+    await client.start_server()
+    try:
+        resp = await client.post(
+            "/guild/123/settings",
+            data={"csrf": "csrf_good", "fc25_stats_enabled": "true"},
+            headers={"Cookie": f"{dashboard.COOKIE_NAME}=sess1"},
+            allow_redirects=False,
+        )
+        assert resp.status == 403
+        text = await resp.text()
+        assert "Pro" in text
+    finally:
+        await client.close()
