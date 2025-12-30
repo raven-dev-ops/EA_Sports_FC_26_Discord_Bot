@@ -67,12 +67,8 @@ def _create_source(*, token: str) -> tuple[str, str]:
 
 def _upload_source(*, put_url: str, archive_path: Path) -> None:
     payload = archive_path.read_bytes()
-    req = Request(
-        put_url,
-        data=payload,
-        method="PUT",
-        headers={"Content-Type": "application/octet-stream"},
-    )
+    # Heroku returns a pre-signed S3 URL; avoid adding headers that can break the signature.
+    req = Request(put_url, data=payload, method="PUT")
     with urlopen(req, timeout=120) as resp:
         resp.read()
 
@@ -186,4 +182,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
