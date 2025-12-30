@@ -1,93 +1,89 @@
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timezone
 
 import discord
-from discord.ext import commands
 
 from interactions.dashboard import build_roster_dashboard
 from interactions.views import SafeView
 from utils.channel_routing import resolve_channel_id
 from utils.discord_wrappers import fetch_channel, send_message
+from utils.embeds import DEFAULT_COLOR, make_embed
+from utils.permissions import is_staff_user
+
+
+def _portal_footer() -> str:
+    return f"Last refreshed: {discord.utils.format_dt(datetime.now(timezone.utc), style='R')}"
 
 
 def build_coach_help_embed() -> discord.Embed:
-    embed = discord.Embed(
+    embed = make_embed(
         title="Coach Guide",
         description="How to create, edit, and submit your roster.",
-        color=discord.Color.green(),
+        color=DEFAULT_COLOR,
     )
     embed.add_field(
-        name="Create & Manage",
+        name="Create & manage",
         value=(
-            "1) Open the dashboard and create your roster.\n"
-            "2) Add/remove players and view your roster.\n"
-            "3) Submit; roster locks until staff acts."
+            "1) Open the roster dashboard.\n"
+            "2) Add/remove players and review your roster.\n"
+            "3) Submit; your roster locks until staff acts."
         ),
         inline=False,
     )
     embed.add_field(
-        name="Player Fields",
-        value="Discord mention/ID, Gamertag/PSN, EA ID, Console (PS/XBOX/PC/SWITCH).",
+        name="Player fields",
+        value="Discord ID/mention, gamertag, EA ID, console (PS/XBOX/PC/SWITCH).",
         inline=False,
     )
     embed.add_field(
-        name="After Submit",
-        value="Locked until staff approves/rejects; ask staff to unlock for edits.",
+        name="After submit",
+        value="If rejected, staff must unlock your roster before you can edit/resubmit.",
         inline=False,
     )
     return embed
 
 
 def build_coach_intro_embed() -> discord.Embed:
-    embed = discord.Embed(
+    return make_embed(
         title="Coach Portal Overview",
         description=(
-            "@Coach\n"
-            "@Coach Premium @Coach Premium+\n\n"
-            "Coaches, welcome to the Offside Bot Portal\n\n"
-            "This portal is the official system used for signing players and submitting your team roster. "
-            "To assist you, the Coach Help button is available and provides a full list of commands you may need throughout the process.\n\n"
-            "When you are ready to begin, select Open Roster Dashboard. Inside the dashboard, you will be able to add players, remove players, view your current roster, "
-            "and edit your team name. All players must be added using their correct player DISCORD ID copied from their profile. "
-            "The roster name must exactly match the team name that was assigned to you by staff; no extra words, symbols, or changes are allowed.\n\n"
-            "**Roster Requirements & Limits**\n"
-            "A minimum of 8 players is required in order to submit a roster. Coaches are permitted to sign up to 16 players. "
-            "Coaches with a Premium membership may sign up to 22 players, while Premium+ coaches may sign up to 25 players. "
-            "It is the coach’s responsibility to ensure their roster does not exceed these limits.\n\n"
-            "🚨 **Submission & Approval Process**\n"
-            "Once your roster is complete, you may submit it. Each team is allowed one initial submission. After submission, a staff member will review your roster. "
-            "If approved, you will receive confirmation along with the name of the staff member who approved and assigned your team. "
-            "If your roster is rejected, you will receive a direct message explaining the reason for the rejection and what needs to be corrected.\n\n"
-            "✅ **Resubmission & Finalization**\n"
-            "If your roster is rejected, review the feedback carefully, then go to your team’s ticket and ping the staff member who declined your roster. "
-            "That staff member will unlock your roster, allowing you to make the required changes and submit again. After resubmission, wait for approval. "
-            "Once your roster is approved, it is finalized and cannot be changed under the roster lock date, which will be announced below this message.\n\n"
-            "📣 **Premium Coach Listings**\n"
-            "Premium coaches can set Practice Times from the roster dashboard to keep the #premium-coaches report up to date."
+            "**Purpose**\n"
+            "Create and submit your roster for the current tournament cycle.\n\n"
+            "**Who should use this**\n"
+            "- Coaches only (Coach / Coach Premium / Coach Premium+).\n\n"
+            "**Key rules**\n"
+            "- Minimum 8 players to submit.\n"
+            "- Caps: Coach=16, Premium=22, Premium+=25.\n"
+            "- After submit, your roster locks until staff approves/rejects.\n"
+            "- Premium coaches: set Practice Times to appear in the Premium Coaches report."
         ),
-        color=discord.Color.orange(),
+        color=DEFAULT_COLOR,
+        footer=_portal_footer(),
     )
-    return embed
 
 
 def build_coach_portal_embed() -> discord.Embed:
-    embed = discord.Embed(
+    embed = make_embed(
         title="Coach Roster Portal",
-        description=(
-            "Use the buttons below to open your roster dashboard or view the coach guide. "
-            "All responses are ephemeral (only you can see them)."
-        ),
-        color=discord.Color.blue(),
+        description="Use the buttons below. All responses are ephemeral (only you can see them).",
+        color=DEFAULT_COLOR,
+        footer=_portal_footer(),
     )
     embed.add_field(
-        name="Dashboard",
-        value="Open your roster dashboard to create, add/remove players, view, and submit.",
+        name="Open Roster Dashboard",
+        value="Open your roster dashboard to create/add/remove/view/submit.",
         inline=False,
     )
     embed.add_field(
-        name="Help",
-        value="Read the coach guide for step-by-step instructions.",
+        name="Coach Help",
+        value="View the coach guide (tips + requirements).",
+        inline=False,
+    )
+    embed.add_field(
+        name="Repost Portal (staff)",
+        value="Clean up and repost this portal message set.",
         inline=False,
     )
     return embed
@@ -102,10 +98,17 @@ class CoachPortalView(SafeView):
         btn_help: discord.ui.Button = discord.ui.Button(
             label="Coach Help", style=discord.ButtonStyle.secondary
         )
+        btn_repost: discord.ui.Button = discord.ui.Button(
+            label="Repost Portal (staff)", style=discord.ButtonStyle.secondary
+        )
+
         setattr(btn_dashboard, "callback", self.on_dashboard)
         setattr(btn_help, "callback", self.on_help)
+        setattr(btn_repost, "callback", self.on_repost_portal)
+
         self.add_item(btn_dashboard)
         self.add_item(btn_help)
+        self.add_item(btn_repost)
 
     async def on_dashboard(self, interaction: discord.Interaction) -> None:
         try:
@@ -120,6 +123,28 @@ class CoachPortalView(SafeView):
 
     async def on_help(self, interaction: discord.Interaction) -> None:
         await interaction.response.send_message(embed=build_coach_help_embed(), ephemeral=True)
+
+    async def on_repost_portal(self, interaction: discord.Interaction) -> None:
+        settings = getattr(interaction.client, "settings", None)
+        if not is_staff_user(interaction.user, settings):
+            await interaction.response.send_message("Not authorized.", ephemeral=True)
+            return
+        guild = interaction.guild
+        if guild is None:
+            await interaction.response.send_message(
+                "This action must be used in a guild.",
+                ephemeral=True,
+            )
+            return
+        await interaction.response.send_message(
+            embed=make_embed(
+                title="Reposting portal...",
+                description="Cleaning up and reposting the coach portal now.",
+                color=DEFAULT_COLOR,
+            ),
+            ephemeral=True,
+        )
+        await post_coach_portal(interaction.client, guilds=[guild])
 
 
 async def send_coach_portal_message(
@@ -142,7 +167,8 @@ async def send_coach_portal_message(
     )
     if not target_channel_id:
         await interaction.response.send_message(
-            "Coach portal channel is not configured yet. Ensure the bot has `Manage Channels` and MongoDB is configured, then restart the bot.",
+            "Coach portal channel is not configured yet. Ensure the bot has `Manage Channels` and "
+            "MongoDB is configured, then restart the bot.",
             ephemeral=True,
         )
         return
@@ -156,7 +182,7 @@ async def send_coach_portal_message(
         return
 
     try:
-        async for message in channel.history(limit=20):
+        async for message in channel.history(limit=20):  # type: ignore[attr-defined]
             client_user = interaction.client.user
             if client_user and message.author.id == client_user.id:
                 if message.embeds and message.embeds[0].title in {
@@ -174,8 +200,17 @@ async def send_coach_portal_message(
     embed = build_coach_portal_embed()
     view = CoachPortalView()
     try:
-        await send_message(channel, embed=intro_embed)
-        await send_message(channel, embed=embed, view=view)
+        await send_message(
+            channel,
+            embed=intro_embed,
+            allowed_mentions=discord.AllowedMentions.none(),
+        )
+        await send_message(
+            channel,
+            embed=embed,
+            view=view,
+            allowed_mentions=discord.AllowedMentions.none(),
+        )
     except discord.DiscordException as exc:
         logging.warning("Failed to post coach portal to channel %s: %s", target_channel_id, exc)
         await interaction.response.send_message(
@@ -190,7 +225,7 @@ async def send_coach_portal_message(
 
 
 async def post_coach_portal(
-    bot: commands.Bot | commands.AutoShardedBot,
+    bot: discord.Client,
     *,
     guilds: list[discord.Guild] | None = None,
 ) -> None:
@@ -218,7 +253,7 @@ async def post_coach_portal(
         if bot_user is None:
             continue
         try:
-            async for message in channel.history(limit=20):
+            async for message in channel.history(limit=20):  # type: ignore[attr-defined]
                 if message.author.id == bot_user.id:
                     if message.embeds and message.embeds[0].title in {
                         "Coach Roster Portal",
@@ -235,9 +270,22 @@ async def post_coach_portal(
         embed = build_coach_portal_embed()
         view = CoachPortalView()
         try:
-            await send_message(channel, embed=intro_embed)
-            await send_message(channel, embed=embed, view=view)
-            logging.info("Posted coach portal embed (guild=%s channel=%s).", guild.id, target_channel_id)
+            await send_message(
+                channel,
+                embed=intro_embed,
+                allowed_mentions=discord.AllowedMentions.none(),
+            )
+            await send_message(
+                channel,
+                embed=embed,
+                view=view,
+                allowed_mentions=discord.AllowedMentions.none(),
+            )
+            logging.info(
+                "Posted coach portal embed (guild=%s channel=%s).",
+                guild.id,
+                target_channel_id,
+            )
         except discord.DiscordException as exc:
             logging.warning(
                 "Failed to post coach portal to channel %s (guild=%s): %s",

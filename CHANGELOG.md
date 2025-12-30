@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.18] - 2025-12-30
+
+### Added
+- Premium Coaches report improvements: Premium vs Premium+ sections, last-updated timestamp, optional pin, and a manager "force rebuild" cleanup action.
+- Club Managers portal: Sync Caps (Active Cycle) action and audit events for tier changes/cap syncs.
+- Portal UX: standardized intro/control panel formatting, "Last refreshed" footers, and a staff-only "Repost Portal" action on each portal.
+- Server onboarding checklist: `docs/server-setup-checklist.md`.
+
+### Changed
+- Recruit and club listing embeds: improved field ordering/icons, "Updated" footers, and safer long-text handling (split/truncate with guidance).
+- Dependencies: add `tzdata` for cross-platform `zoneinfo` support (Windows/dev environments).
+
 ## [0.2.17] - 2025-12-30
 
 ### Added

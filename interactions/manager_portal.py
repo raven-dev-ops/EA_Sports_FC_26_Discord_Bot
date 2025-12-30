@@ -1,14 +1,26 @@
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timezone
 
 import discord
-from discord.ext import commands
 
-from interactions.premium_coaches_report import upsert_premium_coaches_report
+from database import get_collection
+from interactions.premium_coaches_report import (
+    PREMIUM_PIN_ENABLED_KEY,
+    force_rebuild_premium_coaches_report,
+    upsert_premium_coaches_report,
+)
 from interactions.views import SafeView
-from repositories.tournament_repo import ensure_cycle_by_name
-from services.audit_service import AUDIT_ACTION_UNLOCKED, record_staff_action
+from repositories.tournament_repo import ensure_active_cycle, ensure_cycle_by_name
+from services.audit_service import (
+    AUDIT_ACTION_CAP_SYNC_SKIPPED,
+    AUDIT_ACTION_CAP_SYNCED,
+    AUDIT_ACTION_TIER_CHANGED,
+    AUDIT_ACTION_UNLOCKED,
+    record_staff_action,
+)
+from services.guild_config_service import get_guild_config, set_guild_config
 from services.roster_service import (
     ROSTER_STATUS_UNLOCKED,
     count_roster_players,
@@ -26,21 +38,24 @@ from utils.permissions import is_staff_user
 from utils.role_routing import resolve_role_id
 
 
+def _portal_footer() -> str:
+    return f"Last refreshed: {discord.utils.format_dt(datetime.now(timezone.utc), style='R')}"
+
+
 def build_manager_intro_embed() -> discord.Embed:
     return make_embed(
         title="Club Managers Portal Overview",
         description=(
-            "This portal is for club managers to manage coach access and premium tiers.\n\n"
-            "**What you can do here**\n"
-            "- Assign coach tier roles (Coach / Coach Premium / Coach Premium+).\n"
-            "- Sync a coach's roster cap to their tier.\n"
-            "- Unlock rosters after rejection so coaches can resubmit.\n"
-            "- Refresh the Premium Coaches listing embed.\n\n"
-            "**Notes**\n"
-            "- Some actions require the bot to have `Manage Roles` / `Manage Channels` permissions.\n"
-            "- Tier role changes may not reduce an existing roster cap below its current player count."
+            "**Purpose**\n"
+            "Manage coach tiers, roster unlocks, and premium coach listings.\n\n"
+            "**Who should use this**\n"
+            "- Staff / club managers only.\n\n"
+            "**Key rules**\n"
+            "- The bot needs `Manage Roles` for tier changes.\n"
+            "- Cap downgrades will not reduce below current roster size."
         ),
         color=DEFAULT_COLOR,
+        footer=_portal_footer(),
     )
 
 
@@ -49,20 +64,46 @@ def build_manager_embed() -> discord.Embed:
         title="Club Managers Control Panel",
         description="Use the buttons below. All responses are ephemeral (only you can see them).",
         color=DEFAULT_COLOR,
+        footer=_portal_footer(),
     )
     embed.add_field(
-        name="Coach Tier",
-        value="Assign coach tier roles and sync roster caps.",
+        name="Set Coach Tier",
+        value="Assign Coach / Premium / Premium+ to a coach and (optionally) sync their roster cap.",
         inline=False,
     )
     embed.add_field(
-        name="Rosters",
-        value="Unlock a roster for edits after a rejection.",
+        name="Unlock Roster",
+        value="Unlock a coach roster for edits after rejection (clears stale submissions).",
         inline=False,
     )
     embed.add_field(
-        name="Premium Coaches Listing",
-        value="Refresh the `#premium-coaches` report embed.",
+        name="Refresh Premium Coaches",
+        value="Update the Premium Coaches report embed.",
+        inline=False,
+    )
+    embed.add_field(
+        name="Toggle Premium Pin",
+        value="Pin/unpin the Premium Coaches embed (if the bot has permission).",
+        inline=False,
+    )
+    embed.add_field(
+        name="Force Rebuild Premium",
+        value="Delete stale bot messages in the Premium Coaches channel and rebuild the report.",
+        inline=False,
+    )
+    embed.add_field(
+        name="Sync Caps (Active Cycle)",
+        value="Sync all active rosters' caps to match coach tier roles (safe downgrade rules apply).",
+        inline=False,
+    )
+    embed.add_field(
+        name="Delete Roster",
+        value="Delete a roster (administrator-only; last resort).",
+        inline=False,
+    )
+    embed.add_field(
+        name="Repost Portal (staff)",
+        value="Clean up and repost this portal message set.",
         inline=False,
     )
     return embed
@@ -88,6 +129,37 @@ def _tier_to_cap(tier: str) -> int | None:
         return 22
     if normalized in {"premium+", "premium plus", "coach premium+", "coach premium plus"}:
         return 25
+    return None
+
+
+def _parse_bool(value: object) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int):
+        return value != 0
+    if isinstance(value, str):
+        raw = value.strip().lower()
+        if raw in {"1", "true", "yes", "on"}:
+            return True
+        if raw in {"0", "false", "no", "off", ""}:
+            return False
+    return False
+
+
+def _desired_cap_for_member(
+    member: discord.Member,
+    *,
+    coach_role_id: int | None,
+    premium_role_id: int | None,
+    premium_plus_role_id: int | None,
+) -> int | None:
+    role_ids = {role.id for role in member.roles}
+    if premium_plus_role_id and premium_plus_role_id in role_ids:
+        return 25
+    if premium_role_id and premium_role_id in role_ids:
+        return 22
+    if coach_role_id and coach_role_id in role_ids:
+        return 16
     return None
 
 
@@ -166,19 +238,69 @@ async def _set_coach_tier(
     except discord.DiscordException:
         return False, "Failed to update roles due to a Discord API error."
 
+    try:
+        collection = get_collection(settings)
+    except Exception:
+        return True, f"Updated tier role for <@{coach_id}>. (DB unavailable; roster cap not synced.)"
+
     # Best-effort: sync roster cap to match the tier.
-    roster = get_roster_for_coach(coach_id)
+    roster = get_roster_for_coach(coach_id, collection=collection)
     if roster is None:
         return True, f"Updated tier role for <@{coach_id}>. No roster found to sync."
 
-    current_count = count_roster_players(roster["_id"])
+    record_staff_action(
+        roster_id=roster["_id"],
+        action=AUDIT_ACTION_TIER_CHANGED,
+        staff_discord_id=interaction.user.id,
+        staff_display_name=getattr(interaction.user, "display_name", None),
+        staff_username=str(interaction.user),
+        details={
+            "coach_discord_id": coach_id,
+            "tier": tier_role.name,
+            "desired_cap": desired_cap,
+        },
+        collection=collection,
+    )
+
+    current_count = count_roster_players(roster["_id"], collection=collection)
     current_cap = roster.get("cap")
     if isinstance(current_cap, int) and desired_cap < current_count:
+        record_staff_action(
+            roster_id=roster["_id"],
+            action=AUDIT_ACTION_CAP_SYNC_SKIPPED,
+            staff_discord_id=interaction.user.id,
+            staff_display_name=getattr(interaction.user, "display_name", None),
+            staff_username=str(interaction.user),
+            details={
+                "from_cap": current_cap,
+                "to_cap": desired_cap,
+                "player_count": current_count,
+                "reason": "tier_change",
+            },
+            collection=collection,
+        )
         return True, (
             f"Updated tier role for <@{coach_id}>, but did not reduce roster cap below current "
-            f"player count ({current_count})."
+            f"player count ({current_count}). Remove players, then re-run Sync Caps."
         )
-    update_roster_cap(roster["_id"], desired_cap)
+
+    if isinstance(current_cap, int) and current_cap != desired_cap:
+        update_roster_cap(roster["_id"], desired_cap, collection=collection)
+        record_staff_action(
+            roster_id=roster["_id"],
+            action=AUDIT_ACTION_CAP_SYNCED,
+            staff_discord_id=interaction.user.id,
+            staff_display_name=getattr(interaction.user, "display_name", None),
+            staff_username=str(interaction.user),
+            details={
+                "from_cap": current_cap,
+                "to_cap": desired_cap,
+                "player_count": current_count,
+                "reason": "tier_change",
+            },
+            collection=collection,
+        )
+
     return True, f"Updated tier role for <@{coach_id}> and synced roster cap to {desired_cap}."
 
 
@@ -412,6 +534,10 @@ class ManagerPortalView(SafeView):
             ("Set Coach Tier", discord.ButtonStyle.primary, self.on_set_tier),
             ("Unlock Roster", discord.ButtonStyle.secondary, self.on_unlock),
             ("Refresh Premium Coaches", discord.ButtonStyle.success, self.on_refresh_premium),
+            ("Toggle Premium Pin", discord.ButtonStyle.secondary, self.on_toggle_premium_pin),
+            ("Force Rebuild Premium", discord.ButtonStyle.danger, self.on_force_rebuild_premium),
+            ("Sync Caps (Active Cycle)", discord.ButtonStyle.secondary, self.on_sync_caps),
+            ("Repost Portal (staff)", discord.ButtonStyle.secondary, self.on_repost_portal),
             ("Delete Roster", discord.ButtonStyle.danger, self.on_delete_roster),
         ]
         for label, style, handler in buttons:
@@ -465,6 +591,316 @@ class ManagerPortalView(SafeView):
             ephemeral=True,
         )
 
+    async def on_toggle_premium_pin(self, interaction: discord.Interaction) -> None:
+        settings = getattr(interaction.client, "settings", None)
+        if settings is None:
+            await interaction.response.send_message(
+                "Bot configuration is not loaded.",
+                ephemeral=True,
+            )
+            return
+        if not is_staff_user(interaction.user, settings):
+            await interaction.response.send_message("Not authorized.", ephemeral=True)
+            return
+        guild = interaction.guild
+        if guild is None:
+            await interaction.response.send_message(
+                "This action must be used in a guild.",
+                ephemeral=True,
+            )
+            return
+
+        try:
+            cfg = get_guild_config(guild.id)
+        except Exception:
+            cfg = {}
+        enabled = _parse_bool(cfg.get(PREMIUM_PIN_ENABLED_KEY))
+        cfg[PREMIUM_PIN_ENABLED_KEY] = not enabled
+        try:
+            set_guild_config(guild.id, cfg)
+        except Exception:
+            await interaction.response.send_message(
+                "Failed to persist the pin setting.",
+                ephemeral=True,
+            )
+            return
+
+        test_mode = bool(getattr(interaction.client, "test_mode", False))
+        await upsert_premium_coaches_report(
+            interaction.client,
+            settings=settings,
+            guild_id=guild.id,
+            test_mode=test_mode,
+        )
+
+        status = "enabled" if not enabled else "disabled"
+        await interaction.response.send_message(
+            embed=make_embed(
+                title="Premium Coaches pin updated",
+                description=f"Pinning is now **{status}** for the Premium Coaches listing.",
+                color=SUCCESS_COLOR,
+            ),
+            ephemeral=True,
+        )
+
+    async def on_force_rebuild_premium(self, interaction: discord.Interaction) -> None:
+        settings = getattr(interaction.client, "settings", None)
+        if settings is None:
+            await interaction.response.send_message(
+                "Bot configuration is not loaded.",
+                ephemeral=True,
+            )
+            return
+        if not is_staff_user(interaction.user, settings):
+            await interaction.response.send_message("Not authorized.", ephemeral=True)
+            return
+        guild = interaction.guild
+        if guild is None:
+            await interaction.response.send_message(
+                "This action must be used in a guild.",
+                ephemeral=True,
+            )
+            return
+
+        test_mode = bool(getattr(interaction.client, "test_mode", False))
+        deleted = await force_rebuild_premium_coaches_report(
+            interaction.client,
+            settings=settings,
+            guild_id=guild.id,
+            test_mode=test_mode,
+        )
+        await interaction.response.send_message(
+            embed=make_embed(
+                title="Premium Coaches rebuilt",
+                description=f"Deleted {deleted} stale bot message(s) and rebuilt the listing.",
+                color=SUCCESS_COLOR,
+            ),
+            ephemeral=True,
+        )
+
+    async def on_sync_caps(self, interaction: discord.Interaction) -> None:
+        settings = getattr(interaction.client, "settings", None)
+        if settings is None:
+            await interaction.response.send_message(
+                "Bot configuration is not loaded.",
+                ephemeral=True,
+            )
+            return
+        if not is_staff_user(interaction.user, settings):
+            await interaction.response.send_message("Not authorized.", ephemeral=True)
+            return
+        guild = interaction.guild
+        if guild is None:
+            await interaction.response.send_message(
+                "This action must be used in a guild.",
+                ephemeral=True,
+            )
+            return
+
+        await interaction.response.defer(ephemeral=True)
+
+        coach_role_id = resolve_role_id(settings, guild_id=guild.id, field="role_coach_id")
+        premium_role_id = resolve_role_id(settings, guild_id=guild.id, field="role_coach_premium_id")
+        premium_plus_role_id = resolve_role_id(
+            settings, guild_id=guild.id, field="role_coach_premium_plus_id"
+        )
+        if not coach_role_id or not premium_role_id or not premium_plus_role_id:
+            await interaction.followup.send(
+                embed=make_embed(
+                    title="Sync failed",
+                    description=(
+                        "Coach tier roles are not configured yet. Ensure the bot has `Manage Roles` "
+                        "and MongoDB is configured, then restart the bot."
+                    ),
+                    color=ERROR_COLOR,
+                ),
+                ephemeral=True,
+            )
+            return
+
+        try:
+            collection = get_collection(settings)
+        except Exception:
+            await interaction.followup.send(
+                embed=make_embed(
+                    title="Sync failed",
+                    description="MongoDB is not configured or unavailable.",
+                    color=ERROR_COLOR,
+                ),
+                ephemeral=True,
+            )
+            return
+
+        try:
+            cycle = ensure_active_cycle(collection=collection)
+        except Exception:
+            await interaction.followup.send(
+                embed=make_embed(
+                    title="Sync failed",
+                    description="Could not resolve the active tournament cycle.",
+                    color=ERROR_COLOR,
+                ),
+                ephemeral=True,
+            )
+            return
+
+        rosters = list(
+            collection.find(
+                {"record_type": "team_roster", "cycle_id": cycle["_id"]},
+                sort=[("created_at", 1)],
+            )
+        )
+        if not rosters:
+            await interaction.followup.send(
+                embed=make_embed(
+                    title="No rosters found",
+                    description="There are no rosters in the active cycle to sync.",
+                    color=SUCCESS_COLOR,
+                ),
+                ephemeral=True,
+            )
+            return
+
+        roster_ids = [r.get("_id") for r in rosters if r.get("_id") is not None]
+        counts: dict[object, int] = {}
+        if roster_ids:
+            try:
+                pipeline = [
+                    {"$match": {"record_type": "roster_player", "roster_id": {"$in": roster_ids}}},
+                    {"$group": {"_id": "$roster_id", "count": {"$sum": 1}}},
+                ]
+                for doc in collection.aggregate(pipeline):
+                    counts[doc.get("_id")] = int(doc.get("count") or 0)
+            except Exception:
+                counts = {}
+
+        updated = 0
+        unchanged = 0
+        skipped_no_member = 0
+        skipped_no_role = 0
+        skipped_too_large = 0
+        skipped_invalid = 0
+
+        for roster in rosters:
+            roster_id = roster.get("_id")
+            coach_id_raw = roster.get("coach_discord_id")
+            coach_id = int(coach_id_raw) if isinstance(coach_id_raw, int) else None
+            if roster_id is None or coach_id is None:
+                skipped_invalid += 1
+                continue
+
+            member = await _fetch_member(guild, coach_id)
+            if member is None:
+                skipped_no_member += 1
+                continue
+
+            desired_cap = _desired_cap_for_member(
+                member,
+                coach_role_id=coach_role_id,
+                premium_role_id=premium_role_id,
+                premium_plus_role_id=premium_plus_role_id,
+            )
+            if desired_cap is None:
+                skipped_no_role += 1
+                continue
+
+            player_count = counts.get(roster_id, 0)
+            current_cap_raw = roster.get("cap")
+            current_cap = int(current_cap_raw) if isinstance(current_cap_raw, int) else 0
+
+            if desired_cap < player_count:
+                skipped_too_large += 1
+                record_staff_action(
+                    roster_id=roster_id,
+                    action=AUDIT_ACTION_CAP_SYNC_SKIPPED,
+                    staff_discord_id=interaction.user.id,
+                    staff_display_name=getattr(interaction.user, "display_name", None),
+                    staff_username=str(interaction.user),
+                    details={
+                        "from_cap": current_cap,
+                        "to_cap": desired_cap,
+                        "player_count": player_count,
+                        "reason": "active_cycle_sync",
+                    },
+                    collection=collection,
+                )
+                continue
+
+            if current_cap == desired_cap:
+                unchanged += 1
+                continue
+
+            update_roster_cap(roster_id, desired_cap, collection=collection)
+            updated += 1
+            record_staff_action(
+                roster_id=roster_id,
+                action=AUDIT_ACTION_CAP_SYNCED,
+                staff_discord_id=interaction.user.id,
+                staff_display_name=getattr(interaction.user, "display_name", None),
+                staff_username=str(interaction.user),
+                details={
+                    "from_cap": current_cap,
+                    "to_cap": desired_cap,
+                    "player_count": player_count,
+                    "reason": "active_cycle_sync",
+                },
+                collection=collection,
+            )
+
+        test_mode = bool(getattr(interaction.client, "test_mode", False))
+        await upsert_premium_coaches_report(
+            interaction.client,
+            settings=settings,
+            guild_id=guild.id,
+            test_mode=test_mode,
+        )
+
+        await interaction.followup.send(
+            embed=make_embed(
+                title="Roster caps synced",
+                description=(
+                    f"Cycle: **{cycle.get('name', 'Current Tournament')}**\n"
+                    f"Updated: **{updated}**\n"
+                    f"Unchanged: **{unchanged}**\n"
+                    f"Skipped (too many players): **{skipped_too_large}**\n"
+                    f"Skipped (coach not in server): **{skipped_no_member}**\n"
+                    f"Skipped (no coach role): **{skipped_no_role}**\n"
+                    f"Skipped (invalid roster): **{skipped_invalid}**"
+                ),
+                color=SUCCESS_COLOR,
+            ),
+            ephemeral=True,
+        )
+
+    async def on_repost_portal(self, interaction: discord.Interaction) -> None:
+        settings = getattr(interaction.client, "settings", None)
+        if settings is None:
+            await interaction.response.send_message(
+                "Bot configuration is not loaded.",
+                ephemeral=True,
+            )
+            return
+        if not is_staff_user(interaction.user, settings):
+            await interaction.response.send_message("Not authorized.", ephemeral=True)
+            return
+        guild = interaction.guild
+        if guild is None:
+            await interaction.response.send_message(
+                "This action must be used in a guild.",
+                ephemeral=True,
+            )
+            return
+
+        await interaction.response.send_message(
+            embed=make_embed(
+                title="Reposting portal...",
+                description="Cleaning up and reposting the Club Managers portal now.",
+                color=SUCCESS_COLOR,
+            ),
+            ephemeral=True,
+        )
+        await post_manager_portal(interaction.client, guilds=[guild])
+
     async def on_delete_roster(self, interaction: discord.Interaction) -> None:
         if not is_staff_user(interaction.user, getattr(interaction.client, "settings", None)):
             await interaction.response.send_message("Not authorized.", ephemeral=True)
@@ -480,7 +916,7 @@ class ManagerPortalView(SafeView):
 
 
 async def post_manager_portal(
-    bot: commands.Bot | commands.AutoShardedBot,
+    bot: discord.Client,
     *,
     guilds: list[discord.Guild] | None = None,
 ) -> None:

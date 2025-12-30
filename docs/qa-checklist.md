@@ -1,5 +1,7 @@
 # QA Checklist (Staging Guild)
 
+See also: `docs/server-setup-checklist.md`
+
 ## Setup
 - Start bot with `TEST_MODE=true`
 - Confirm auto-setup creates `--OFFSIDE DASHBOARD--` and `--OFFSIDE REPORTS--`

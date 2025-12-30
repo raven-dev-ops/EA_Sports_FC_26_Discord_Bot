@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timezone
 
 import discord
-from discord.ext import commands
 
 from interactions.premium_coaches_report import upsert_premium_coaches_report
 from interactions.views import SafeView
@@ -17,7 +17,12 @@ from services.roster_service import (
 from services.submission_service import delete_submission_by_roster
 from utils.channel_routing import resolve_channel_id
 from utils.discord_wrappers import fetch_channel, send_message
+from utils.embeds import DEFAULT_COLOR, make_embed
 from utils.errors import send_interaction_error
+
+
+def _portal_footer() -> str:
+    return f"Last refreshed: {discord.utils.format_dt(datetime.now(timezone.utc), style='R')}"
 
 
 def _coach_help_embed() -> discord.Embed:
@@ -49,41 +54,29 @@ def _coach_help_embed() -> discord.Embed:
 
 
 def build_admin_intro_embed() -> discord.Embed:
-    embed = discord.Embed(
+    return make_embed(
         title="Staff Portal Overview",
         description=(
-            "Staff, welcome to the Offside Bot Portal\n\n"
-            "This portal allows you to navigate and manage all roster submissions. In this channel, coaches will submit their team rosters. "
-            "Your responsibility is to locate the roster submitted by the coach assigned to you, carefully review it, and either approve or reject it based on league requirements.\n\n"
-            "**Review, Approval & Rejection Process**\n"
-            "When reviewing a roster, ensure all information is accurate and follows the rules. If approving a roster, you must include your name when submitting the approval. "
-            "If rejecting a roster, you must include your name along with a clear and specific reason explaining what needs to be fixed. "
-            "Clear feedback is required so the coach understands exactly what must be corrected.\n\n"
-            "After rejecting a roster, unlock it so the coach can edit and resubmit. "
-            "Use the Club Managers portal (preferred) or run `/unlock_roster`. "
-            "Do not unlock rosters unless a rejection has been issued.\n\n"
-            "**Roster Deletion & Final Submissions**\n"
-            "Only Administrator+ staff members have permission to delete rosters, and this should be used as a last resort only. "
-            "If a roster must be deleted (which should be extremely rare), tag one of the higher-ups or primarily the bot developer so they can run the necessary command.\n\n"
-            "Once a roster is approved, it will be automatically sent to the official roster logs channel. "
-            "Rosters posted in that channel are considered final submissions and cannot be edited or revised under any circumstances.\n\n"
-            "**Final Checks**\n"
-            "Before approving any roster, make sure you carefully review it and confirm that all players are properly tagged and that all required sections are completed. "
-            "Accuracy is critical, as approved rosters are final."
+            "**Purpose**\n"
+            "Review roster submissions and manage tournament operations.\n\n"
+            "**Who should use this**\n"
+            "- Staff only.\n\n"
+            "**Key rules**\n"
+            "- Approve/reject with clear feedback.\n"
+            "- Unlock only after rejection (use Club Managers portal).\n"
+            "- Approved rosters are final once posted to the roster listing channel."
         ),
-        color=discord.Color.orange(),
+        color=DEFAULT_COLOR,
+        footer=_portal_footer(),
     )
-    return embed
 
 
 def build_admin_embed() -> discord.Embed:
-    embed = discord.Embed(
+    embed = make_embed(
         title="Admin Control Panel",
-        description=(
-            "Admin controls for the tournament bot. Use the buttons below to view quick actions "
-            "and command references. All responses are ephemeral to you."
-        ),
-        color=discord.Color.blue(),
+        description="Use the buttons below. All responses are ephemeral (only you can see them).",
+        color=DEFAULT_COLOR,
+        footer=_portal_footer(),
     )
     embed.add_field(
         name="Tournaments",
@@ -101,8 +94,13 @@ def build_admin_embed() -> discord.Embed:
         inline=False,
     )
     embed.add_field(
-        name="DB & Analytics",
+        name="DB Analytics",
         value="Data checks, health, and exports.",
+        inline=False,
+    )
+    embed.add_field(
+        name="Repost Portal (staff)",
+        value="Clean up and repost this portal message set.",
         inline=False,
     )
     return embed
@@ -245,6 +243,7 @@ class AdminPortalView(SafeView):
             ("Club Managers", discord.ButtonStyle.primary, self.on_managers),
             ("Players", discord.ButtonStyle.primary, self.on_players),
             ("DB Analytics", discord.ButtonStyle.primary, self.on_db),
+            ("Repost Portal (staff)", discord.ButtonStyle.secondary, self.on_repost_portal),
         ]
         for label, style, handler in buttons:
             button: discord.ui.Button = discord.ui.Button(label=label, style=style)
@@ -323,6 +322,27 @@ class AdminPortalView(SafeView):
             ephemeral=True,
             view=DBView(),
         )
+
+    async def on_repost_portal(self, interaction: discord.Interaction) -> None:
+        if not await self._ensure_staff(interaction):
+            return
+        guild = interaction.guild
+        if guild is None:
+            await interaction.response.send_message(
+                "This action must be used in a guild.",
+                ephemeral=True,
+            )
+            return
+
+        await interaction.response.send_message(
+            embed=make_embed(
+                title="Reposting portal...",
+                description="Cleaning up and reposting the staff portal now.",
+                color=DEFAULT_COLOR,
+            ),
+            ephemeral=True,
+        )
+        await post_admin_portal(interaction.client, guilds=[guild])
 class TournamentsView(SafeView):
     def __init__(self) -> None:
         super().__init__(timeout=300)
@@ -699,8 +719,17 @@ async def send_admin_portal_message(
     embed = build_admin_embed()
     view = AdminPortalView()
     try:
-        await send_message(channel, embed=intro_embed)
-        await send_message(channel, embed=embed, view=view)
+        await send_message(
+            channel,
+            embed=intro_embed,
+            allowed_mentions=discord.AllowedMentions.none(),
+        )
+        await send_message(
+            channel,
+            embed=embed,
+            view=view,
+            allowed_mentions=discord.AllowedMentions.none(),
+        )
     except discord.DiscordException as exc:
         logging.warning("Failed to post admin portal to channel %s: %s", target_channel_id, exc)
         await interaction.response.send_message(
@@ -715,7 +744,7 @@ async def send_admin_portal_message(
 
 
 async def post_admin_portal(
-    bot: commands.Bot | commands.AutoShardedBot,
+    bot: discord.Client,
     *,
     guilds: list[discord.Guild] | None = None,
 ) -> None:
@@ -760,8 +789,17 @@ async def post_admin_portal(
         embed = build_admin_embed()
         view = AdminPortalView()
         try:
-            await send_message(channel, embed=intro_embed)
-            await send_message(channel, embed=embed, view=view)
+            await send_message(
+                channel,
+                embed=intro_embed,
+                allowed_mentions=discord.AllowedMentions.none(),
+            )
+            await send_message(
+                channel,
+                embed=embed,
+                view=view,
+                allowed_mentions=discord.AllowedMentions.none(),
+            )
             logging.info("Posted admin/staff portal embed (guild=%s channel=%s).", guild.id, target_channel_id)
         except discord.DiscordException as exc:
             logging.warning(

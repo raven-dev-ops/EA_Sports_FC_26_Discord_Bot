@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timezone
 
 import discord
-from discord.ext import commands
 
 from interactions.fc25_stats_modals import (
     LinkFC25StatsModal,
@@ -20,13 +20,27 @@ from services.recruitment_service import delete_recruit_profile, get_recruit_pro
 from utils.channel_routing import resolve_channel_id
 from utils.discord_wrappers import delete_message, fetch_channel, send_message
 from utils.embeds import DEFAULT_COLOR, SUCCESS_COLOR, make_embed
+from utils.permissions import is_staff_user
+
+
+def _portal_footer() -> str:
+    return f"Last refreshed: {discord.utils.format_dt(datetime.now(timezone.utc), style='R')}"
 
 
 def build_recruit_intro_embed() -> discord.Embed:
     return make_embed(
         title="Recruitment Portal Overview",
-        description="Register your profile so clubs can find you.",
+        description=(
+            "**Purpose**\n"
+            "Create a recruit profile so clubs/coaches can find you.\n\n"
+            "**Who should use this**\n"
+            "- Players/recruits.\n\n"
+            "**Key rules**\n"
+            "- Set Availability to publish to the listing channel.\n"
+            "- Keep positions/archetypes consistent so coaches can filter/search."
+        ),
         color=DEFAULT_COLOR,
+        footer=_portal_footer(),
     )
 
 
@@ -34,9 +48,10 @@ def build_recruit_portal_embed() -> discord.Embed:
     embed = make_embed(
         title="Recruitment Portal",
         description=(
-            "Use the buttons below to register/edit your profile, preview it, or unregister."
+            "Use the buttons below. All responses are ephemeral (only you can see them)."
         ),
         color=DEFAULT_COLOR,
+        footer=_portal_footer(),
     )
     embed.add_field(
         name="Register / Edit",
@@ -56,6 +71,16 @@ def build_recruit_portal_embed() -> discord.Embed:
     embed.add_field(
         name="Unregister",
         value="Deletes your stored profile and removes your listing posts when possible.",
+        inline=False,
+    )
+    embed.add_field(
+        name="Help",
+        value="Guidance and tips for keeping your profile high-signal.",
+        inline=False,
+    )
+    embed.add_field(
+        name="Repost Portal (staff)",
+        value="Clean up and repost this portal message set.",
         inline=False,
     )
     return embed
@@ -78,7 +103,7 @@ def build_recruit_help_embed() -> discord.Embed:
 
 class RecruitPortalView(SafeView):
     def __init__(self) -> None:
-        super().__init__(timeout=300)
+        super().__init__(timeout=None)
 
     @discord.ui.button(
         label="Register / Edit",
@@ -342,6 +367,35 @@ class RecruitPortalView(SafeView):
             ephemeral=True,
         )
 
+    @discord.ui.button(
+        label="Repost Portal (staff)",
+        style=discord.ButtonStyle.secondary,
+        custom_id="recruit:repost_portal",
+    )
+    async def repost_portal(
+        self, interaction: discord.Interaction, button: discord.ui.Button
+    ) -> None:
+        settings = getattr(interaction.client, "settings", None)
+        if not is_staff_user(interaction.user, settings):
+            await interaction.response.send_message("Not authorized.", ephemeral=True)
+            return
+        guild = interaction.guild
+        if guild is None:
+            await interaction.response.send_message(
+                "This action must be used in a guild.",
+                ephemeral=True,
+            )
+            return
+        await interaction.response.send_message(
+            embed=make_embed(
+                title="Reposting portal...",
+                description="Cleaning up and reposting the recruitment portal now.",
+                color=DEFAULT_COLOR,
+            ),
+            ephemeral=True,
+        )
+        await post_recruit_portal(interaction.client, guilds=[guild])
+
 
 async def _delete_profile_posts(client: discord.Client, profile: dict) -> None:
     for channel_key, message_key in (
@@ -363,7 +417,7 @@ async def _delete_profile_posts(client: discord.Client, profile: dict) -> None:
 
 
 async def post_recruit_portal(
-    bot: commands.Bot | commands.AutoShardedBot,
+    bot: discord.Client,
     *,
     guilds: list[discord.Guild] | None = None,
 ) -> None:

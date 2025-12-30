@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timezone
 
 import discord
-from discord.ext import commands
 
 from interactions.club_embeds import build_club_ad_embed
 from interactions.modals import ClubAdModalStep1
@@ -12,21 +12,36 @@ from services.clubs_service import delete_club_ad, get_club_ad
 from utils.channel_routing import resolve_channel_id
 from utils.discord_wrappers import delete_message, fetch_channel, send_message
 from utils.embeds import DEFAULT_COLOR, SUCCESS_COLOR, make_embed
+from utils.permissions import is_staff_user
+
+
+def _portal_footer() -> str:
+    return f"Last refreshed: {discord.utils.format_dt(datetime.now(timezone.utc), style='R')}"
 
 
 def build_club_intro_embed() -> discord.Embed:
     return make_embed(
         title="Club Portal Overview",
-        description="Register your club ad so recruits can find you.",
+        description=(
+            "**Purpose**\n"
+            "Create a club ad so recruits can find you.\n\n"
+            "**Who should use this**\n"
+            "- Club staff/coaches posting ads.\n\n"
+            "**Key rules**\n"
+            "- Keep positions needed and keywords consistent so recruits can search.\n"
+            "- Descriptions must be at least 30 characters."
+        ),
         color=DEFAULT_COLOR,
+        footer=_portal_footer(),
     )
 
 
 def build_club_portal_embed() -> discord.Embed:
     embed = make_embed(
         title="Club Portal",
-        description="Use the buttons below to register/edit your club ad, preview it, or unregister.",
+        description="Use the buttons below. All responses are ephemeral (only you can see them).",
         color=DEFAULT_COLOR,
+        footer=_portal_footer(),
     )
     embed.add_field(
         name="Register / Edit",
@@ -41,6 +56,16 @@ def build_club_portal_embed() -> discord.Embed:
     embed.add_field(
         name="Unregister",
         value="Deletes your stored club ad and removes your listing posts when possible.",
+        inline=False,
+    )
+    embed.add_field(
+        name="Help",
+        value="Guidance and tips for making your club ad clear and searchable.",
+        inline=False,
+    )
+    embed.add_field(
+        name="Repost Portal (staff)",
+        value="Clean up and repost this portal message set.",
         inline=False,
     )
     return embed
@@ -64,7 +89,7 @@ def build_club_help_embed() -> discord.Embed:
 
 class ClubPortalView(SafeView):
     def __init__(self) -> None:
-        super().__init__(timeout=300)
+        super().__init__(timeout=None)
 
     @discord.ui.button(
         label="Register / Edit",
@@ -191,6 +216,35 @@ class ClubPortalView(SafeView):
             ephemeral=True,
         )
 
+    @discord.ui.button(
+        label="Repost Portal (staff)",
+        style=discord.ButtonStyle.secondary,
+        custom_id="club:repost_portal",
+    )
+    async def repost_portal(
+        self, interaction: discord.Interaction, button: discord.ui.Button
+    ) -> None:
+        settings = getattr(interaction.client, "settings", None)
+        if not is_staff_user(interaction.user, settings):
+            await interaction.response.send_message("Not authorized.", ephemeral=True)
+            return
+        guild = interaction.guild
+        if guild is None:
+            await interaction.response.send_message(
+                "This action must be used in a guild.",
+                ephemeral=True,
+            )
+            return
+        await interaction.response.send_message(
+            embed=make_embed(
+                title="Reposting portal...",
+                description="Cleaning up and reposting the club portal now.",
+                color=DEFAULT_COLOR,
+            ),
+            ephemeral=True,
+        )
+        await post_club_portal(interaction.client, guilds=[guild])
+
 
 async def _delete_club_posts(client: discord.Client, ad: dict) -> None:
     for channel_key, message_key in (
@@ -212,7 +266,7 @@ async def _delete_club_posts(client: discord.Client, ad: dict) -> None:
 
 
 async def post_club_portal(
-    bot: commands.Bot | commands.AutoShardedBot,
+    bot: discord.Client,
     *,
     guilds: list[discord.Guild] | None = None,
 ) -> None:

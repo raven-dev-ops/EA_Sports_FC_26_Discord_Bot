@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timezone
 from typing import Any
 
 import discord
@@ -14,10 +15,19 @@ from utils.channel_routing import resolve_channel_id
 from utils.discord_wrappers import edit_message, fetch_channel, send_message
 
 PREMIUM_CAPS = {22, 25}
+
 PREMIUM_MESSAGE_ID_KEY = "premium_coaches_message_id"
+PREMIUM_PIN_ENABLED_KEY = "premium_coaches_pin_enabled"
+PREMIUM_PINNED_MESSAGE_ID_KEY = "premium_coaches_pinned_message_id"
 
 
-def _build_embed(*, cycle_name: str, listings: list[str]) -> discord.Embed:
+def _build_embed(
+    *,
+    cycle_name: str,
+    premium_listings: list[str],
+    premium_plus_listings: list[str],
+    updated_at: datetime,
+) -> discord.Embed:
     embed = discord.Embed(
         title="Premium Coaches",
         description=(
@@ -28,25 +38,40 @@ def _build_embed(*, cycle_name: str, listings: list[str]) -> discord.Embed:
     )
     embed.add_field(name="Cycle", value=cycle_name, inline=False)
 
-    if not listings:
+    if not premium_listings and not premium_plus_listings:
         embed.add_field(
             name="Listings",
             value="No premium rosters found yet.",
             inline=False,
         )
+        embed.set_footer(text=f"Last updated: {discord.utils.format_dt(updated_at, style='R')}")
         return embed
+
+    _add_listing_fields(embed, heading="Premium+ (25 cap)", listings=premium_plus_listings)
+    _add_listing_fields(embed, heading="Premium (22 cap)", listings=premium_listings)
+    embed.set_footer(
+        text=(
+            f"Last updated: {discord.utils.format_dt(updated_at, style='R')} | "
+            "Premium=22 | Premium+=25"
+        )
+    )
+    return embed
+
+
+def _add_listing_fields(embed: discord.Embed, *, heading: str, listings: list[str]) -> None:
+    if not listings:
+        embed.add_field(name=heading, value="None", inline=False)
+        return
 
     chunks = _chunk_lines(listings, max_len=1024)
     for idx, chunk in enumerate(chunks):
+        if len(embed.fields) >= 25:
+            return
         embed.add_field(
-            name="Listings" if idx == 0 else "Listings (cont.)",
+            name=heading if idx == 0 else f"{heading} (cont.)",
             value=chunk,
             inline=False,
         )
-        if idx >= 23:
-            break
-    embed.set_footer(text="Coach Premium = 22 cap • Coach Premium+ = 25 cap")
-    return embed
 
 
 def _chunk_lines(lines: list[str], *, max_len: int) -> list[str]:
@@ -90,7 +115,21 @@ def _parse_int(value: Any) -> int | None:
         return None
 
 
-def _build_listings(collection, *, cycle_id: Any) -> list[str]:
+def _parse_bool(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int):
+        return value != 0
+    if isinstance(value, str):
+        raw = value.strip().lower()
+        if raw in {"1", "true", "yes", "on"}:
+            return True
+        if raw in {"0", "false", "no", "off", ""}:
+            return False
+    return False
+
+
+def _build_listings(collection, *, cycle_id: Any) -> tuple[list[str], list[str]]:
     rosters = list(
         collection.find(
             {
@@ -101,7 +140,7 @@ def _build_listings(collection, *, cycle_id: Any) -> list[str]:
         )
     )
     if not rosters:
-        return []
+        return [], []
 
     roster_ids = [r.get("_id") for r in rosters if r.get("_id") is not None]
     counts: dict[Any, int] = {}
@@ -116,7 +155,8 @@ def _build_listings(collection, *, cycle_id: Any) -> list[str]:
         except Exception:
             counts = {}
 
-    rows: list[tuple[int, str]] = []
+    premium: list[tuple[int, str]] = []
+    premium_plus: list[tuple[int, str]] = []
     for roster in rosters:
         cap_raw = roster.get("cap")
         cap = int(cap_raw) if isinstance(cap_raw, int) else 0
@@ -126,23 +166,90 @@ def _build_listings(collection, *, cycle_id: Any) -> list[str]:
             continue
         count = counts.get(roster.get("_id"), 0)
         openings = max(0, cap - count) if cap > 0 else 0
-        rows.append((openings, _format_listing(roster, count=count, openings=openings)))
+        line = _format_listing(roster, count=count, openings=openings)
+        if cap >= 25:
+            premium_plus.append((openings, line))
+        else:
+            premium.append((openings, line))
 
-    rows.sort(key=lambda item: (item[0], item[1].casefold()), reverse=True)
-    return [line for _, line in rows]
+    premium.sort(key=lambda item: (item[0], item[1].casefold()), reverse=True)
+    premium_plus.sort(key=lambda item: (item[0], item[1].casefold()), reverse=True)
+    return [line for _, line in premium], [line for _, line in premium_plus]
 
 
 def _format_listing(roster: dict[str, Any], *, count: int, openings: int) -> str:
     coach_id = roster.get("coach_discord_id")
+    coach = f"<@{coach_id}>" if isinstance(coach_id, int) else "Unknown coach"
     team_name = str(roster.get("team_name") or "Unnamed Team").strip() or "Unnamed Team"
     cap_raw = roster.get("cap")
     cap = int(cap_raw) if isinstance(cap_raw, int) else 0
     practice = str(roster.get("practice_times") or "").strip() or "Not set"
     tier = "Premium+" if cap >= 25 else "Premium"
     return (
-        f"<@{coach_id}> — **{team_name}** — {tier} — "
-        f"Openings: {openings} ({count}/{cap}) — Practice: {practice}"
+        f"{coach} - **{team_name}** - {tier} - "
+        f"Openings: {openings} ({count}/{cap}) - Practice: {practice}"
     )
+
+
+async def force_rebuild_premium_coaches_report(
+    client: discord.Client,
+    *,
+    settings: Settings,
+    guild_id: int,
+    test_mode: bool,
+    cleanup_limit: int = 50,
+) -> int:
+    channel_id = resolve_channel_id(
+        settings,
+        guild_id=guild_id,
+        field="channel_premium_coaches_id",
+        test_mode=test_mode,
+    )
+    if not channel_id:
+        return 0
+
+    channel = await fetch_channel(client, channel_id)
+    if channel is None:
+        return 0
+
+    deleted = 0
+    bot_user = getattr(client, "user", None)
+    if bot_user and hasattr(channel, "history"):
+        try:
+            async for message in channel.history(limit=int(cleanup_limit)):  # type: ignore[attr-defined]
+                if message.author.id != bot_user.id:
+                    continue
+                if not message.embeds:
+                    continue
+                if message.embeds[0].title != "Premium Coaches":
+                    continue
+                try:
+                    await message.delete()
+                    deleted += 1
+                except discord.DiscordException:
+                    continue
+        except discord.DiscordException:
+            pass
+
+    if not test_mode:
+        try:
+            cfg = get_guild_config(guild_id)
+        except Exception:
+            cfg = {}
+        cfg.pop(PREMIUM_MESSAGE_ID_KEY, None)
+        cfg.pop(PREMIUM_PINNED_MESSAGE_ID_KEY, None)
+        try:
+            set_guild_config(guild_id, cfg)
+        except Exception:
+            logging.debug("Failed to clear premium coaches message ids (guild=%s).", guild_id)
+
+    await upsert_premium_coaches_report(
+        client,
+        settings=settings,
+        guild_id=guild_id,
+        test_mode=test_mode,
+    )
+    return deleted
 
 
 async def upsert_premium_coaches_report(
@@ -171,8 +278,13 @@ async def upsert_premium_coaches_report(
     except Exception:
         return
 
-    listings = _build_listings(collection, cycle_id=cycle["_id"])
-    embed = _build_embed(cycle_name=str(cycle.get("name") or "Current Tournament"), listings=listings)
+    premium_listings, premium_plus_listings = _build_listings(collection, cycle_id=cycle["_id"])
+    embed = _build_embed(
+        cycle_name=str(cycle.get("name") or "Current Tournament"),
+        premium_listings=premium_listings,
+        premium_plus_listings=premium_plus_listings,
+        updated_at=datetime.now(timezone.utc),
+    )
 
     channel = await fetch_channel(client, channel_id)
     if channel is None:
@@ -187,7 +299,10 @@ async def upsert_premium_coaches_report(
         cfg = get_guild_config(guild_id)
     except Exception:
         cfg = {}
+
     message_id = _parse_int(cfg.get(PREMIUM_MESSAGE_ID_KEY))
+    pin_enabled = _parse_bool(cfg.get(PREMIUM_PIN_ENABLED_KEY))
+    pinned_message_id = _parse_int(cfg.get(PREMIUM_PINNED_MESSAGE_ID_KEY))
 
     msg = None
     if message_id and hasattr(channel, "fetch_message"):
@@ -199,16 +314,93 @@ async def upsert_premium_coaches_report(
     if msg is not None:
         edited = await edit_message(msg, embed=embed, view=None)
         if edited is not None:
+            updated = await _apply_pin_settings(
+                channel,
+                msg,
+                guild_id=guild_id,
+                pin_enabled=pin_enabled,
+                pinned_message_id=pinned_message_id,
+                cfg=cfg,
+            )
+            if updated:
+                try:
+                    set_guild_config(guild_id, cfg)
+                except Exception:
+                    logging.debug(
+                        "Failed to persist premium coaches pin settings (guild=%s).", guild_id
+                    )
             return
 
     sent = await send_message(channel, embed=embed, allowed_mentions=discord.AllowedMentions.none())
     if sent is None:
         return
     cfg[PREMIUM_MESSAGE_ID_KEY] = sent.id
+    await _apply_pin_settings(
+        channel,
+        sent,
+        guild_id=guild_id,
+        pin_enabled=pin_enabled,
+        pinned_message_id=pinned_message_id,
+        cfg=cfg,
+    )
     try:
         set_guild_config(guild_id, cfg)
     except Exception:
-        logging.debug("Failed to persist premium coaches message id (guild=%s).", guild_id)
+        logging.debug("Failed to persist premium coaches config (guild=%s).", guild_id)
+
+
+async def _apply_pin_settings(
+    channel: discord.abc.Messageable,
+    message: discord.Message,
+    *,
+    guild_id: int,
+    pin_enabled: bool,
+    pinned_message_id: int | None,
+    cfg: dict[str, Any],
+) -> bool:
+    if not hasattr(message, "pin") or not hasattr(message, "unpin"):
+        return False
+    if not hasattr(channel, "fetch_message"):
+        return False
+
+    changed = False
+    if pin_enabled:
+        if pinned_message_id and pinned_message_id != message.id:
+            try:
+                old = await channel.fetch_message(pinned_message_id)  # type: ignore[attr-defined]
+            except discord.DiscordException:
+                old = None
+            if old is not None and getattr(old, "pinned", False):
+                try:
+                    await old.unpin(reason="Offside: premium coaches repin")  # type: ignore[attr-defined]
+                except discord.DiscordException:
+                    pass
+        try:
+            if not getattr(message, "pinned", False):
+                await message.pin(reason="Offside: premium coaches")  # type: ignore[attr-defined]
+            if cfg.get(PREMIUM_PINNED_MESSAGE_ID_KEY) != message.id:
+                cfg[PREMIUM_PINNED_MESSAGE_ID_KEY] = message.id
+                changed = True
+        except discord.Forbidden:
+            logging.info("Missing permission to pin premium coaches message (guild=%s).", guild_id)
+        except discord.DiscordException:
+            pass
+        return changed
+
+    if pinned_message_id:
+        try:
+            old = await channel.fetch_message(pinned_message_id)  # type: ignore[attr-defined]
+        except discord.DiscordException:
+            old = None
+        if old is not None and getattr(old, "pinned", False):
+            try:
+                await old.unpin(reason="Offside: premium coaches unpin")  # type: ignore[attr-defined]
+            except discord.DiscordException:
+                pass
+        if PREMIUM_PINNED_MESSAGE_ID_KEY in cfg:
+            cfg.pop(PREMIUM_PINNED_MESSAGE_ID_KEY, None)
+            changed = True
+    return changed
 
 
 async def post_premium_coaches_report(
@@ -232,3 +424,4 @@ async def post_premium_coaches_report(
             )
         except Exception:
             logging.exception("Failed to upsert premium coaches report (guild=%s).", guild.id)
+

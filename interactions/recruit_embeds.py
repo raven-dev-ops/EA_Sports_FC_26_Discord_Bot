@@ -24,11 +24,11 @@ def build_recruit_profile_embed(
     )
 
     if profile.get("age"):
-        embed.add_field(name="Age", value=str(profile["age"]), inline=True)
+        embed.add_field(name="🎂 Age", value=str(profile["age"]), inline=True)
     if profile.get("platform"):
-        embed.add_field(name="Platform", value=str(profile["platform"]), inline=True)
+        embed.add_field(name="🎮 Platform", value=str(profile["platform"]), inline=True)
     if "mic" in profile:
-        embed.add_field(name="Mic", value="Yes" if profile.get("mic") else "No", inline=True)
+        embed.add_field(name="🎙️ Mic", value="Yes" if profile.get("mic") else "No", inline=True)
 
     main_position = profile.get("main_position") or "-"
     main_archetype = _format_label(profile.get("main_archetype")) or "-"
@@ -38,16 +38,16 @@ def build_recruit_profile_embed(
         f"Main: **{main_position}** ({main_archetype})\n"
         f"Secondary: **{secondary_position}** ({secondary_archetype})"
     )
-    embed.add_field(name="Positions", value=positions_value, inline=False)
+    embed.add_field(name="📌 Positions", value=positions_value, inline=False)
 
     if profile.get("server_name"):
-        embed.add_field(name="Server", value=str(profile["server_name"]), inline=True)
+        embed.add_field(name="📍 Server", value=str(profile["server_name"]), inline=True)
     if profile.get("timezone"):
-        embed.add_field(name="Timezone", value=str(profile["timezone"]), inline=True)
+        embed.add_field(name="🧭 Timezone", value=str(profile["timezone"]), inline=True)
 
     notes = profile.get("notes")
     if notes:
-        embed.add_field(name="Notes", value=str(notes), inline=False)
+        _add_long_field(embed, name="📝 Notes", value=str(notes), max_fields=2)
 
     availability_days = profile.get("availability_days")
     availability_start_hour = profile.get("availability_start_hour")
@@ -78,13 +78,13 @@ def build_recruit_profile_embed(
 
         if availability is not None:
             embed.add_field(
-                name="Availability",
+                name="🗓️ Availability",
                 value=f"{format_days(availability.days)} - {availability.start_hour:02d}:00-{availability.end_hour:02d}:00",
                 inline=False,
             )
         if next_start is not None:
             embed.add_field(
-                name="Next start (viewer-local)",
+                name="⏰ Next start (viewer-local)",
                 value=f"{discord.utils.format_dt(next_start, style='F')} ({discord.utils.format_dt(next_start, style='R')})",
                 inline=False,
             )
@@ -115,16 +115,54 @@ def build_recruit_profile_embed(
             lines.append(f"Last updated: {discord.utils.format_dt(fetched_at, style='R')}")
 
         embed.add_field(
-            name="Verified Stats (FC25 Clubs, unofficial)",
+            name="📊 Verified Stats (FC25 Clubs, unofficial)",
             value="\n".join(lines)[:1024],
             inline=False,
         )
 
     updated_at = profile.get("updated_at") or profile.get("created_at")
     if isinstance(updated_at, datetime):
-        embed.set_footer(text=f"Updated: {updated_at.strftime('%Y-%m-%d %H:%M UTC')}")
+        embed.set_footer(
+            text=(
+                f"Updated: {discord.utils.format_dt(updated_at, style='R')} | "
+                "Long text may be truncated"
+            )
+        )
 
     return embed
+
+
+def _add_long_field(
+    embed: discord.Embed,
+    *,
+    name: str,
+    value: str,
+    inline: bool = False,
+    max_fields: int = 2,
+) -> None:
+    remaining = value.strip()
+    if not remaining:
+        return
+    fields_added = 0
+    while remaining and fields_added < max_fields:
+        chunk, remaining = _split_chunk(remaining, max_len=1024)
+        heading = name if fields_added == 0 else f"{name} (cont.)"
+        if remaining and fields_added == max_fields - 1 and len(chunk) >= 4:
+            chunk = chunk[:1020].rstrip() + "..."
+            remaining = ""
+        embed.add_field(name=heading, value=chunk, inline=inline)
+        fields_added += 1
+
+
+def _split_chunk(text: str, *, max_len: int) -> tuple[str, str]:
+    if len(text) <= max_len:
+        return text, ""
+    cutoff = max(text.rfind("\n", 0, max_len), text.rfind(" ", 0, max_len))
+    if cutoff < int(max_len * 0.6):
+        cutoff = max_len
+    chunk = text[:cutoff].rstrip()
+    rest = text[cutoff:].lstrip()
+    return chunk, rest
 
 
 def _format_label(value: object) -> str | None:
