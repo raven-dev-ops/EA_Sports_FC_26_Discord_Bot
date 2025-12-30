@@ -2,12 +2,17 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timezone
+from typing import Any
 
 import discord
 
+from database import get_collection
 from interactions.premium_coaches_report import upsert_premium_coaches_report
 from interactions.views import SafeView
 from repositories.tournament_repo import ensure_cycle_by_name
+from services.channel_setup_service import ensure_offside_channels
+from services.guild_config_service import get_guild_config, set_guild_config
+from services.role_setup_service import ensure_offside_roles
 from services.roster_service import (
     ROSTER_STATUS_UNLOCKED,
     delete_roster,
@@ -96,6 +101,11 @@ def build_admin_embed() -> discord.Embed:
     embed.add_field(
         name="DB Analytics",
         value="Data checks, health, and exports.",
+        inline=False,
+    )
+    embed.add_field(
+        name="Verify Setup (staff)",
+        value="Re-run auto-setup for this guild and report any changes (channels/roles/permissions).",
         inline=False,
     )
     embed.add_field(
@@ -243,6 +253,7 @@ class AdminPortalView(SafeView):
             ("Club Managers", discord.ButtonStyle.primary, self.on_managers),
             ("Players", discord.ButtonStyle.primary, self.on_players),
             ("DB Analytics", discord.ButtonStyle.primary, self.on_db),
+            ("Verify Setup (staff)", discord.ButtonStyle.secondary, self.on_verify_setup),
             ("Repost Portal (staff)", discord.ButtonStyle.secondary, self.on_repost_portal),
         ]
         for label, style, handler in buttons:
@@ -322,6 +333,120 @@ class AdminPortalView(SafeView):
             ephemeral=True,
             view=DBView(),
         )
+
+    async def on_verify_setup(self, interaction: discord.Interaction) -> None:
+        if not await self._ensure_staff(interaction):
+            return
+        settings = getattr(interaction.client, "settings", None)
+        if settings is None:
+            await send_interaction_error(interaction)
+            return
+        guild = interaction.guild
+        if guild is None:
+            await interaction.response.send_message(
+                "This action must be used in a guild.",
+                ephemeral=True,
+            )
+            return
+
+        me = guild.me
+        if me is None:
+            await interaction.response.send_message(
+                "Bot member is not available yet. Try again in a moment.",
+                ephemeral=True,
+            )
+            return
+
+        if not (settings.mongodb_uri and settings.mongodb_db_name and settings.mongodb_collection):
+            await interaction.response.send_message(
+                "MongoDB is not configured; per-guild auto-setup cannot run.",
+                ephemeral=True,
+            )
+            return
+
+        actions: list[str] = []
+        warnings: list[str] = []
+
+        if not me.guild_permissions.manage_channels:
+            warnings.append("Missing `Manage Channels` (cannot create/repair channels).")
+        if not me.guild_permissions.manage_roles:
+            warnings.append("Missing `Manage Roles` (cannot create/repair coach tier roles).")
+        if not me.guild_permissions.manage_messages:
+            warnings.append("Missing `Manage Messages` (pin/unpin and some cleanup actions may fail).")
+
+        try:
+            collection = get_collection(settings)
+        except Exception:
+            logging.exception("Verify Setup: failed to connect to MongoDB (guild=%s).", guild.id)
+            await interaction.response.send_message(
+                "Could not connect to MongoDB. Check `MONGODB_*` settings and try again.",
+                ephemeral=True,
+            )
+            return
+
+        existing: dict[str, object] = {}
+        try:
+            existing = get_guild_config(guild.id, collection=collection)
+        except Exception:
+            logging.exception("Verify Setup: failed to load guild config (guild=%s).", guild.id)
+            existing = {}
+
+        updated: dict[str, Any] = dict(existing)
+        if me.guild_permissions.manage_roles:
+            try:
+                updated = await ensure_offside_roles(guild, existing_config=updated, actions=actions)
+            except discord.DiscordException as exc:
+                logging.warning("Verify Setup: role setup failed (guild=%s): %s", guild.id, exc)
+                actions.append("Role setup failed (missing permissions).")
+        if me.guild_permissions.manage_channels:
+            try:
+                test_mode = bool(getattr(interaction.client, "test_mode", False))
+                updated, channel_actions = await ensure_offside_channels(
+                    guild,
+                    settings=settings,
+                    existing_config=updated,
+                    test_mode=test_mode,
+                )
+                actions.extend(channel_actions)
+            except discord.DiscordException as exc:
+                logging.warning("Verify Setup: channel setup failed (guild=%s): %s", guild.id, exc)
+                actions.append("Channel setup failed (missing permissions).")
+
+        if updated != existing:
+            try:
+                set_guild_config(guild.id, updated, collection=collection)
+            except Exception:
+                logging.exception("Verify Setup: failed to persist guild config (guild=%s).", guild.id)
+                actions.append("Could not persist updated guild config to MongoDB.")
+
+        test_mode = bool(getattr(interaction.client, "test_mode", False))
+        staff_monitor = updated.get("channel_staff_monitor_id")
+        staff_monitor_status = (
+            f"<#{staff_monitor}>" if test_mode and isinstance(staff_monitor, int) else "Not active"
+        )
+
+        embed = make_embed(
+            title="Setup Verification",
+            description=(
+                f"Guild: **{guild.name}** (`{guild.id}`)\n"
+                f"Test mode: **{test_mode}**\n"
+                f"Test sink: {staff_monitor_status}"
+            ),
+            color=DEFAULT_COLOR,
+        )
+        if warnings:
+            embed.add_field(
+                name="Warnings",
+                value="\n".join(f"- {w}" for w in warnings)[:1024],
+                inline=False,
+            )
+        embed.add_field(
+            name="Actions",
+            value=("\n".join(f"- {a}" for a in actions) or "- No changes needed.")[:1024],
+            inline=False,
+        )
+        embed.set_footer(text=_portal_footer())
+        await interaction.response.send_message(embed=embed, ephemeral=True)
 
     async def on_repost_portal(self, interaction: discord.Interaction) -> None:
         if not await self._ensure_staff(interaction):
