@@ -39,6 +39,13 @@ SESSION_TTL_SECONDS = int(os.environ.get("DASHBOARD_SESSION_TTL_SECONDS", "21600
 STATE_TTL_SECONDS = 600
 GUILD_METADATA_TTL_SECONDS = int(os.environ.get("DASHBOARD_GUILD_METADATA_TTL_SECONDS", "60").strip() or "60")
 
+REQUEST_TIMEOUT_SECONDS = float(os.environ.get("DASHBOARD_REQUEST_TIMEOUT_SECONDS", "15").strip() or "15")
+MAX_REQUEST_BYTES = int(os.environ.get("DASHBOARD_MAX_REQUEST_BYTES", "1048576").strip() or "1048576")
+RATE_LIMIT_WINDOW_SECONDS = int(os.environ.get("DASHBOARD_RATE_LIMIT_WINDOW_SECONDS", "60").strip() or "60")
+RATE_LIMIT_PUBLIC_MAX = int(os.environ.get("DASHBOARD_RATE_LIMIT_PUBLIC_MAX", "20").strip() or "20")
+RATE_LIMIT_WEBHOOK_MAX = int(os.environ.get("DASHBOARD_RATE_LIMIT_WEBHOOK_MAX", "120").strip() or "120")
+RATE_LIMIT_DEFAULT_MAX = int(os.environ.get("DASHBOARD_RATE_LIMIT_DEFAULT_MAX", "300").strip() or "300")
+
 # Minimal permissions needed for auto-setup and dashboard posting:
 # - Manage Channels, Manage Roles, View Channel, Send Messages, Embed Links, Read Message History
 DEFAULT_BOT_PERMISSIONS = 268520464
@@ -53,6 +60,10 @@ class SessionData:
     user: dict[str, Any]
     owner_guilds: list[dict[str, Any]]
     csrf_token: str
+
+
+_RATE_LIMIT_STATE: dict[tuple[str, str], tuple[int, float]] = {}
+_RATE_LIMIT_LAST_SWEEP: float = 0.0
 
 
 def _utc_now() -> datetime:
@@ -334,6 +345,88 @@ async def security_headers_middleware(request: web.Request, handler):
         response.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
 
     return response
+
+
+def _client_ip(request: web.Request) -> str:
+    forwarded = request.headers.get("X-Forwarded-For", "")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return str(request.remote or "")
+
+
+def _rate_limit_bucket_and_max(path: str) -> tuple[str, int]:
+    if path in {"/health", "/ready"}:
+        return "health", 10_000
+    if path in {"/login", "/install", "/oauth/callback"}:
+        return "public", RATE_LIMIT_PUBLIC_MAX
+    if path == "/api/billing/webhook":
+        return "webhook", RATE_LIMIT_WEBHOOK_MAX
+    return "default", RATE_LIMIT_DEFAULT_MAX
+
+
+def _rate_limit_allowed(*, key: tuple[str, str], limit: int, window_seconds: int) -> tuple[bool, int]:
+    now = time.time()
+    count, window_start = _RATE_LIMIT_STATE.get(key, (0, now))
+    if now - window_start >= window_seconds:
+        count, window_start = 0, now
+    count += 1
+    _RATE_LIMIT_STATE[key] = (count, window_start)
+    if count <= limit:
+        return True, 0
+    retry_after = max(0, int(window_seconds - (now - window_start)))
+    return False, retry_after
+
+
+def _sweep_rate_limit_state(*, window_seconds: int) -> None:
+    global _RATE_LIMIT_LAST_SWEEP
+    now = time.time()
+    if now - _RATE_LIMIT_LAST_SWEEP < max(1, window_seconds):
+        return
+    _RATE_LIMIT_LAST_SWEEP = now
+    cutoff = now - (window_seconds * 2)
+    to_delete = [key for key, (_count, start) in _RATE_LIMIT_STATE.items() if start < cutoff]
+    for key in to_delete:
+        _RATE_LIMIT_STATE.pop(key, None)
+
+
+@web.middleware
+async def rate_limit_middleware(request: web.Request, handler):
+    bucket, max_requests = _rate_limit_bucket_and_max(request.path)
+    window_seconds = max(1, int(RATE_LIMIT_WINDOW_SECONDS))
+    _sweep_rate_limit_state(window_seconds=window_seconds)
+
+    ip = _client_ip(request)
+    allowed, retry_after = _rate_limit_allowed(
+        key=(bucket, ip),
+        limit=max(1, int(max_requests)),
+        window_seconds=window_seconds,
+    )
+    if not allowed:
+        logging.warning(
+            "event=rate_limited bucket=%s ip=%s path=%s retry_after=%s",
+            bucket,
+            ip,
+            request.path,
+            retry_after,
+        )
+        resp = web.json_response(
+            {"ok": False, "error": "rate_limited", "bucket": bucket},
+            status=429,
+        )
+        resp.headers["Retry-After"] = str(retry_after)
+        return resp
+
+    return await handler(request)
+
+
+@web.middleware
+async def timeout_middleware(request: web.Request, handler):
+    try:
+        return await asyncio.wait_for(handler(request), timeout=float(REQUEST_TIMEOUT_SECONDS))
+    except asyncio.TimeoutError:
+        ip = _client_ip(request)
+        logging.warning("event=request_timeout ip=%s path=%s", ip, request.path)
+        raise web.HTTPRequestTimeout(text="Request timed out.") from None
 
 
 def _sanitize_next_path(raw: str) -> str:
@@ -1280,7 +1373,15 @@ async def _on_cleanup(app: web.Application) -> None:
 
 
 def create_app(*, settings: Settings | None = None) -> web.Application:
-    app = web.Application(middlewares=[security_headers_middleware, session_middleware])
+    app = web.Application(
+        client_max_size=max(1, int(MAX_REQUEST_BYTES)),
+        middlewares=[
+            security_headers_middleware,
+            rate_limit_middleware,
+            timeout_middleware,
+            session_middleware,
+        ]
+    )
     app_settings = settings or load_settings()
     app["settings"] = app_settings
     session_collection, state_collection = _ensure_dashboard_collections(app_settings)
