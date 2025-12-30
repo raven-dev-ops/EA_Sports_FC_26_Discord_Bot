@@ -24,6 +24,10 @@ DEPRECATED_KEYS: set[str] = {
     "CHANNEL_ROSTER_PORTAL_ID",
 }
 
+OVERRIDE_KEYS: set[str] = {
+    "STAFF_ROLE_IDS",
+}
+
 
 def _parse_dotenv(path: Path) -> dict[str, str]:
     if not path.exists():
@@ -77,6 +81,12 @@ def _parse_env_key_whitelist(example_path: Path) -> set[str]:
         if key:
             keys.add(key)
     return keys
+
+
+def _is_override_key(key: str) -> bool:
+    if key in OVERRIDE_KEYS:
+        return True
+    return key.startswith("ROLE_") or key.startswith("CHANNEL_")
 
 
 def _get_auth_header() -> str | None:
@@ -140,6 +150,11 @@ def main() -> int:
         help="Unset known deprecated keys in Heroku config",
     )
     parser.add_argument(
+        "--include-overrides",
+        action="store_true",
+        help="Include ROLE_*/CHANNEL_* and STAFF_ROLE_IDS overrides (not recommended for multi-guild prod)",
+    )
+    parser.add_argument(
         "--dry-run",
         action="store_true",
         help="Print keys that would be set/cleared without making API calls",
@@ -158,6 +173,8 @@ def main() -> int:
 
     to_set: dict[str, str] = {}
     for key in sorted(whitelist):
+        if not args.include_overrides and _is_override_key(key):
+            continue
         value = env_values.get(key, "")
         if value != "":
             to_set[key] = value
