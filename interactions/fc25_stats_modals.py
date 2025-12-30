@@ -8,6 +8,7 @@ import discord
 from config import Settings
 from interactions.modals import SafeModal
 from interactions.recruit_posts import upsert_recruit_profile_posts
+from services import entitlements_service
 from services.fc25_stats_client import (
     FC25NotFound,
     FC25ParseError,
@@ -78,6 +79,16 @@ class LinkFC25StatsModal(SafeModal, title="Link FC25 Clubs Stats"):
             )
             return
 
+        if not entitlements_service.is_feature_enabled(
+            settings,
+            guild_id=guild.id,
+            feature_key=entitlements_service.FEATURE_FC25_STATS,
+        ):
+            await interaction.response.send_message(
+                "FC25 stats integration is a Pro feature for this server.",
+                ephemeral=True,
+            )
+            return
         if not fc25_stats_enabled(settings, guild_id=guild.id):
             await interaction.response.send_message(
                 "FC25 stats integration is disabled for this guild.",
@@ -274,6 +285,16 @@ async def refresh_fc25_stats(interaction: discord.Interaction) -> None:
     if settings is None:
         await interaction.response.send_message(
             "Bot configuration is not loaded.",
+            ephemeral=True,
+        )
+        return
+    if not entitlements_service.is_feature_enabled(
+        settings,
+        guild_id=guild.id,
+        feature_key=entitlements_service.FEATURE_FC25_STATS,
+    ):
+        await interaction.response.send_message(
+            "FC25 stats integration is a Pro feature for this server.",
             ephemeral=True,
         )
         return
@@ -535,6 +556,16 @@ async def unlink_fc25_stats(interaction: discord.Interaction) -> None:
     if settings is None:
         await interaction.response.send_message(
             "Bot configuration is not loaded.",
+            ephemeral=True,
+        )
+        return
+    if not entitlements_service.is_feature_enabled(
+        settings,
+        guild_id=guild.id,
+        feature_key=entitlements_service.FEATURE_FC25_STATS,
+    ):
+        await interaction.response.send_message(
+            "FC25 stats integration is a Pro feature for this server.",
             ephemeral=True,
         )
         return
