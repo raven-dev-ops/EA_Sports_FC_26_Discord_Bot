@@ -7,6 +7,16 @@ from discord import app_commands
 from discord.ext import commands
 
 from services.guild_config_service import get_guild_config, set_guild_config
+from services.guild_settings_schema import (
+    BOOL_FIELDS,
+    INT_FIELDS,
+    INT_LIST_FIELDS,
+    TRI_BOOL_FIELDS,
+    USER_EDITABLE_FIELDS,
+    parse_csv_int_list,
+    parse_optional_bool,
+    parse_optional_int,
+)
 from utils.permissions import is_staff_user
 
 SAFE_CONFIG_FIELDS = {
@@ -101,7 +111,35 @@ class ConfigCog(commands.Cog):
             await interaction.response.send_message("Field is required.", ephemeral=True)
             return
         cfg = get_guild_config(guild.id)
-        cfg[field] = value.strip()
+        if field not in USER_EDITABLE_FIELDS:
+            allowed = ", ".join(sorted(USER_EDITABLE_FIELDS))
+            await interaction.response.send_message(
+                f"Field not allowed. Allowed fields: {allowed}",
+                ephemeral=True,
+            )
+            return
+
+        raw = value.strip()
+        try:
+            parsed: object | None
+            if field in INT_FIELDS:
+                parsed = parse_optional_int(raw)
+            elif field in INT_LIST_FIELDS:
+                parsed = parse_csv_int_list(raw)
+                if parsed == []:
+                    parsed = None
+            elif field in BOOL_FIELDS or field in TRI_BOOL_FIELDS:
+                parsed = parse_optional_bool(raw)
+            else:
+                parsed = raw
+        except ValueError as exc:
+            await interaction.response.send_message(str(exc), ephemeral=True)
+            return
+
+        if parsed is None:
+            cfg.pop(field, None)
+        else:
+            cfg[field] = parsed
         set_guild_config(guild.id, cfg)
         await interaction.response.send_message(
             f"Set `{field}` override for this guild.", ephemeral=True

@@ -17,6 +17,12 @@ from config import Settings, load_settings
 from database import get_global_collection
 from services.analytics_service import get_guild_analytics
 from services.guild_config_service import get_guild_config, set_guild_config
+from services.guild_settings_schema import (
+    FC25_STATS_ENABLED_KEY,
+    GUILD_CHANNEL_FIELDS,
+    GUILD_COACH_ROLE_FIELDS,
+    PREMIUM_COACHES_PIN_ENABLED_KEY,
+)
 
 DISCORD_API_BASE = "https://discord.com/api"
 AUTHORIZE_URL = "https://discord.com/oauth2/authorize"
@@ -35,25 +41,6 @@ DEFAULT_BOT_PERMISSIONS = 268520464
 
 DASHBOARD_SESSIONS_COLLECTION = "dashboard_sessions"
 DASHBOARD_OAUTH_STATES_COLLECTION = "dashboard_oauth_states"
-
-GUILD_COACH_ROLE_FIELDS: list[tuple[str, str]] = [
-    ("role_coach_id", "Coach role"),
-    ("role_coach_premium_id", "Coach Premium role"),
-    ("role_coach_premium_plus_id", "Coach Premium+ role"),
-]
-
-GUILD_CHANNEL_FIELDS: list[tuple[str, str]] = [
-    ("channel_staff_portal_id", "Staff portal channel"),
-    ("channel_club_portal_id", "Club portal channel"),
-    ("channel_manager_portal_id", "Club Managers portal channel"),
-    ("channel_coach_portal_id", "Coach portal channel"),
-    ("channel_recruit_portal_id", "Recruit portal channel"),
-    ("channel_staff_monitor_id", "Staff monitor channel"),
-    ("channel_roster_listing_id", "Roster listing channel"),
-    ("channel_recruit_listing_id", "Recruit listing channel"),
-    ("channel_club_listing_id", "Club listing channel"),
-    ("channel_premium_coaches_id", "Premium Coaches channel"),
-]
 
 
 @dataclass
@@ -598,6 +585,20 @@ def _parse_int(value: Any) -> int | None:
         return None
 
 
+def _parse_bool(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int):
+        return value != 0
+    if isinstance(value, str):
+        raw = value.strip().lower()
+        if raw in {"1", "true", "yes", "on"}:
+            return True
+        if raw in {"0", "false", "no", "off", ""}:
+            return False
+    return False
+
+
 async def guild_settings_page(request: web.Request) -> web.Response:
     session = _require_session(request)
     settings: Settings = request.app["settings"]
@@ -777,7 +778,15 @@ async def guild_settings_page(request: web.Request) -> web.Response:
             )
         channels_control_html = "\n".join(channel_controls)
 
-    fc25_value = cfg.get("fc25_stats_enabled")
+    premium_pin_enabled = _parse_bool(cfg.get(PREMIUM_COACHES_PIN_ENABLED_KEY))
+    premium_pin_checked = "checked" if premium_pin_enabled else ""
+    premium_pin_control_html = f"""
+            <h3 style="margin:14px 0 6px;">Premium Coaches</h3>
+            <label><input type="checkbox" name="{PREMIUM_COACHES_PIN_ENABLED_KEY}" value="1" {premium_pin_checked} /> Pin listing message</label>
+            <p class="muted">Pins the bot's Premium Coaches listing message in the Premium Coaches channel (requires Manage Messages).</p>
+        """
+
+    fc25_value = cfg.get(FC25_STATS_ENABLED_KEY)
     if fc25_value is True:
         fc25_selected = "true"
     elif fc25_value is False:
@@ -820,6 +829,7 @@ async def guild_settings_page(request: web.Request) -> web.Response:
              {staff_roles_control_html}
              {coach_roles_control_html}
              {channels_control_html}
+             {premium_pin_control_html}
              <label>FC25 stats override</label><br/>
              <select name="fc25_stats_enabled" style="width:100%; padding:10px; margin-top:6px;">
                <option value="default" {selected_default}>Default</option>
@@ -925,13 +935,19 @@ async def guild_settings_save(request: web.Request) -> web.Response:
             kind="channel",
         )
 
-    fc25_raw = str(data.get("fc25_stats_enabled", "default")).strip().lower()
+    pin_enabled = data.get(PREMIUM_COACHES_PIN_ENABLED_KEY) is not None
+    if pin_enabled:
+        cfg[PREMIUM_COACHES_PIN_ENABLED_KEY] = True
+    else:
+        cfg.pop(PREMIUM_COACHES_PIN_ENABLED_KEY, None)
+
+    fc25_raw = str(data.get(FC25_STATS_ENABLED_KEY, "default")).strip().lower()
     if fc25_raw in {"", "default"}:
-        cfg.pop("fc25_stats_enabled", None)
+        cfg.pop(FC25_STATS_ENABLED_KEY, None)
     elif fc25_raw in {"1", "true", "yes", "on"}:
-        cfg["fc25_stats_enabled"] = True
+        cfg[FC25_STATS_ENABLED_KEY] = True
     elif fc25_raw in {"0", "false", "no", "off"}:
-        cfg["fc25_stats_enabled"] = False
+        cfg[FC25_STATS_ENABLED_KEY] = False
     else:
         raise web.HTTPBadRequest(text="fc25_stats_enabled must be default/true/false.")
 
