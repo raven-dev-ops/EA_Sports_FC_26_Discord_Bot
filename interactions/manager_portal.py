@@ -13,6 +13,7 @@ from interactions.premium_coaches_report import (
 )
 from interactions.views import SafeView
 from repositories.tournament_repo import ensure_active_cycle, ensure_cycle_by_name
+from services import entitlements_service
 from services.audit_service import (
     AUDIT_ACTION_CAP_SYNC_SKIPPED,
     AUDIT_ACTION_CAP_SYNCED,
@@ -209,6 +210,12 @@ async def _set_coach_tier(
     desired_cap = _tier_to_cap(tier)
     if desired_cap is None:
         return False, "Tier must be one of: Coach, Premium, Premium+."
+    if desired_cap > 16 and not entitlements_service.is_feature_enabled(
+        settings,
+        guild_id=guild.id,
+        feature_key=entitlements_service.FEATURE_PREMIUM_COACH_TIERS,
+    ):
+        return False, "Premium coach tiers are a Pro feature for this server."
 
     tier_role_id: int
     if desired_cap == 16:
@@ -593,6 +600,20 @@ class ManagerPortalView(SafeView):
                 ephemeral=True,
             )
             return
+        if not entitlements_service.is_feature_enabled(
+            settings,
+            guild_id=guild.id,
+            feature_key=entitlements_service.FEATURE_PREMIUM_COACHES_REPORT,
+        ):
+            await interaction.response.send_message(
+                embed=make_embed(
+                    title="Premium Coaches is Pro-only",
+                    description="Upgrade this server to Pro to enable the Premium Coaches report.",
+                    color=ERROR_COLOR,
+                ),
+                ephemeral=True,
+            )
+            return
         test_mode = bool(getattr(interaction.client, "test_mode", False))
         await upsert_premium_coaches_report(
             interaction.client,
@@ -624,6 +645,20 @@ class ManagerPortalView(SafeView):
         if guild is None:
             await interaction.response.send_message(
                 "This action must be used in a guild.",
+                ephemeral=True,
+            )
+            return
+        if not entitlements_service.is_feature_enabled(
+            settings,
+            guild_id=guild.id,
+            feature_key=entitlements_service.FEATURE_PREMIUM_COACHES_REPORT,
+        ):
+            await interaction.response.send_message(
+                embed=make_embed(
+                    title="Premium Coaches is Pro-only",
+                    description="Upgrade this server to Pro to enable the Premium Coaches report.",
+                    color=ERROR_COLOR,
+                ),
                 ephemeral=True,
             )
             return
@@ -679,6 +714,20 @@ class ManagerPortalView(SafeView):
                 ephemeral=True,
             )
             return
+        if not entitlements_service.is_feature_enabled(
+            settings,
+            guild_id=guild.id,
+            feature_key=entitlements_service.FEATURE_PREMIUM_COACHES_REPORT,
+        ):
+            await interaction.response.send_message(
+                embed=make_embed(
+                    title="Premium Coaches is Pro-only",
+                    description="Upgrade this server to Pro to enable the Premium Coaches report.",
+                    color=ERROR_COLOR,
+                ),
+                ephemeral=True,
+            )
+            return
 
         test_mode = bool(getattr(interaction.client, "test_mode", False))
         deleted = await force_rebuild_premium_coaches_report(
@@ -717,12 +766,17 @@ class ManagerPortalView(SafeView):
 
         await interaction.response.defer(ephemeral=True)
 
+        premium_tiers_enabled = entitlements_service.is_feature_enabled(
+            settings,
+            guild_id=guild.id,
+            feature_key=entitlements_service.FEATURE_PREMIUM_COACH_TIERS,
+        )
         coach_role_id = resolve_role_id(settings, guild_id=guild.id, field="role_coach_id")
         premium_role_id = resolve_role_id(settings, guild_id=guild.id, field="role_coach_premium_id")
         premium_plus_role_id = resolve_role_id(
             settings, guild_id=guild.id, field="role_coach_premium_plus_id"
         )
-        if not coach_role_id or not premium_role_id or not premium_plus_role_id:
+        if not coach_role_id or (premium_tiers_enabled and (not premium_role_id or not premium_plus_role_id)):
             await interaction.followup.send(
                 embed=make_embed(
                     title="Sync failed",
@@ -735,6 +789,9 @@ class ManagerPortalView(SafeView):
                 ephemeral=True,
             )
             return
+        if not premium_tiers_enabled:
+            premium_role_id = None
+            premium_plus_role_id = None
 
         try:
             cycle_collection = get_collection(settings, record_type="tournament_cycle", guild_id=guild.id)

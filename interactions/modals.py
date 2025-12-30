@@ -11,6 +11,7 @@ from interactions.club_posts import upsert_club_ad_posts
 from interactions.premium_coaches_report import upsert_premium_coaches_report
 from interactions.recruit_posts import upsert_recruit_profile_posts
 from repositories.tournament_repo import ensure_cycle_by_name
+from services import entitlements_service
 from services.banlist_service import get_ban_reason
 from services.clubs_service import update_club_ad_posts, upsert_club_ad
 from services.permission_service import resolve_roster_cap_for_guild
@@ -195,17 +196,27 @@ class AddPlayerModal(SafeModal, title="Add Player"):
             )
             return
 
-        try:
-            ban_reason = get_ban_reason(settings, player_id)
-        except RuntimeError as exc:
-            await interaction.response.send_message(str(exc), ephemeral=True)
-            return
-        if ban_reason:
-            await interaction.response.send_message(
-                f"Player is banned: {ban_reason}",
-                ephemeral=True,
+        guild_id = getattr(interaction, "guild_id", None)
+        ban_checks_enabled = (
+            isinstance(guild_id, int)
+            and entitlements_service.is_feature_enabled(
+                settings,
+                guild_id=guild_id,
+                feature_key=entitlements_service.FEATURE_BANLIST,
             )
-            return
+        )
+        if ban_checks_enabled:
+            try:
+                ban_reason = get_ban_reason(settings, player_id)
+            except RuntimeError as exc:
+                await interaction.response.send_message(str(exc), ephemeral=True)
+                return
+            if ban_reason:
+                await interaction.response.send_message(
+                    f"Player is banned: {ban_reason}",
+                    ephemeral=True,
+                )
+                return
 
         console_value = normalize_console(self.console.value)
         if console_value is None:
@@ -216,13 +227,23 @@ class AddPlayerModal(SafeModal, title="Add Player"):
             return
 
         try:
+            cap_value = roster.get("cap")
+            cap = int(cap_value) if isinstance(cap_value, int) else 0
+            if cap <= 0:
+                cap = 16
+            if isinstance(guild_id, int) and not entitlements_service.is_feature_enabled(
+                settings,
+                guild_id=guild_id,
+                feature_key=entitlements_service.FEATURE_PREMIUM_COACH_TIERS,
+            ):
+                cap = min(cap, 16)
             add_player(
                 roster_id=self.roster_id,
                 player_discord_id=player_id,
                 gamertag=self.gamertag.value.strip(),
                 ea_id=self.ea_id.value.strip(),
                 console=console_value,
-                cap=int(roster.get("cap", 0)),
+                cap=cap,
             )
         except RuntimeError as exc:
             await interaction.response.send_message(str(exc), ephemeral=True)

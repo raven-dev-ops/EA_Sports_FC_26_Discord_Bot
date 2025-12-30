@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from config.settings import Settings
+from services import entitlements_service
 from services.guild_config_service import get_guild_config
 from utils.flags import feature_enabled
 
@@ -21,6 +22,12 @@ def fc25_stats_enabled(settings: Settings | None, *, guild_id: int | None) -> bo
         return False
     if guild_id is None:
         return True
+    if not entitlements_service.is_feature_enabled(
+        settings,
+        guild_id=guild_id,
+        feature_key=entitlements_service.FEATURE_FC25_STATS,
+    ):
+        return False
     if not settings.mongodb_uri:
         return True
 

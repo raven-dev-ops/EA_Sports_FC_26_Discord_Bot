@@ -10,6 +10,7 @@ from discord.ext import commands
 from config import Settings
 from database import get_collection
 from repositories.tournament_repo import ensure_active_cycle
+from services import entitlements_service
 from services.guild_config_service import get_guild_config, set_guild_config
 from utils.channel_routing import resolve_channel_id
 from utils.discord_wrappers import edit_message, fetch_channel, send_message
@@ -205,6 +206,12 @@ async def force_rebuild_premium_coaches_report(
     test_mode: bool,
     cleanup_limit: int = 50,
 ) -> int:
+    if not entitlements_service.is_feature_enabled(
+        settings,
+        guild_id=guild_id,
+        feature_key=entitlements_service.FEATURE_PREMIUM_COACHES_REPORT,
+    ):
+        return 0
     channel_id = resolve_channel_id(
         settings,
         guild_id=guild_id,
@@ -265,6 +272,12 @@ async def upsert_premium_coaches_report(
     guild_id: int,
     test_mode: bool,
 ) -> None:
+    if not entitlements_service.is_feature_enabled(
+        settings,
+        guild_id=guild_id,
+        feature_key=entitlements_service.FEATURE_PREMIUM_COACHES_REPORT,
+    ):
+        return
     channel_id = resolve_channel_id(
         settings,
         guild_id=guild_id,
