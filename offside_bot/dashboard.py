@@ -581,9 +581,15 @@ async def guild_analytics_json(request: web.Request) -> web.Response:
     )
 
 
+async def _on_startup(app: web.Application) -> None:
+    # aiohttp ClientSession must be created with a running event loop.
+    app["http"] = ClientSession()
+
+
 async def _on_cleanup(app: web.Application) -> None:
-    http: ClientSession = app["http"]
-    await http.close()
+    http = app.get("http")
+    if isinstance(http, ClientSession):
+        await http.close()
 
 
 def create_app(*, settings: Settings | None = None) -> web.Application:
@@ -591,7 +597,8 @@ def create_app(*, settings: Settings | None = None) -> web.Application:
     app["settings"] = settings or load_settings()
     app["sessions"] = {}
     app["pending_states"] = {}
-    app["http"] = ClientSession()
+    app["http"] = None
+    app.on_startup.append(_on_startup)
     app.on_cleanup.append(_on_cleanup)
 
     app.router.add_get("/", index)

@@ -72,7 +72,7 @@ def install_signal_handlers(bot: BotLike) -> None:
     Install SIGTERM/SIGINT handlers to trigger a graceful shutdown.
     """
     try:
-        loop = bot.loop
+        loop = asyncio.get_running_loop()
 
         def _request_close() -> None:
             asyncio.create_task(bot.close())
@@ -378,6 +378,12 @@ class OffsideBot(commands.AutoShardedBot):
                     logging.exception("Failed to persist guild cleanup (guild=%s).", guild.id)
 
     async def setup_hook(self) -> None:
+        try:
+            loop = asyncio.get_running_loop()
+            install_asyncio_exception_handler(loop)
+            install_signal_handlers(self)
+        except RuntimeError:
+            logging.debug("Asyncio loop not ready for handlers yet.")
         await load_cogs(self)
         attach_discord_log_handler(self)
         try:
@@ -530,7 +536,6 @@ def build_bot(settings: Settings) -> OffsideBot:
     bot.settings = settings
     bot.test_mode = settings.test_mode
     bot.staff_monitor_channel_id = settings.channel_staff_monitor_id
-    install_asyncio_exception_handler(bot.loop)
     return bot
 
 
@@ -571,7 +576,6 @@ def main() -> None:
             raise
 
     bot = build_bot(settings)
-    install_signal_handlers(bot)
     register_commands(bot)
 
     try:
