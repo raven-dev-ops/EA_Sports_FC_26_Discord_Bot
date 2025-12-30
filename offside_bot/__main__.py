@@ -16,6 +16,7 @@ from interactions.admin_portal import post_admin_portal
 from interactions.club_portal import post_club_portal
 from interactions.coach_portal import post_coach_portal
 from interactions.fc25_stats_modals import refresh_fc25_stats_for_user
+from interactions.manager_portal import post_manager_portal
 from interactions.premium_coaches_report import post_premium_coaches_report
 from interactions.recruit_portal import post_recruit_portal
 from migrations import apply_migrations
@@ -185,6 +186,12 @@ class OffsideBot(commands.AutoShardedBot):
             logging.info("Posted admin/staff portal embed.")
         except Exception:
             logging.exception("Failed to post admin portal.")
+        await asyncio.sleep(0.5)
+        try:
+            await post_manager_portal(self)
+            logging.info("Posted club managers portal embed.")
+        except Exception:
+            logging.exception("Failed to post club managers portal.")
         await asyncio.sleep(0.5)
         try:
             await post_coach_portal(self)

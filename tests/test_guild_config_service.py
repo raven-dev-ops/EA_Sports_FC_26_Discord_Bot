@@ -21,6 +21,7 @@ def _settings() -> Settings:
         role_coach_premium_plus_id=4,
         channel_staff_portal_id=7,
         channel_club_portal_id=None,
+        channel_manager_portal_id=None,
         channel_coach_portal_id=6,
         channel_recruit_portal_id=None,
         channel_staff_monitor_id=None,

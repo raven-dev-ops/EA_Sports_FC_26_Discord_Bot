@@ -59,7 +59,8 @@ def build_admin_intro_embed() -> discord.Embed:
             "When reviewing a roster, ensure all information is accurate and follows the rules. If approving a roster, you must include your name when submitting the approval. "
             "If rejecting a roster, you must include your name along with a clear and specific reason explaining what needs to be fixed. "
             "Clear feedback is required so the coach understands exactly what must be corrected.\n\n"
-            "After rejecting a roster, you must run the `/unlock_roster` command on the coach’s roster. This will unlock the roster so the coach can edit it and submit it again. "
+            "After rejecting a roster, unlock it so the coach can edit and resubmit. "
+            "Use the Club Managers portal (preferred) or run `/unlock_roster`. "
             "Do not unlock rosters unless a rejection has been issued.\n\n"
             "**Roster Deletion & Final Submissions**\n"
             "Only Administrator+ staff members have permission to delete rosters, and this should be used as a last resort only. "
@@ -90,8 +91,8 @@ def build_admin_embed() -> discord.Embed:
         inline=False,
     )
     embed.add_field(
-        name="Coaches & Rosters",
-        value="Unlock, review, roster dashboards.",
+        name="Club Managers",
+        value="Coach tiers, unlocks, premium listing refresh.",
         inline=False,
     )
     embed.add_field(
@@ -241,11 +242,9 @@ class AdminPortalView(SafeView):
 
         buttons = [
             ("Tournaments", discord.ButtonStyle.primary, self.on_tournaments),
-            ("Coaches", discord.ButtonStyle.primary, self.on_coaches),
-            ("Rosters", discord.ButtonStyle.primary, self.on_rosters),
+            ("Club Managers", discord.ButtonStyle.primary, self.on_managers),
             ("Players", discord.ButtonStyle.primary, self.on_players),
             ("DB Analytics", discord.ButtonStyle.primary, self.on_db),
-            ("Delete Roster", discord.ButtonStyle.danger, self.on_delete_roster),
         ]
         for label, style, handler in buttons:
             button: discord.ui.Button = discord.ui.Button(label=label, style=style)
@@ -282,22 +281,29 @@ class AdminPortalView(SafeView):
             view=TournamentsView(),
         )
 
-    async def on_coaches(self, interaction: discord.Interaction) -> None:
+    async def on_managers(self, interaction: discord.Interaction) -> None:
         if not await self._ensure_staff(interaction):
             return
-        await interaction.response.send_message(
-            embed=coaches_embed(),
-            ephemeral=True,
-            view=CoachesView(),
+        settings = getattr(interaction.client, "settings", None)
+        if settings is None:
+            await send_interaction_error(interaction)
+            return
+        test_mode = bool(getattr(interaction.client, "test_mode", False))
+        target_channel_id = resolve_channel_id(
+            settings,
+            guild_id=getattr(interaction.guild, "id", None),
+            field="channel_manager_portal_id",
+            test_mode=test_mode,
         )
-
-    async def on_rosters(self, interaction: discord.Interaction) -> None:
-        if not await self._ensure_staff(interaction):
+        if not target_channel_id:
+            await interaction.response.send_message(
+                "Club Managers portal is not configured. Ask staff to run `/setup_channels`.",
+                ephemeral=True,
+            )
             return
         await interaction.response.send_message(
-            embed=rosters_embed(),
+            f"Open the Club Managers portal here: <#{target_channel_id}>",
             ephemeral=True,
-            view=RostersView(),
         )
 
     async def on_players(self, interaction: discord.Interaction) -> None:
@@ -317,15 +323,6 @@ class AdminPortalView(SafeView):
             ephemeral=True,
             view=DBView(),
         )
-
-    async def on_delete_roster(self, interaction: discord.Interaction) -> None:
-        if not self._is_admin(interaction):
-            await interaction.response.send_message(
-                "Only server administrators can delete rosters.",
-                ephemeral=True,
-            )
-            return
-        await interaction.response.send_modal(DeleteRosterModal())
 class TournamentsView(SafeView):
     def __init__(self) -> None:
         super().__init__(timeout=300)

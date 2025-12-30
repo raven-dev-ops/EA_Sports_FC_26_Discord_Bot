@@ -10,6 +10,7 @@ DASHBOARD_CATEGORY_NAME = "--OFFSIDE DASHBOARD--"
 REPORTS_CATEGORY_NAME = "--OFFSIDE REPORTS--"
 
 STAFF_PORTAL_CHANNEL_NAME = "staff-portal"
+MANAGER_PORTAL_CHANNEL_NAME = "club-managers-portal"
 CLUB_PORTAL_CHANNEL_NAME = "club-portal"
 COACH_PORTAL_CHANNEL_NAME = "coach-portal"
 RECRUIT_PORTAL_CHANNEL_NAME = "recruit-portal"
@@ -57,6 +58,16 @@ async def ensure_offside_channels(
         await _ensure_text_channel(
             guild,
             category=dashboard_category,
+            name=MANAGER_PORTAL_CHANNEL_NAME,
+            overwrites=_staff_only_overwrites(guild, staff_roles, bot_member),
+            existing_channel_id=_parse_int(config.get("channel_manager_portal_id")),
+            actions=actions,
+        )
+    )
+    dashboard_channels.append(
+        await _ensure_text_channel(
+            guild,
+            category=dashboard_category,
             name=CLUB_PORTAL_CHANNEL_NAME,
             overwrites=_public_readonly_overwrites(guild, staff_roles, bot_member),
             existing_channel_id=_parse_int(config.get("channel_club_portal_id")),
@@ -85,9 +96,10 @@ async def ensure_offside_channels(
     )
 
     config["channel_staff_portal_id"] = dashboard_channels[0].id
-    config["channel_club_portal_id"] = dashboard_channels[1].id
-    config["channel_coach_portal_id"] = dashboard_channels[2].id
-    config["channel_recruit_portal_id"] = dashboard_channels[3].id
+    config["channel_manager_portal_id"] = dashboard_channels[1].id
+    config["channel_club_portal_id"] = dashboard_channels[2].id
+    config["channel_coach_portal_id"] = dashboard_channels[3].id
+    config["channel_recruit_portal_id"] = dashboard_channels[4].id
 
     reports_channels: list[discord.TextChannel] = []
 

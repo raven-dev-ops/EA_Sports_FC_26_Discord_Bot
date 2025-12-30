@@ -6,7 +6,7 @@ Roster management and staff review bot for Discord tournaments.
 
 1. Set up Discord channels and roles:
    - Invite the bot with permissions to manage channels/roles, send messages, read message history, and use slash commands.
-   - Run `/setup_channels` once per guild to create the `--OFFSIDE DASHBOARD--` and `--OFFSIDE REPORTS--` layout and the coach roles (`Coach`, `Coach Premium`, `Coach Premium+`).
+   - Run `/setup_channels` once per guild to create the `--OFFSIDE DASHBOARD--` / `--OFFSIDE REPORTS--` layout, required channels (including Club Managers + Premium Coaches), and the coach roles (`Coach`, `Coach Premium`, `Coach Premium+`).
    - Assign the coach roles to your coaches (premium tiers control roster caps).
 2. Configure the bot:
    - Copy `.env.example` to `.env` and fill in the required IDs and tokens.
@@ -36,14 +36,20 @@ Roster management and staff review bot for Discord tournaments.
 
 ## Portals (auto-posted on startup)
 
+- **Staff Portal** (`channel_staff_portal_id`): staff review (approve/reject) + quick-reference panel.
+- **Club Managers Portal** (`channel_manager_portal_id`): coach tiers (Coach/Premium/Premium+), roster unlock/delete, premium coaches refresh.
 - **Coach Portal** (`channel_coach_portal_id`): roster dashboard + coach help (buttons; responses are ephemeral).
-- **Staff Portal** (`channel_staff_portal_id`): staff controls + roster submission reviews (buttons; responses are ephemeral).
-- **Roster Listing** (`channel_roster_listing_id`): approved rosters reposted here after staff approval.
+- **Recruit Portal** (`channel_recruit_portal_id`): recruit profile register/edit/preview/unregister (buttons; responses are ephemeral).
+- **Club Portal** (`channel_club_portal_id`): club ad register/edit/preview/unregister (buttons; responses are ephemeral).
+- **Roster Listing** (`channel_roster_listing_id`): approved roster embeds reposted here after staff approval.
+- **Recruit Listing** (`channel_recruit_listing_id`): recruit profile listing embeds.
+- **Club Listing** (`channel_club_listing_id`): club ad listing embeds.
+- **Premium Coaches** (`channel_premium_coaches_id`): premium coach roster listings (openings + practice times).
 
 ### Dashboard embeds & buttons
 - Coach portal: intro embed + roster portal embed. Buttons open the roster dashboard (add/remove/view/submit, rename) and coach help. Responses are ephemeral; portal is idempotent and cleans prior portal embeds.
-- Staff portal: intro embed + admin control panel. Buttons for Tournaments (quick reference), Coaches/Rosters (unlock guidance, review tips), Players (ban list note), DB/Analytics (schema/index info), and Delete Roster (admin-only). Staff actions are ephemeral; the submission review message is cleaned after approve/reject.
-- Roster portal: receives approved roster embeds only; staff review/decision happens in the staff portal, not here.
+- Staff portal: intro embed + admin control panel. Buttons for Tournaments, Club Managers portal link, Players, and DB/Analytics. Staff actions are ephemeral; the submission review message is cleaned after approve/reject.
+- Club Managers portal: intro embed + control panel. Buttons for Set Coach Tier, Unlock Roster, Refresh Premium Coaches, and Delete Roster (admin-only).
 - Help command: `/help` returns an embed with coach/staff/tournament/ops categories and submission steps; all responses are ephemeral.
 
 ## Commands
@@ -73,7 +79,7 @@ Tournament (staff-only)
 - Groups: `/group_create`, `/group_register`, `/group_generate_fixtures [double_round]`, `/group_match_report`, `/group_standings`, `/group_advance <top_n>`
 
 Operations (staff-only)
-- `/setup_channels` creates/repairs the Offside categories + channels for this guild and stores their IDs in Mongo.
+- `/setup_channels` creates/repairs Offside categories + channels (including Club Managers + Premium Coaches) and stores per-guild IDs in Mongo; also ensures coach tier roles exist.
 - `/config_view` snapshot of non-secret runtime settings.
 - `/config_set <field> <value>` runtime override (no persistence; restart to reset).
 - `/config_guild_view` / `/config_guild_set <field> <value>` per-guild overrides (staff).
@@ -104,7 +110,7 @@ Optional:
   - `ROLE_COACH_PREMIUM_ID`
   - `ROLE_COACH_PREMIUM_PLUS_ID`
 - Channel env overrides (optional; primary source is per-guild config written by `/setup_channels`):
-  - `CHANNEL_STAFF_PORTAL_ID`, `CHANNEL_CLUB_PORTAL_ID`, `CHANNEL_COACH_PORTAL_ID`, `CHANNEL_RECRUIT_PORTAL_ID`
+  - `CHANNEL_STAFF_PORTAL_ID`, `CHANNEL_MANAGER_PORTAL_ID`, `CHANNEL_CLUB_PORTAL_ID`, `CHANNEL_COACH_PORTAL_ID`, `CHANNEL_RECRUIT_PORTAL_ID`
   - `CHANNEL_STAFF_MONITOR_ID` (test-mode sink)
   - `CHANNEL_ROSTER_LISTING_ID` (fallback to legacy `CHANNEL_ROSTER_PORTAL_ID`)
   - `CHANNEL_RECRUIT_LISTING_ID`, `CHANNEL_CLUB_LISTING_ID`, `CHANNEL_PREMIUM_COACHES_ID`

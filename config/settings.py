@@ -21,6 +21,7 @@ class Settings:
     role_coach_premium_plus_id: int | None
     channel_staff_portal_id: int | None
     channel_club_portal_id: int | None
+    channel_manager_portal_id: int | None
     channel_coach_portal_id: int | None
     channel_recruit_portal_id: int | None
     channel_staff_monitor_id: int | None
@@ -155,6 +156,7 @@ def load_settings() -> Settings:
 
     channel_staff_portal_id = _optional_int(constants.CHANNEL_STAFF_PORTAL_ID_ENV)
     channel_club_portal_id = _optional_int(constants.CHANNEL_CLUB_PORTAL_ID_ENV)
+    channel_manager_portal_id = _optional_int(constants.CHANNEL_MANAGER_PORTAL_ID_ENV)
     channel_coach_portal_id = _optional_int(constants.CHANNEL_COACH_PORTAL_ID_ENV)
     channel_recruit_portal_id = _optional_int(constants.CHANNEL_RECRUIT_PORTAL_ID_ENV)
 
@@ -210,6 +212,7 @@ def load_settings() -> Settings:
         role_coach_premium_plus_id=role_coach_premium_plus_id,
         channel_staff_portal_id=channel_staff_portal_id,
         channel_club_portal_id=channel_club_portal_id,
+        channel_manager_portal_id=channel_manager_portal_id,
         channel_coach_portal_id=channel_coach_portal_id,
         channel_recruit_portal_id=channel_recruit_portal_id,
         channel_staff_monitor_id=channel_staff_monitor_id,
@@ -261,6 +264,7 @@ def summarize_settings(settings: Settings) -> dict[str, object]:
         "channels": {
             "staff_portal": settings.channel_staff_portal_id,
             "club_portal": settings.channel_club_portal_id,
+            "manager_portal": settings.channel_manager_portal_id,
             "coach_portal": settings.channel_coach_portal_id,
             "recruit_portal": settings.channel_recruit_portal_id,
             "staff_monitor": settings.channel_staff_monitor_id,

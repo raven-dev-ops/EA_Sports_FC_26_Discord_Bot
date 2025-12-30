@@ -11,6 +11,7 @@ from interactions.modals import (
     RemovePlayerModal,
     RenameRosterModal,
 )
+from interactions.roster_embeds import build_roster_listing_embed
 from services.audit_service import (
     AUDIT_ACTION_APPROVED,
     AUDIT_ACTION_REJECTED,
@@ -796,7 +797,17 @@ class StaffReviewView(SafeView):
                     return
                 roster_channel = await fetch_channel(interaction.client, roster_channel_id)
                 if roster_channel:
-                    await send_message(roster_channel, message_content)
+                    listing_embed = build_roster_listing_embed(
+                        roster,
+                        players,
+                        approved=True,
+                        reason=reason,
+                    )
+                    await send_message(
+                        roster_channel,
+                        embed=listing_embed,
+                        allowed_mentions=discord.AllowedMentions.none(),
+                    )
 
         if reason:
             try:

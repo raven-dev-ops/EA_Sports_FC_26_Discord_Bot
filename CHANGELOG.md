@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.16] - 2025-12-30
+
+### Added
+- Club Managers portal: `/setup_channels` now creates `club-managers-portal` and the bot auto-posts a control panel for coach tier management and roster unlocks.
+- Staff portal now links to the Club Managers portal for coach-management actions.
+- Approved rosters now post as rich embeds in the roster listing channel (mentions suppressed).
+- New backlog file: `futwiz_player_evolution_github_issues.md` (repurposed for Offside bot issue planning).
+
+### Changed
+- Added optional `CHANNEL_MANAGER_PORTAL_ID` env override (primary source remains per-guild config written by `/setup_channels`).
+
 ## [0.2.15] - 2025-12-30
 
 ### Added

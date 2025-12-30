@@ -284,3 +284,18 @@ def update_practice_times(
         {"record_type": "team_roster", "_id": roster_id},
         {"$set": {"practice_times": practice_times, "updated_at": now}},
     )
+
+
+def update_roster_cap(
+    roster_id: Any,
+    cap: int,
+    *,
+    collection: Collection | None = None,
+) -> None:
+    if collection is None:
+        collection = get_collection()
+    now = datetime.now(timezone.utc)
+    collection.update_one(
+        {"record_type": "team_roster", "_id": roster_id},
+        {"$set": {"cap": int(cap), "updated_at": now}},
+    )
