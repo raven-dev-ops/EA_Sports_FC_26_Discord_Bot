@@ -245,7 +245,7 @@ async def _ensure_text_channel(
     *,
     category: discord.CategoryChannel,
     name: str,
-    overwrites: dict[discord.Role | discord.Member | discord.Object, discord.PermissionOverwrite],
+    overwrites: dict[discord.Role | discord.Member, discord.PermissionOverwrite],
     existing_channel_id: int | None,
     actions: list[str],
 ) -> discord.TextChannel:
@@ -265,7 +265,7 @@ async def _ensure_text_channel_with_created(
     *,
     category: discord.CategoryChannel,
     name: str,
-    overwrites: dict[discord.Role | discord.Member | discord.Object, discord.PermissionOverwrite],
+    overwrites: dict[discord.Role | discord.Member, discord.PermissionOverwrite],
     existing_channel_id: int | None,
     actions: list[str],
 ) -> tuple[discord.TextChannel, bool]:
@@ -344,8 +344,8 @@ def _staff_only_overwrites(
     guild: discord.Guild,
     staff_roles: list[discord.Role],
     bot_member: discord.Member | None,
-) -> dict[discord.Role | discord.Member | discord.Object, discord.PermissionOverwrite]:
-    overwrites: dict[discord.Role | discord.Member | discord.Object, discord.PermissionOverwrite] = {
+) -> dict[discord.Role | discord.Member, discord.PermissionOverwrite]:
+    overwrites: dict[discord.Role | discord.Member, discord.PermissionOverwrite] = {
         guild.default_role: discord.PermissionOverwrite(view_channel=False)
     }
     for role in staff_roles:
@@ -371,8 +371,8 @@ def _public_readonly_overwrites(
     guild: discord.Guild,
     staff_roles: list[discord.Role],
     bot_member: discord.Member | None,
-) -> dict[discord.Role | discord.Member | discord.Object, discord.PermissionOverwrite]:
-    overwrites: dict[discord.Role | discord.Member | discord.Object, discord.PermissionOverwrite] = {
+) -> dict[discord.Role | discord.Member, discord.PermissionOverwrite]:
+    overwrites: dict[discord.Role | discord.Member, discord.PermissionOverwrite] = {
         guild.default_role: discord.PermissionOverwrite(
             view_channel=True,
             send_messages=False,
@@ -426,11 +426,11 @@ def _coach_portal_overwrites(
     staff_roles: list[discord.Role],
     coach_roles: list[discord.Role],
     bot_member: discord.Member | None,
-) -> dict[discord.Role | discord.Member | discord.Object, discord.PermissionOverwrite]:
+) -> dict[discord.Role | discord.Member, discord.PermissionOverwrite]:
     if not coach_roles:
         return _public_readonly_overwrites(guild, staff_roles, bot_member)
 
-    overwrites: dict[discord.Role | discord.Member | discord.Object, discord.PermissionOverwrite] = {
+    overwrites: dict[discord.Role | discord.Member, discord.PermissionOverwrite] = {
         guild.default_role: discord.PermissionOverwrite(view_channel=False)
     }
     for role in coach_roles:

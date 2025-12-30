@@ -1070,7 +1070,7 @@ def create_app(*, settings: Settings | None = None) -> web.Application:
 def main() -> None:
     settings = load_settings()
     host = os.environ.get("DASHBOARD_HOST", "0.0.0.0").strip() or "0.0.0.0"
-    port_raw = (os.environ.get("PORT") or os.environ.get("DASHBOARD_PORT", "8080")).strip() or "8080"
+    port_raw = (os.environ.get("PORT") or os.environ.get("DASHBOARD_PORT") or "8080").strip() or "8080"
     port = int(port_raw)
     app = create_app(settings=settings)
     web.run_app(app, host=host, port=port)
