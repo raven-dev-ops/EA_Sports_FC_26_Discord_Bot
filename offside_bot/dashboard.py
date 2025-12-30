@@ -187,7 +187,14 @@ async def _discord_get_json_with_auth(http: ClientSession, *, url: str, authoriz
                 continue
 
             if resp.status >= 400:
-                raise web.HTTPBadRequest(text=f"Discord API error ({resp.status}): {data}")
+                text = f"Discord API error ({resp.status}): {data}"
+                if resp.status == 401:
+                    raise web.HTTPUnauthorized(text=text)
+                if resp.status == 403:
+                    raise web.HTTPForbidden(text=text)
+                if resp.status == 404:
+                    raise web.HTTPNotFound(text=text)
+                raise web.HTTPBadRequest(text=text)
             return data
 
     raise web.HTTPBadRequest(text=f"Discord API request failed after retries: {last_error or 'unknown'}")
@@ -268,6 +275,24 @@ async def _get_guild_discord_metadata(
     channels = await _fetch_guild_channels(http, bot_token=settings.discord_token, guild_id=guild_id)
     cache[guild_id] = {"fetched_at": now, "roles": roles, "channels": channels}
     return roles, channels
+
+
+async def _detect_bot_installed(request: web.Request, *, guild_id: int) -> tuple[bool | None, str | None]:
+    settings: Settings = request.app["settings"]
+    http = request.app.get("http")
+    if not isinstance(http, ClientSession):
+        return None, "Dashboard HTTP client is not ready yet."
+
+    url = f"{DISCORD_API_BASE}/guilds/{guild_id}"
+    try:
+        await _discord_bot_get_json(http, url=url, bot_token=settings.discord_token)
+        return True, None
+    except (web.HTTPForbidden, web.HTTPNotFound):
+        return False, "Bot is not installed in this server yet."
+    except web.HTTPException as exc:
+        return None, exc.text or str(exc)
+    except Exception as exc:
+        return None, str(exc)
 
 
 @web.middleware
@@ -800,6 +825,22 @@ async def guild_settings_page(request: web.Request) -> web.Response:
     guild_id_str = request.match_info["guild_id"]
     guild_id = _require_owned_guild(session, guild_id=guild_id_str)
 
+    installed, install_error = await _detect_bot_installed(request, guild_id=guild_id)
+    if installed is False:
+        invite_href = _invite_url(settings, guild_id=str(guild_id), disable_guild_select=True)
+        body = f"""
+          <p><a href="/">← Back</a></p>
+          <h1>Settings</h1>
+          <div class="card">
+            <h2 style="margin-top:0;">Invite bot to this server</h2>
+            <p class="muted">This server is in your Discord list, but the bot is not installed yet.</p>
+            <p><a class="btn blue" href="/install?guild_id={guild_id}">Invite bot to server</a></p>
+            <p class="muted">Direct invite URL:</p>
+            <p><a href="{invite_href}">{invite_href}</a></p>
+          </div>
+        """
+        return web.Response(text=_html_page(title="Guild Settings", body=body), content_type="text/html")
+
     cfg: dict[str, Any] = {}
     try:
         cfg = get_guild_config(guild_id)
@@ -821,6 +862,12 @@ async def guild_settings_page(request: web.Request) -> web.Response:
         metadata_error = exc.text or str(exc)
     except Exception as exc:
         metadata_error = str(exc)
+
+    if installed is None and install_error:
+        if metadata_error:
+            metadata_error = f"{metadata_error}; install_check={install_error}"
+        else:
+            metadata_error = install_error
 
     if roles:
         role_options: list[str] = []
@@ -1048,6 +1095,10 @@ async def guild_settings_save(request: web.Request) -> web.Response:
     session = _require_session(request)
     guild_id_str = request.match_info["guild_id"]
     guild_id = _require_owned_guild(session, guild_id=guild_id_str)
+
+    installed, _install_error = await _detect_bot_installed(request, guild_id=guild_id)
+    if installed is False:
+        raise web.HTTPBadRequest(text="Bot is not installed in this server yet. Invite it first.")
 
     data = await request.post()
     if str(data.get("csrf", "")) != session.csrf_token:

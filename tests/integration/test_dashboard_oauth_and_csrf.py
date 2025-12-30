@@ -178,3 +178,58 @@ async def test_billing_portal_requires_csrf(monkeypatch) -> None:
     finally:
         await client.close()
 
+
+@pytest.mark.asyncio
+async def test_settings_blocks_when_bot_not_installed(monkeypatch) -> None:
+    from aiohttp import web
+    from aiohttp.test_utils import TestClient, TestServer
+
+    monkeypatch.setattr(database, "MongoClient", mongomock.MongoClient)
+    monkeypatch.setattr(database, "_CLIENT", None)
+
+    async def fake_bot_get_json(*_args, url: str, **_kwargs):
+        if url.endswith("/guilds/123"):
+            raise web.HTTPNotFound(text="Discord API error (404): Unknown Guild")
+        raise AssertionError(f"Unexpected bot Discord URL: {url}")
+
+    monkeypatch.setattr(dashboard, "_discord_bot_get_json", fake_bot_get_json)
+
+    app = dashboard.create_app(settings=_settings())
+    sessions = app["session_collection"]
+    sessions.insert_one(
+        {
+            "_id": "sess1",
+            "created_at": time.time(),
+            "expires_at": datetime.now(timezone.utc) + timedelta(hours=6),
+            "user": {"id": "1", "username": "alice"},
+            "owner_guilds": [{"id": "123", "name": "Managed"}],
+            "all_guilds": [{"id": "123", "name": "Managed"}],
+            "csrf_token": "csrf_good",
+        }
+    )
+
+    client = TestClient(TestServer(app))
+    await client.start_server()
+    try:
+        resp = await client.get(
+            "/guild/123/settings",
+            headers={"Cookie": f"{dashboard.COOKIE_NAME}=sess1"},
+            allow_redirects=False,
+        )
+        assert resp.status == 200
+        html = await resp.text()
+        assert "Invite bot to this server" in html
+        assert "/install?guild_id=123" in html
+        assert "<form" not in html
+
+        save = await client.post(
+            "/guild/123/settings",
+            data={},
+            headers={"Cookie": f"{dashboard.COOKIE_NAME}=sess1"},
+            allow_redirects=False,
+        )
+        assert save.status == 400
+        text = await save.text()
+        assert "Invite" in text or "installed" in text
+    finally:
+        await client.close()
