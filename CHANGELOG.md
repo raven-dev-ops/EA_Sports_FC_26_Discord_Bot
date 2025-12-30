@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.21] - 2025-12-30
+
+### Added
+- Dev tooling: `python -m scripts.seed_test_data` to seed demo data across all MongoDB collections/record types.
+
 ## [0.2.20] - 2025-12-30
 
 ### Changed

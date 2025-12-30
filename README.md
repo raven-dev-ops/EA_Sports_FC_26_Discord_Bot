@@ -176,6 +176,7 @@ staff monitor channel (`channel_staff_monitor_id`) only.
 - Lint/format: `ruff check .` (and `ruff format .` if you want formatting).
 - Type check: `mypy .`
 - Tests: `python -m pytest`
+- Seed demo data: `python -m scripts.seed_test_data --guild-id <id> --purge`
 - Register commands: `python -m scripts.register_commands --guild <id>` during dev; use `--global` for production sync after validation.
 - Logging: structured key/value logging with command context (guild/channel/user/command); set `LOG_LEVEL=DEBUG` for verbose output in staging.
 - Signals & shutdown: SIGTERM/SIGINT trigger a graceful shutdown and close the Mongo client; Discord backoff helpers use timeouts and honor `retry_after`.
