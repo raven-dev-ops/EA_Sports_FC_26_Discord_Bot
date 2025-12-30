@@ -7,6 +7,8 @@ from pymongo.collection import Collection
 
 from database import get_collection
 
+RECORD_TYPE = "roster_audit"
+
 AUDIT_ACTION_APPROVED = "APPROVED"
 AUDIT_ACTION_REJECTED = "REJECTED"
 AUDIT_ACTION_UNLOCKED = "UNLOCKED"
@@ -26,10 +28,10 @@ def record_staff_action(
     collection: Collection | None = None,
 ) -> dict[str, Any]:
     if collection is None:
-        collection = get_collection()
+        collection = get_collection(record_type=RECORD_TYPE)
     now = datetime.now(timezone.utc)
     doc = {
-        "record_type": "roster_audit",
+        "record_type": RECORD_TYPE,
         "roster_id": roster_id,
         "action": action,
         "staff_discord_id": staff_discord_id,

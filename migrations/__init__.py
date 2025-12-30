@@ -4,7 +4,8 @@ import logging
 from datetime import datetime, timezone
 from typing import Callable
 
-from database import ensure_indexes, get_collection, get_database
+from config import load_settings
+from database import ensure_indexes, ensure_offside_indexes, get_collection, get_database
 
 MigrationFunc = Callable[[dict], None]
 
@@ -34,7 +35,9 @@ def _migration_1(context: dict) -> None:
     """
     Ensure primary indexes on the main collection for roster/tournament records.
     """
-    collection = context["collection"]
+    collection = context.get("collection")
+    if collection is None:
+        return
     ensure_indexes(collection)
 
 
@@ -42,7 +45,9 @@ def _migration_2(context: dict) -> None:
     """
     Ensure indexes for recruit/club records and new record types.
     """
-    collection = context["collection"]
+    collection = context.get("collection")
+    if collection is None:
+        return
     ensure_indexes(collection)
 
 
@@ -50,14 +55,25 @@ def _migration_3(context: dict) -> None:
     """
     Ensure indexes for FC25 stats records.
     """
-    collection = context["collection"]
+    collection = context.get("collection")
+    if collection is None:
+        return
     ensure_indexes(collection)
+
+
+def _migration_4(context: dict) -> None:
+    """
+    Ensure indexes for the recommended multi-collection Offside schema.
+    """
+    db = context["db"]
+    ensure_offside_indexes(db)
 
 
 MIGRATIONS: list[tuple[int, str, MigrationFunc]] = [
     (1, "Ensure primary indexes", _migration_1),
     (2, "Ensure recruit/club indexes", _migration_2),
     (3, "Ensure FC25 stats indexes", _migration_3),
+    (4, "Ensure multi-collection Offside indexes", _migration_4),
 ]
 
 
@@ -66,8 +82,10 @@ def apply_migrations(*, settings=None, logger: logging.Logger | None = None) -> 
     Apply pending migrations in order. Returns the latest version after migration.
     """
     log = logger or logging.getLogger(__name__)
+    if settings is None:
+        settings = load_settings()
     db = get_database(settings)
-    collection = get_collection(settings)
+    collection = get_collection(settings) if settings.mongodb_collection else None
     current = _get_current_version(db)
     log.info("Current schema version: %s", current)
     for version, description, func in MIGRATIONS:

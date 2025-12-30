@@ -14,6 +14,22 @@ ROSTER_STATUS_APPROVED = "APPROVED"
 ROSTER_STATUS_REJECTED = "REJECTED"
 ROSTER_STATUS_UNLOCKED = "UNLOCKED"
 
+TEAM_ROSTER_RECORD_TYPE = "team_roster"
+ROSTER_PLAYER_RECORD_TYPE = "roster_player"
+SUBMISSION_RECORD_TYPE = "submission_message"
+
+
+def _team_rosters(collection: Collection | None) -> Collection:
+    return collection or get_collection(record_type=TEAM_ROSTER_RECORD_TYPE)
+
+
+def _roster_players(collection: Collection | None) -> Collection:
+    return collection or get_collection(record_type=ROSTER_PLAYER_RECORD_TYPE)
+
+
+def _submission_messages(collection: Collection | None) -> Collection:
+    return collection or get_collection(record_type=SUBMISSION_RECORD_TYPE)
+
 
 def get_roster_for_coach(
     coach_discord_id: int,
@@ -21,14 +37,15 @@ def get_roster_for_coach(
     cycle_id: Any | None = None,
     collection: Collection | None = None
 ) -> dict[str, Any] | None:
-    if collection is None:
-        collection = get_collection()
     cycle = (
-        ensure_active_cycle(collection=collection) if cycle_id is None else {"_id": cycle_id}
+        ensure_active_cycle(collection=collection) if (collection is not None and cycle_id is None)
+        else ensure_active_cycle() if cycle_id is None
+        else {"_id": cycle_id}
     )
-    return collection.find_one(
+    team_rosters = _team_rosters(collection)
+    return team_rosters.find_one(
         {
-            "record_type": "team_roster",
+            "record_type": TEAM_ROSTER_RECORD_TYPE,
             "cycle_id": cycle["_id"],
             "coach_discord_id": coach_discord_id,
         }
@@ -38,12 +55,11 @@ def get_roster_for_coach(
 def get_rosters_for_coach(
     coach_discord_id: int, *, collection: Collection | None = None
 ) -> list[dict[str, Any]]:
-    if collection is None:
-        collection = get_collection()
+    team_rosters = _team_rosters(collection)
     return list(
-        collection.find(
+        team_rosters.find(
             {
-                "record_type": "team_roster",
+                "record_type": TEAM_ROSTER_RECORD_TYPE,
                 "coach_discord_id": coach_discord_id,
             },
             sort=[("created_at", -1)],
@@ -66,20 +82,25 @@ def create_roster(
     cycle_id: Any | None = None,
     collection: Collection | None = None,
 ) -> dict[str, Any]:
-    if collection is None:
-        collection = get_collection()
     cycle = (
-        ensure_active_cycle(collection=collection) if cycle_id is None else {"_id": cycle_id}
+        ensure_active_cycle(collection=collection) if (collection is not None and cycle_id is None)
+        else ensure_active_cycle() if cycle_id is None
+        else {"_id": cycle_id}
     )
-    existing = get_roster_for_coach(
-        coach_discord_id, cycle_id=cycle["_id"], collection=collection
+    team_rosters = _team_rosters(collection)
+    existing = team_rosters.find_one(
+        {
+            "record_type": TEAM_ROSTER_RECORD_TYPE,
+            "cycle_id": cycle["_id"],
+            "coach_discord_id": coach_discord_id,
+        }
     )
     if existing:
         return existing
 
     now = datetime.now(timezone.utc)
     doc = {
-        "record_type": "team_roster",
+        "record_type": TEAM_ROSTER_RECORD_TYPE,
         "cycle_id": cycle["_id"],
         "coach_discord_id": coach_discord_id,
         "team_name": team_name,
@@ -90,7 +111,7 @@ def create_roster(
         "updated_at": now,
         "submitted_at": None,
     }
-    result = collection.insert_one(doc)
+    result = team_rosters.insert_one(doc)
     doc["_id"] = result.inserted_id
     return doc
 
@@ -98,19 +119,17 @@ def create_roster(
 def get_roster_by_id(
     roster_id: Any, *, collection: Collection | None = None
 ) -> dict[str, Any] | None:
-    if collection is None:
-        collection = get_collection()
-    return collection.find_one({"record_type": "team_roster", "_id": roster_id})
+    team_rosters = _team_rosters(collection)
+    return team_rosters.find_one({"record_type": TEAM_ROSTER_RECORD_TYPE, "_id": roster_id})
 
 
 def get_roster_players(
     roster_id: Any, *, collection: Collection | None = None
 ) -> list[dict[str, Any]]:
-    if collection is None:
-        collection = get_collection()
+    roster_players = _roster_players(collection)
     return list(
-        collection.find(
-            {"record_type": "roster_player", "roster_id": roster_id},
+        roster_players.find(
+            {"record_type": ROSTER_PLAYER_RECORD_TYPE, "roster_id": roster_id},
             sort=[("added_at", 1)],
         )
     )
@@ -119,11 +138,8 @@ def get_roster_players(
 def count_roster_players(
     roster_id: Any, *, collection: Collection | None = None
 ) -> int:
-    if collection is None:
-        collection = get_collection()
-    return collection.count_documents(
-        {"record_type": "roster_player", "roster_id": roster_id}
-    )
+    roster_players = _roster_players(collection)
+    return roster_players.count_documents({"record_type": ROSTER_PLAYER_RECORD_TYPE, "roster_id": roster_id})
 
 
 def add_player(
@@ -136,13 +152,12 @@ def add_player(
     cap: int,
     collection: Collection | None = None,
 ) -> dict[str, Any]:
-    if collection is None:
-        collection = get_collection()
+    roster_players = _roster_players(collection)
     now = datetime.now(timezone.utc)
 
-    existing = collection.find_one(
+    existing = roster_players.find_one(
         {
-            "record_type": "roster_player",
+            "record_type": ROSTER_PLAYER_RECORD_TYPE,
             "roster_id": roster_id,
             "player_discord_id": player_discord_id,
         }
@@ -150,12 +165,12 @@ def add_player(
     if existing:
         raise RuntimeError("Player is already on this roster.")
 
-    count = count_roster_players(roster_id, collection=collection)
+    count = count_roster_players(roster_id, collection=roster_players)
     if count >= cap:
         raise RuntimeError("Roster cap reached.")
 
     doc = {
-        "record_type": "roster_player",
+        "record_type": ROSTER_PLAYER_RECORD_TYPE,
         "roster_id": roster_id,
         "player_discord_id": player_discord_id,
         "gamertag": gamertag,
@@ -163,7 +178,7 @@ def add_player(
         "console": console,
         "added_at": now,
     }
-    result = collection.insert_one(doc)
+    result = roster_players.insert_one(doc)
     doc["_id"] = result.inserted_id
     return doc
 
@@ -174,11 +189,10 @@ def remove_player(
     player_discord_id: int,
     collection: Collection | None = None,
 ) -> bool:
-    if collection is None:
-        collection = get_collection()
-    result = collection.delete_one(
+    roster_players = _roster_players(collection)
+    result = roster_players.delete_one(
         {
-            "record_type": "roster_player",
+            "record_type": ROSTER_PLAYER_RECORD_TYPE,
             "roster_id": roster_id,
             "player_discord_id": player_discord_id,
         }
@@ -189,15 +203,18 @@ def remove_player(
 def delete_roster(
     roster_id: Any, *, collection: Collection | None = None
 ) -> None:
-    if collection is None:
-        collection = get_collection()
-    collection.delete_many(
-        {"record_type": "roster_player", "roster_id": roster_id}
-    )
-    collection.delete_many(
-        {"record_type": "submission_message", "roster_id": roster_id}
-    )
-    collection.delete_one({"record_type": "team_roster", "_id": roster_id})
+    if collection is not None:
+        collection.delete_many({"record_type": ROSTER_PLAYER_RECORD_TYPE, "roster_id": roster_id})
+        collection.delete_many({"record_type": SUBMISSION_RECORD_TYPE, "roster_id": roster_id})
+        collection.delete_one({"record_type": TEAM_ROSTER_RECORD_TYPE, "_id": roster_id})
+        return
+
+    roster_players = _roster_players(None)
+    submission_messages = _submission_messages(None)
+    team_rosters = _team_rosters(None)
+    roster_players.delete_many({"record_type": ROSTER_PLAYER_RECORD_TYPE, "roster_id": roster_id})
+    submission_messages.delete_many({"record_type": SUBMISSION_RECORD_TYPE, "roster_id": roster_id})
+    team_rosters.delete_one({"record_type": TEAM_ROSTER_RECORD_TYPE, "_id": roster_id})
 
 
 def set_roster_status(
@@ -207,18 +224,17 @@ def set_roster_status(
     collection: Collection | None = None,
     expected_updated_at: datetime | None = None,
 ) -> None:
-    if collection is None:
-        collection = get_collection()
+    team_rosters = _team_rosters(collection)
     now = datetime.now(timezone.utc)
     updates: dict[str, Any] = {"status": status, "updated_at": now}
     if status == ROSTER_STATUS_SUBMITTED:
         updates["submitted_at"] = now
     if status in {ROSTER_STATUS_UNLOCKED, ROSTER_STATUS_DRAFT}:
         updates["submitted_at"] = None
-    filter_doc: dict[str, Any] = {"record_type": "team_roster", "_id": roster_id}
+    filter_doc: dict[str, Any] = {"record_type": TEAM_ROSTER_RECORD_TYPE, "_id": roster_id}
     if expected_updated_at is not None:
         filter_doc["updated_at"] = expected_updated_at
-    result = collection.update_one(filter_doc, {"$set": updates})
+    result = team_rosters.update_one(filter_doc, {"$set": updates})
     if expected_updated_at is not None and result.matched_count == 0:
         raise RuntimeError("Roster changed; reopen the dashboard and try again.")
 
@@ -238,11 +254,10 @@ def validate_roster_identity(
     Validate roster before submission: duplicates, missing fields, and counts.
     Returns (ok, message).
     """
-    if collection is None:
-        collection = get_collection()
+    roster_players = _roster_players(collection)
     players = list(
-        collection.find(
-            {"record_type": "roster_player", "roster_id": roster_id},
+        roster_players.find(
+            {"record_type": ROSTER_PLAYER_RECORD_TYPE, "roster_id": roster_id},
             sort=[("added_at", 1)],
         )
     )
@@ -262,11 +277,10 @@ def validate_roster_identity(
 def update_roster_name(
     roster_id: Any, team_name: str, *, collection: Collection | None = None
 ) -> None:
-    if collection is None:
-        collection = get_collection()
+    team_rosters = _team_rosters(collection)
     now = datetime.now(timezone.utc)
-    collection.update_one(
-        {"record_type": "team_roster", "_id": roster_id},
+    team_rosters.update_one(
+        {"record_type": TEAM_ROSTER_RECORD_TYPE, "_id": roster_id},
         {"$set": {"team_name": team_name, "updated_at": now}},
     )
 
@@ -277,11 +291,10 @@ def update_practice_times(
     *,
     collection: Collection | None = None,
 ) -> None:
-    if collection is None:
-        collection = get_collection()
+    team_rosters = _team_rosters(collection)
     now = datetime.now(timezone.utc)
-    collection.update_one(
-        {"record_type": "team_roster", "_id": roster_id},
+    team_rosters.update_one(
+        {"record_type": TEAM_ROSTER_RECORD_TYPE, "_id": roster_id},
         {"$set": {"practice_times": practice_times, "updated_at": now}},
     )
 
@@ -292,10 +305,9 @@ def update_roster_cap(
     *,
     collection: Collection | None = None,
 ) -> None:
-    if collection is None:
-        collection = get_collection()
+    team_rosters = _team_rosters(collection)
     now = datetime.now(timezone.utc)
-    collection.update_one(
-        {"record_type": "team_roster", "_id": roster_id},
+    team_rosters.update_one(
+        {"record_type": TEAM_ROSTER_RECORD_TYPE, "_id": roster_id},
         {"$set": {"cap": int(cap), "updated_at": now}},
     )

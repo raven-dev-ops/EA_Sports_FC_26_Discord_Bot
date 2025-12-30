@@ -17,7 +17,7 @@ def get_club_ad(
     collection: Collection | None = None,
 ) -> dict[str, Any] | None:
     if collection is None:
-        collection = get_collection()
+        collection = get_collection(record_type=RECORD_TYPE)
     return collection.find_one(
         {"record_type": RECORD_TYPE, "guild_id": guild_id, "owner_id": owner_id}
     )
@@ -31,7 +31,7 @@ def upsert_club_ad(
     collection: Collection | None = None,
 ) -> dict[str, Any]:
     if collection is None:
-        collection = get_collection()
+        collection = get_collection(record_type=RECORD_TYPE)
     now = datetime.now(timezone.utc)
     filter_doc = {"record_type": RECORD_TYPE, "guild_id": guild_id, "owner_id": owner_id}
     update_doc = {
@@ -56,7 +56,7 @@ def update_club_ad_posts(
     collection: Collection | None = None,
 ) -> None:
     if collection is None:
-        collection = get_collection()
+        collection = get_collection(record_type=RECORD_TYPE)
     now = datetime.now(timezone.utc)
     updates: dict[str, Any] = {
         "updated_at": now,
@@ -81,7 +81,7 @@ def set_club_ad_approval(
     collection: Collection | None = None,
 ) -> dict[str, Any]:
     if collection is None:
-        collection = get_collection()
+        collection = get_collection(record_type=RECORD_TYPE)
     now = datetime.now(timezone.utc)
     updates: dict[str, Any] = {
         "updated_at": now,
@@ -107,7 +107,7 @@ def delete_club_ad(
     collection: Collection | None = None,
 ) -> dict[str, Any] | None:
     if collection is None:
-        collection = get_collection()
+        collection = get_collection(record_type=RECORD_TYPE)
     doc = get_club_ad(guild_id, owner_id, collection=collection)
     if not doc:
         return None

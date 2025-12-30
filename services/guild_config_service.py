@@ -10,7 +10,7 @@ RECORD_TYPE = "guild_settings"
 
 
 def _collection(collection: Optional[Collection] = None) -> Collection:
-    return collection or get_collection()
+    return collection or get_collection(record_type=RECORD_TYPE)
 
 
 def get_guild_config(guild_id: int, *, collection: Optional[Collection] = None) -> dict[str, Any]:

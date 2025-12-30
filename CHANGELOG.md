@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.20] - 2025-12-30
+
+### Changed
+- MongoDB: defaults database name to `OffsideDiscordBot` when `MONGODB_DB_NAME` is unset.
+- MongoDB: defaults to a multi-collection schema (one collection per record type); `MONGODB_COLLECTION` enables legacy single-collection mode.
+- Migrations: schema version bumped to 4; indexes are ensured per collection.
+
+### Updated
+- Docs: clarified MongoDB configuration in `.env.example`, `README.md`, and `docs/server-setup-checklist.md`.
+
 ## [0.2.19] - 2025-12-30
 
 ### Added

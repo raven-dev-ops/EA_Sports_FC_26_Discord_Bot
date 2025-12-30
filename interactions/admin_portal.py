@@ -357,7 +357,7 @@ class AdminPortalView(SafeView):
             )
             return
 
-        if not (settings.mongodb_uri and settings.mongodb_db_name and settings.mongodb_collection):
+        if not settings.mongodb_uri:
             await interaction.response.send_message(
                 "MongoDB is not configured; per-guild auto-setup cannot run.",
                 ephemeral=True,
@@ -375,7 +375,7 @@ class AdminPortalView(SafeView):
             warnings.append("Missing `Manage Messages` (pin/unpin and some cleanup actions may fail).")
 
         try:
-            collection = get_collection(settings)
+            collection = get_collection(settings, record_type="guild_settings")
         except Exception:
             logging.exception("Verify Setup: failed to connect to MongoDB (guild=%s).", guild.id)
             await interaction.response.send_message(

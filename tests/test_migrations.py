@@ -55,10 +55,10 @@ def test_apply_migrations_with_mongomock(monkeypatch) -> None:
 
     logger = logging.getLogger("test_migrations")
     latest = apply_migrations(settings=settings, logger=logger)
-    assert latest == 3
+    assert latest == 4
 
     client = database.get_client(settings)
     meta = client[settings.mongodb_db_name]["_meta"].find_one({"_id": "schema_version"})
-    assert meta and meta["version"] == 3
+    assert meta and meta["version"] == 4
 
     close_client()

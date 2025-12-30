@@ -7,21 +7,30 @@ from pymongo import MongoClient
 
 COACH_ID = 790188155969601577
 TEAM_NAMES = ["Test 1", "Test 2", "Test 3", "Test 4"]
+DEFAULT_DB_NAME = "OffsideDiscordBot"
 
 
 def main() -> None:
     mongo_uri = os.environ.get("MONGODB_URI")
-    db_name = os.environ.get("MONGODB_DB_NAME")
+    db_name = os.environ.get("MONGODB_DB_NAME") or DEFAULT_DB_NAME
     collection_name = os.environ.get("MONGODB_COLLECTION")
     cycle_id_raw = os.environ.get("CYCLE_ID")  # optional: hex id for a specific cycle
-    if not mongo_uri or not db_name or not collection_name:
-        raise SystemExit("Set MONGODB_URI, MONGODB_DB_NAME, and MONGODB_COLLECTION.")
+    if not mongo_uri:
+        raise SystemExit("Set MONGODB_URI.")
 
     client = MongoClient(mongo_uri, serverSelectionTimeoutMS=5000)
-    coll = client[db_name][collection_name]
+    db = client[db_name]
+    if collection_name:
+        cycles_collection = db[collection_name]
+        rosters_collection = db[collection_name]
+        players_collection = db[collection_name]
+    else:
+        cycles_collection = db["tournament_cycles"]
+        rosters_collection = db["team_rosters"]
+        players_collection = db["roster_players"]
     now = datetime.now(timezone.utc)
 
-    cycle = coll.find_one({"record_type": "tournament_cycle", "is_active": True})
+    cycle = cycles_collection.find_one({"record_type": "tournament_cycle", "is_active": True})
     if cycle is None:
         cycle = {
             "record_type": "tournament_cycle",
@@ -30,7 +39,7 @@ def main() -> None:
             "created_at": now,
             "updated_at": now,
         }
-        cycle_id = coll.insert_one(cycle).inserted_id
+        cycle_id = cycles_collection.insert_one(cycle).inserted_id
         cycle["_id"] = cycle_id
     else:
         cycle_id = cycle["_id"]
@@ -62,12 +71,12 @@ def main() -> None:
             "updated_at": now,
             "submitted_at": None,
         }
-        roster_id = coll.insert_one(roster_doc).inserted_id
-        players = [mk_player(p_idx, t_idx) for p_idx in range(8)]
-        for p in players:
+        roster_id = rosters_collection.insert_one(roster_doc).inserted_id
+        player_docs = [mk_player(p_idx, t_idx) for p_idx in range(8)]
+        for p in player_docs:
             p["roster_id"] = roster_id
-        if players:
-            coll.insert_many(players)
+        if player_docs:
+            players_collection.insert_many(player_docs)
 
     print("Seeded teams:", TEAM_NAMES)
 

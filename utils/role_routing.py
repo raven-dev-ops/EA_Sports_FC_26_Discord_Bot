@@ -33,7 +33,7 @@ def resolve_role_id(
 
 
 def _mongo_enabled(settings: Settings) -> bool:
-    return bool(settings.mongodb_uri and settings.mongodb_db_name and settings.mongodb_collection)
+    return bool(settings.mongodb_uri)
 
 
 def _parse_int(value: Any) -> int | None:
@@ -55,4 +55,3 @@ def _parse_int(value: Any) -> int | None:
         return int(value)
     except (TypeError, ValueError):
         return None
-

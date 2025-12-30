@@ -21,7 +21,7 @@ def fc25_stats_enabled(settings: Settings | None, *, guild_id: int | None) -> bo
         return False
     if guild_id is None:
         return True
-    if not (settings.mongodb_uri and settings.mongodb_db_name and settings.mongodb_collection):
+    if not settings.mongodb_uri:
         return True
 
     try:
@@ -43,4 +43,3 @@ def fc25_stats_enabled(settings: Settings | None, *, guild_id: int | None) -> bo
         if value in {"0", "false", "no", "off"}:
             return False
     return True
-

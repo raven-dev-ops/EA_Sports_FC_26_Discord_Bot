@@ -23,19 +23,33 @@ T = TypeVar("T")
 def _now():
     return datetime.now(timezone.utc)
 
+TOURNAMENT_RECORD_TYPE = "tournament"
+PARTICIPANT_RECORD_TYPE = "tournament_participant"
+MATCH_RECORD_TYPE = "tournament_match"
+
+
+def _tournaments(collection: Collection | None) -> Collection:
+    return collection or get_collection(record_type=TOURNAMENT_RECORD_TYPE)
+
+
+def _participants(collection: Collection | None) -> Collection:
+    return collection or get_collection(record_type=PARTICIPANT_RECORD_TYPE)
+
+
+def _matches(collection: Collection | None) -> Collection:
+    return collection or get_collection(record_type=MATCH_RECORD_TYPE)
+
 
 def list_tournaments(*, collection: Collection | None = None) -> list[dict[str, Any]]:
-    if collection is None:
-        collection = get_collection()
+    tournaments = _tournaments(collection)
     return list(
-        collection.find({"record_type": "tournament"}).sort([("created_at", -1)])
+        tournaments.find({"record_type": TOURNAMENT_RECORD_TYPE}).sort([("created_at", -1)])
     )
 
 
 def get_tournament(name: str, *, collection: Collection | None = None) -> dict[str, Any] | None:
-    if collection is None:
-        collection = get_collection()
-    return collection.find_one({"record_type": "tournament", "name": name})
+    tournaments = _tournaments(collection)
+    return tournaments.find_one({"record_type": TOURNAMENT_RECORD_TYPE, "name": name})
 
 
 def create_tournament(
@@ -47,14 +61,13 @@ def create_tournament(
     disputes_channel_id: int | None = None,
     collection: Collection | None = None,
 ) -> dict[str, Any]:
-    if collection is None:
-        collection = get_collection()
     existing = get_tournament(name, collection=collection)
     if existing:
         return existing
+    tournaments = _tournaments(collection)
     now = _now()
     doc = {
-        "record_type": "tournament",
+        "record_type": TOURNAMENT_RECORD_TYPE,
         "name": name,
         "format": format,
         "rules": rules,
@@ -64,7 +77,7 @@ def create_tournament(
         "created_at": now,
         "updated_at": now,
     }
-    result = collection.insert_one(doc)
+    result = tournaments.insert_one(doc)
     doc["_id"] = result.inserted_id
     return doc
 
@@ -72,10 +85,9 @@ def create_tournament(
 def update_tournament_state(
     name: str, state: str, *, collection: Collection | None = None
 ) -> bool:
-    if collection is None:
-        collection = get_collection()
-    result = collection.update_one(
-        {"record_type": "tournament", "name": name},
+    tournaments = _tournaments(collection)
+    result = tournaments.update_one(
+        {"record_type": TOURNAMENT_RECORD_TYPE, "name": name},
         {"$set": {"state": state, "updated_at": _now()}},
     )
     return result.matched_count > 0
@@ -88,15 +100,14 @@ def update_tournament_channels(
     disputes_channel_id: int | None = None,
     collection: Collection | None = None,
 ) -> bool:
-    if collection is None:
-        collection = get_collection()
+    tournaments = _tournaments(collection)
     updates: dict[str, Any] = {"updated_at": _now()}
     if matches_channel_id is not None:
         updates["matches_channel_id"] = matches_channel_id
     if disputes_channel_id is not None:
         updates["disputes_channel_id"] = disputes_channel_id
-    result = collection.update_one(
-        {"record_type": "tournament", "name": name},
+    result = tournaments.update_one(
+        {"record_type": TOURNAMENT_RECORD_TYPE, "name": name},
         {"$set": updates},
     )
     return result.matched_count > 0
@@ -109,10 +120,9 @@ def set_match_message_id(
     message_id: int | None,
     collection: Collection | None = None,
 ) -> None:
-    if collection is None:
-        collection = get_collection()
-    collection.update_one(
-        {"record_type": "tournament_match", "_id": ObjectId(match_id)},
+    matches = _matches(collection)
+    matches.update_one(
+        {"record_type": MATCH_RECORD_TYPE, "_id": ObjectId(match_id)},
         {"$set": {field: message_id, "updated_at": _now()}},
     )
 
@@ -125,16 +135,15 @@ def add_participant(
     seed: int | None = None,
     collection: Collection | None = None,
 ) -> dict[str, Any]:
-    if collection is None:
-        collection = get_collection()
     tour = get_tournament(tournament_name, collection=collection)
     if tour is None:
         raise RuntimeError("Tournament not found.")
     if tour.get("state") not in {TOURNAMENT_STATE_DRAFT, TOURNAMENT_STATE_REG_OPEN}:
         raise RuntimeError("Registration is closed.")
-    existing = collection.find_one(
+    participants = _participants(collection)
+    existing = participants.find_one(
         {
-            "record_type": "tournament_participant",
+            "record_type": PARTICIPANT_RECORD_TYPE,
             "tournament": tour["_id"],
             "team_name": team_name,
         }
@@ -143,7 +152,7 @@ def add_participant(
         return existing
     now = _now()
     doc = {
-        "record_type": "tournament_participant",
+        "record_type": PARTICIPANT_RECORD_TYPE,
         "tournament": tour["_id"],
         "team_name": team_name,
         "coach_id": coach_id,
@@ -151,20 +160,19 @@ def add_participant(
         "created_at": now,
         "updated_at": now,
     }
-    result = collection.insert_one(doc)
+    result = participants.insert_one(doc)
     doc["_id"] = result.inserted_id
     return doc
 
 
 def list_participants(tournament_name: str, *, collection: Collection | None = None) -> list[dict[str, Any]]:
-    if collection is None:
-        collection = get_collection()
     tour = get_tournament(tournament_name, collection=collection)
     if tour is None:
         return []
+    participants = _participants(collection)
     return list(
-        collection.find(
-            {"record_type": "tournament_participant", "tournament": tour["_id"]}
+        participants.find(
+            {"record_type": PARTICIPANT_RECORD_TYPE, "tournament": tour["_id"]}
         ).sort([("seed", 1), ("created_at", 1)])
     )
 
@@ -183,8 +191,6 @@ def generate_bracket(
     tournament_name: str,
     collection: Collection | None = None,
 ) -> list[dict[str, Any]]:
-    if collection is None:
-        collection = get_collection()
     tour = get_tournament(tournament_name, collection=collection)
     if tour is None:
         raise RuntimeError("Tournament not found.")
@@ -199,10 +205,11 @@ def generate_bracket(
 
     now = _now()
     pairs = _pairwise(participants)
+    match_collection = _matches(collection)
     matches: list[dict[str, Any]] = []
     for idx, (a, b) in enumerate(pairs, start=1):
         match = {
-            "record_type": "tournament_match",
+            "record_type": MATCH_RECORD_TYPE,
             "tournament": tour["_id"],
             "round": 1,
             "sequence": idx,
@@ -214,7 +221,7 @@ def generate_bracket(
             "created_at": now,
             "updated_at": now,
         }
-        result = collection.insert_one(match)
+        result = match_collection.insert_one(match)
         match["_id"] = result.inserted_id
         matches.append(match)
     update_tournament_state(tournament_name, TOURNAMENT_STATE_IN_PROGRESS, collection=collection)
@@ -230,8 +237,6 @@ def preview_bracket(
     Return round 1 pairings without mutating the database or advancing state.
     Useful for "dry-run" previews before publishing the bracket.
     """
-    if collection is None:
-        collection = get_collection()
     tour = get_tournament(tournament_name, collection=collection)
     if tour is None:
         raise RuntimeError("Tournament not found.")
@@ -256,14 +261,13 @@ def preview_bracket(
 
 
 def list_matches(tournament_name: str, *, collection: Collection | None = None) -> list[dict[str, Any]]:
-    if collection is None:
-        collection = get_collection()
     tour = get_tournament(tournament_name, collection=collection)
     if tour is None:
         return []
+    matches = _matches(collection)
     return list(
-        collection.find(
-            {"record_type": "tournament_match", "tournament": tour["_id"]}
+        matches.find(
+            {"record_type": MATCH_RECORD_TYPE, "tournament": tour["_id"]}
         ).sort([("round", 1), ("sequence", 1)])
     )
 
@@ -278,14 +282,13 @@ def report_score(
     collection: Collection | None = None,
     expected_updated_at: datetime | None = None,
 ) -> dict[str, Any]:
-    if collection is None:
-        collection = get_collection()
     tour = get_tournament(tournament_name, collection=collection)
     if tour is None:
         raise RuntimeError("Tournament not found.")
-    match = collection.find_one(
+    matches = _matches(collection)
+    match = matches.find_one(
         {
-            "record_type": "tournament_match",
+            "record_type": MATCH_RECORD_TYPE,
             "tournament": tour["_id"],
             "_id": ObjectId(match_id),
         }
@@ -306,7 +309,7 @@ def report_score(
     filter_doc = {"_id": match["_id"]}
     if expected_updated_at is not None:
         filter_doc["updated_at"] = expected_updated_at
-    result = collection.update_one(
+    result = matches.update_one(
         filter_doc,
         {"$set": {"scores": scores, "status": MATCH_STATUS_REPORTED, "updated_at": _now()}},
     )
@@ -325,14 +328,13 @@ def confirm_match(
     collection: Collection | None = None,
     expected_updated_at: datetime | None = None,
 ) -> dict[str, Any]:
-    if collection is None:
-        collection = get_collection()
     tour = get_tournament(tournament_name, collection=collection)
     if tour is None:
         raise RuntimeError("Tournament not found.")
-    match = collection.find_one(
+    matches = _matches(collection)
+    match = matches.find_one(
         {
-            "record_type": "tournament_match",
+            "record_type": MATCH_RECORD_TYPE,
             "tournament": tour["_id"],
             "_id": ObjectId(match_id),
         }
@@ -354,7 +356,7 @@ def confirm_match(
     filter_doc = {"_id": match["_id"]}
     if expected_updated_at is not None:
         filter_doc["updated_at"] = expected_updated_at
-    result = collection.update_one(
+    result = matches.update_one(
         filter_doc,
         {
             "$set": {
@@ -379,14 +381,13 @@ def set_match_deadline(
     deadline: str,
     collection: Collection | None = None,
 ) -> bool:
-    if collection is None:
-        collection = get_collection()
     tour = get_tournament(tournament_name, collection=collection)
     if tour is None:
         return False
-    result = collection.update_one(
+    matches = _matches(collection)
+    result = matches.update_one(
         {
-            "record_type": "tournament_match",
+            "record_type": MATCH_RECORD_TYPE,
             "tournament": tour["_id"],
             "_id": ObjectId(match_id),
         },
@@ -402,14 +403,13 @@ def forfeit_match(
     winner_team_id: Any,
     collection: Collection | None = None,
 ) -> dict[str, Any]:
-    if collection is None:
-        collection = get_collection()
     tour = get_tournament(tournament_name, collection=collection)
     if tour is None:
         raise RuntimeError("Tournament not found.")
-    match = collection.find_one(
+    matches = _matches(collection)
+    match = matches.find_one(
         {
-            "record_type": "tournament_match",
+            "record_type": MATCH_RECORD_TYPE,
             "tournament": tour["_id"],
             "_id": ObjectId(match_id),
         }
@@ -418,7 +418,7 @@ def forfeit_match(
         raise RuntimeError("Match not found.")
     if match.get("status") == MATCH_STATUS_COMPLETED:
         return match
-    collection.update_one(
+    matches.update_one(
         {"_id": match["_id"]},
         {
             "$set": {
@@ -441,14 +441,13 @@ def request_reschedule(
     requested_by: Any,
     collection: Collection | None = None,
 ) -> dict[str, Any]:
-    if collection is None:
-        collection = get_collection()
     tour = get_tournament(tournament_name, collection=collection)
     if tour is None:
         raise RuntimeError("Tournament not found.")
-    match = collection.find_one(
+    matches = _matches(collection)
+    match = matches.find_one(
         {
-            "record_type": "tournament_match",
+            "record_type": MATCH_RECORD_TYPE,
             "tournament": tour["_id"],
             "_id": ObjectId(match_id),
         }
@@ -459,7 +458,7 @@ def request_reschedule(
     reqs.append(
         {"requested_by": requested_by, "reason": reason, "requested_at": _now()}
     )
-    collection.update_one(
+    matches.update_one(
         {"_id": match["_id"]},
         {"$set": {"reschedule_requests": reqs, "updated_at": _now()}},
     )
@@ -475,14 +474,13 @@ def add_dispute(
     filed_by: Any,
     collection: Collection | None = None,
 ) -> dict[str, Any]:
-    if collection is None:
-        collection = get_collection()
     tour = get_tournament(tournament_name, collection=collection)
     if tour is None:
         raise RuntimeError("Tournament not found.")
-    match = collection.find_one(
+    matches = _matches(collection)
+    match = matches.find_one(
         {
-            "record_type": "tournament_match",
+            "record_type": MATCH_RECORD_TYPE,
             "tournament": tour["_id"],
             "_id": ObjectId(match_id),
         }
@@ -499,7 +497,7 @@ def add_dispute(
             "resolution": None,
         }
     )
-    collection.update_one(
+    matches.update_one(
         {"_id": match["_id"]},
         {"$set": {"disputes": disputes, "updated_at": _now()}},
     )
@@ -514,14 +512,13 @@ def resolve_dispute(
     resolution: str,
     collection: Collection | None = None,
 ) -> dict[str, Any]:
-    if collection is None:
-        collection = get_collection()
     tour = get_tournament(tournament_name, collection=collection)
     if tour is None:
         raise RuntimeError("Tournament not found.")
-    match = collection.find_one(
+    matches = _matches(collection)
+    match = matches.find_one(
         {
-            "record_type": "tournament_match",
+            "record_type": MATCH_RECORD_TYPE,
             "tournament": tour["_id"],
             "_id": ObjectId(match_id),
         }
@@ -534,7 +531,7 @@ def resolve_dispute(
     disputes[-1]["resolved"] = True
     disputes[-1]["resolution"] = resolution
     disputes[-1]["resolved_at"] = _now()
-    collection.update_one(
+    matches.update_one(
         {"_id": match["_id"]},
         {"$set": {"disputes": disputes, "updated_at": _now()}},
     )
@@ -547,8 +544,6 @@ def advance_round(
     tournament_name: str,
     collection: Collection | None = None,
 ) -> list[dict[str, Any]]:
-    if collection is None:
-        collection = get_collection()
     tour = get_tournament(tournament_name, collection=collection)
     if tour is None:
         raise RuntimeError("Tournament not found.")
@@ -568,9 +563,10 @@ def advance_round(
     now = _now()
     next_round = current_round + 1
     new_matches: list[dict[str, Any]] = []
+    match_collection = _matches(collection)
     for idx, (a, b) in enumerate(pairs, start=1):
         match = {
-            "record_type": "tournament_match",
+            "record_type": MATCH_RECORD_TYPE,
             "tournament": tour["_id"],
             "round": next_round,
             "sequence": idx,
@@ -584,7 +580,7 @@ def advance_round(
             "created_at": now,
             "updated_at": now,
         }
-        result = collection.insert_one(match)
+        result = match_collection.insert_one(match)
         match["_id"] = result.inserted_id
         new_matches.append(match)
     if len(new_matches) == 1 and new_matches[0]["team_b"] is None:

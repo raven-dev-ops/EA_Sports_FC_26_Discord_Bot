@@ -4,7 +4,6 @@ from typing import Any
 
 from pymongo.collection import Collection
 
-from database import get_collection
 from services.tournament_service import (
     MATCH_STATUS_COMPLETED,
     list_matches,
@@ -18,8 +17,6 @@ def compute_leaderboard(
     """
     Build a simple leaderboard from completed matches (wins/losses/gd).
     """
-    if collection is None:
-        collection = get_collection()
     participants = list_participants(tournament_name, collection=collection)
     name_map = {p["_id"]: p["team_name"] for p in participants}
     table: dict[Any, dict[str, Any]] = {}

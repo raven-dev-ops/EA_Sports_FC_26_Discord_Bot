@@ -7,6 +7,8 @@ from pymongo.collection import Collection
 
 from database import get_collection
 
+RECORD_TYPE = "submission_message"
+
 
 def create_submission_record(
     *,
@@ -17,10 +19,10 @@ def create_submission_record(
     collection: Collection | None = None,
 ) -> dict[str, Any]:
     if collection is None:
-        collection = get_collection()
+        collection = get_collection(record_type=RECORD_TYPE)
     now = datetime.now(timezone.utc)
     doc = {
-        "record_type": "submission_message",
+        "record_type": RECORD_TYPE,
         "roster_id": roster_id,
         "staff_channel_id": staff_channel_id,
         "staff_message_id": staff_message_id,
@@ -37,8 +39,8 @@ def get_submission_by_roster(
     roster_id: Any, *, collection: Collection | None = None
 ) -> dict[str, Any] | None:
     if collection is None:
-        collection = get_collection()
-    return collection.find_one({"record_type": "submission_message", "roster_id": roster_id})
+        collection = get_collection(record_type=RECORD_TYPE)
+    return collection.find_one({"record_type": RECORD_TYPE, "roster_id": roster_id})
 
 
 def update_submission_status(
@@ -48,9 +50,9 @@ def update_submission_status(
     collection: Collection | None = None,
 ) -> None:
     if collection is None:
-        collection = get_collection()
+        collection = get_collection(record_type=RECORD_TYPE)
     collection.update_one(
-        {"record_type": "submission_message", "roster_id": roster_id},
+        {"record_type": RECORD_TYPE, "roster_id": roster_id},
         {"$set": {"status": status, "updated_at": datetime.now(timezone.utc)}},
     )
 
@@ -59,8 +61,8 @@ def delete_submission_by_roster(
     roster_id: Any, *, collection: Collection | None = None
 ) -> dict[str, Any] | None:
     if collection is None:
-        collection = get_collection()
-    doc = collection.find_one({"record_type": "submission_message", "roster_id": roster_id})
+        collection = get_collection(record_type=RECORD_TYPE)
+    doc = collection.find_one({"record_type": RECORD_TYPE, "roster_id": roster_id})
     if doc:
         collection.delete_one({"_id": doc["_id"]})
     return doc

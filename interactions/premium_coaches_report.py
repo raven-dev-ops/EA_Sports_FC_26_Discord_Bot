@@ -129,9 +129,15 @@ def _parse_bool(value: Any) -> bool:
     return False
 
 
-def _build_listings(collection, *, cycle_id: Any) -> tuple[list[str], list[str]]:
+def _build_listings(
+    roster_collection,
+    *,
+    cycle_id: Any,
+    roster_players_collection=None,
+) -> tuple[list[str], list[str]]:
+    players_collection = roster_players_collection or roster_collection
     rosters = list(
-        collection.find(
+        roster_collection.find(
             {
                 "record_type": "team_roster",
                 "cycle_id": cycle_id,
@@ -150,7 +156,7 @@ def _build_listings(collection, *, cycle_id: Any) -> tuple[list[str], list[str]]
                 {"$match": {"record_type": "roster_player", "roster_id": {"$in": roster_ids}}},
                 {"$group": {"_id": "$roster_id", "count": {"$sum": 1}}},
             ]
-            for doc in collection.aggregate(pipeline):
+            for doc in players_collection.aggregate(pipeline):
                 counts[doc.get("_id")] = int(doc.get("count") or 0)
         except Exception:
             counts = {}
@@ -269,16 +275,22 @@ async def upsert_premium_coaches_report(
         return
 
     try:
-        collection = get_collection(settings)
+        cycle_collection = get_collection(settings, record_type="tournament_cycle")
+        team_rosters = get_collection(settings, record_type="team_roster")
+        roster_players = get_collection(settings, record_type="roster_player")
     except Exception:
         return
 
     try:
-        cycle = ensure_active_cycle(collection=collection)
+        cycle = ensure_active_cycle(collection=cycle_collection)
     except Exception:
         return
 
-    premium_listings, premium_plus_listings = _build_listings(collection, cycle_id=cycle["_id"])
+    premium_listings, premium_plus_listings = _build_listings(
+        team_rosters,
+        roster_players_collection=roster_players,
+        cycle_id=cycle["_id"],
+    )
     embed = _build_embed(
         cycle_name=str(cycle.get("name") or "Current Tournament"),
         premium_listings=premium_listings,
@@ -424,4 +436,3 @@ async def post_premium_coaches_report(
             )
         except Exception:
             logging.exception("Failed to upsert premium coaches report (guild=%s).", guild.id)
-

@@ -101,10 +101,12 @@ Required (startup):
 
 Required for persistence:
 - `MONGODB_URI`
-- `MONGODB_DB_NAME`
-- `MONGODB_COLLECTION`
+
+Recommended:
+- `MONGODB_DB_NAME` (defaults to `OffsideDiscordBot`)
 
 Optional:
+- `MONGODB_COLLECTION` (legacy single-collection mode)
 - `STAFF_ROLE_IDS` (comma-separated role IDs)
 - `TEST_MODE` (defaults to `true`, set `false` for production)
 - Role env overrides (optional; primary source is per-guild config created by auto-setup):

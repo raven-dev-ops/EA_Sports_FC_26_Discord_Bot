@@ -230,7 +230,7 @@ class OffsideBot(commands.AutoShardedBot):
         settings = getattr(self, "settings", None)
         if settings is None:
             return
-        if not (settings.mongodb_uri and settings.mongodb_db_name and settings.mongodb_collection):
+        if not settings.mongodb_uri:
             logging.warning("Auto-setup skipped (guild=%s): MongoDB not configured.", guild.id)
             return
 
@@ -250,7 +250,7 @@ class OffsideBot(commands.AutoShardedBot):
         actions: list[str] = []
 
         try:
-            collection = get_collection(settings)
+            collection = get_collection(settings, record_type="guild_settings")
         except Exception:
             logging.exception("Auto-setup skipped (guild=%s): failed to connect to MongoDB.", guild.id)
             return
@@ -318,10 +318,10 @@ class OffsideBot(commands.AutoShardedBot):
         if getattr(self, "test_mode", False):
             return
         settings = getattr(self, "settings", None)
-        if settings is None or not (settings.mongodb_uri and settings.mongodb_db_name and settings.mongodb_collection):
+        if settings is None or not settings.mongodb_uri:
             return
         try:
-            collection = get_collection(settings)
+            collection = get_collection(settings, record_type="guild_settings")
         except Exception:
             return
         for guild in self.guilds:
@@ -427,10 +427,10 @@ class OffsideBot(commands.AutoShardedBot):
         settings = getattr(self, "settings", None)
         if settings is None:
             return
-        if not (settings.mongodb_uri and settings.mongodb_db_name and settings.mongodb_collection):
+        if not settings.mongodb_uri:
             return
         try:
-            collection = get_collection(settings)
+            collection = get_collection(settings, record_type="fc25_stats_link")
         except Exception:
             return
 

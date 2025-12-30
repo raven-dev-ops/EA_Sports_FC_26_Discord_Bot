@@ -39,7 +39,7 @@ def get_recruit_profile(
     collection: Collection | None = None,
 ) -> dict[str, Any] | None:
     if collection is None:
-        collection = get_collection()
+        collection = get_collection(record_type=RECORD_TYPE)
     return collection.find_one(
         {"record_type": RECORD_TYPE, "guild_id": guild_id, "user_id": user_id}
     )
@@ -53,7 +53,7 @@ def upsert_recruit_profile(
     collection: Collection | None = None,
 ) -> dict[str, Any]:
     if collection is None:
-        collection = get_collection()
+        collection = get_collection(record_type=RECORD_TYPE)
     now = datetime.now(timezone.utc)
     filter_doc = {"record_type": RECORD_TYPE, "guild_id": guild_id, "user_id": user_id}
     update_doc = {
@@ -81,7 +81,7 @@ def search_recruit_profiles(
     collection: Collection | None = None,
 ) -> list[dict[str, Any]]:
     if collection is None:
-        collection = get_collection()
+        collection = get_collection(record_type=RECORD_TYPE)
 
     position_value = position.strip().upper() if isinstance(position, str) and position.strip() else None
     archetype_value = (
@@ -138,7 +138,7 @@ def list_recruit_profile_distinct(
     collection: Collection | None = None,
 ) -> list[str]:
     if collection is None:
-        collection = get_collection()
+        collection = get_collection(record_type=RECORD_TYPE)
     query = {"record_type": RECORD_TYPE, "guild_id": guild_id, **_listing_ready_filter()}
     values = [v for v in collection.distinct(field, query) if isinstance(v, str) and v.strip()]
     values = sorted(set(values), key=lambda v: v.casefold())
@@ -156,7 +156,7 @@ def update_recruit_profile_posts(
     collection: Collection | None = None,
 ) -> None:
     if collection is None:
-        collection = get_collection()
+        collection = get_collection(record_type=RECORD_TYPE)
     now = datetime.now(timezone.utc)
     updates: dict[str, Any] = {
         "updated_at": now,
@@ -181,7 +181,7 @@ def update_recruit_profile_availability(
     collection: Collection | None = None,
 ) -> None:
     if collection is None:
-        collection = get_collection()
+        collection = get_collection(record_type=RECORD_TYPE)
     now = datetime.now(timezone.utc)
     updates: dict[str, Any] = {
         "updated_at": now,
@@ -202,7 +202,7 @@ def delete_recruit_profile(
     collection: Collection | None = None,
 ) -> dict[str, Any] | None:
     if collection is None:
-        collection = get_collection()
+        collection = get_collection(record_type=RECORD_TYPE)
     doc = get_recruit_profile(guild_id, user_id, collection=collection)
     if not doc:
         return None

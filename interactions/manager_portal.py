@@ -238,70 +238,68 @@ async def _set_coach_tier(
     except discord.DiscordException:
         return False, "Failed to update roles due to a Discord API error."
 
+    if not settings.mongodb_uri:
+        return True, f"Updated tier role for <@{coach_id}>. (MongoDB not configured; roster cap not synced.)"
+
     try:
-        collection = get_collection(settings)
+        # Best-effort: sync roster cap to match the tier.
+        roster = get_roster_for_coach(coach_id)
+        if roster is None:
+            return True, f"Updated tier role for <@{coach_id}>. No roster found to sync."
+
+        record_staff_action(
+            roster_id=roster["_id"],
+            action=AUDIT_ACTION_TIER_CHANGED,
+            staff_discord_id=interaction.user.id,
+            staff_display_name=getattr(interaction.user, "display_name", None),
+            staff_username=str(interaction.user),
+            details={
+                "coach_discord_id": coach_id,
+                "tier": tier_role.name,
+                "desired_cap": desired_cap,
+            },
+        )
+
+        current_count = count_roster_players(roster["_id"])
+        current_cap = roster.get("cap")
+        if isinstance(current_cap, int) and desired_cap < current_count:
+            record_staff_action(
+                roster_id=roster["_id"],
+                action=AUDIT_ACTION_CAP_SYNC_SKIPPED,
+                staff_discord_id=interaction.user.id,
+                staff_display_name=getattr(interaction.user, "display_name", None),
+                staff_username=str(interaction.user),
+                details={
+                    "from_cap": current_cap,
+                    "to_cap": desired_cap,
+                    "player_count": current_count,
+                    "reason": "tier_change",
+                },
+            )
+            return True, (
+                f"Updated tier role for <@{coach_id}>, but did not reduce roster cap below current "
+                f"player count ({current_count}). Remove players, then re-run Sync Caps."
+            )
+
+        if isinstance(current_cap, int) and current_cap != desired_cap:
+            update_roster_cap(roster["_id"], desired_cap)
+            record_staff_action(
+                roster_id=roster["_id"],
+                action=AUDIT_ACTION_CAP_SYNCED,
+                staff_discord_id=interaction.user.id,
+                staff_display_name=getattr(interaction.user, "display_name", None),
+                staff_username=str(interaction.user),
+                details={
+                    "from_cap": current_cap,
+                    "to_cap": desired_cap,
+                    "player_count": current_count,
+                    "reason": "tier_change",
+                },
+            )
+
+        return True, f"Updated tier role for <@{coach_id}> and synced roster cap to {desired_cap}."
     except Exception:
         return True, f"Updated tier role for <@{coach_id}>. (DB unavailable; roster cap not synced.)"
-
-    # Best-effort: sync roster cap to match the tier.
-    roster = get_roster_for_coach(coach_id, collection=collection)
-    if roster is None:
-        return True, f"Updated tier role for <@{coach_id}>. No roster found to sync."
-
-    record_staff_action(
-        roster_id=roster["_id"],
-        action=AUDIT_ACTION_TIER_CHANGED,
-        staff_discord_id=interaction.user.id,
-        staff_display_name=getattr(interaction.user, "display_name", None),
-        staff_username=str(interaction.user),
-        details={
-            "coach_discord_id": coach_id,
-            "tier": tier_role.name,
-            "desired_cap": desired_cap,
-        },
-        collection=collection,
-    )
-
-    current_count = count_roster_players(roster["_id"], collection=collection)
-    current_cap = roster.get("cap")
-    if isinstance(current_cap, int) and desired_cap < current_count:
-        record_staff_action(
-            roster_id=roster["_id"],
-            action=AUDIT_ACTION_CAP_SYNC_SKIPPED,
-            staff_discord_id=interaction.user.id,
-            staff_display_name=getattr(interaction.user, "display_name", None),
-            staff_username=str(interaction.user),
-            details={
-                "from_cap": current_cap,
-                "to_cap": desired_cap,
-                "player_count": current_count,
-                "reason": "tier_change",
-            },
-            collection=collection,
-        )
-        return True, (
-            f"Updated tier role for <@{coach_id}>, but did not reduce roster cap below current "
-            f"player count ({current_count}). Remove players, then re-run Sync Caps."
-        )
-
-    if isinstance(current_cap, int) and current_cap != desired_cap:
-        update_roster_cap(roster["_id"], desired_cap, collection=collection)
-        record_staff_action(
-            roster_id=roster["_id"],
-            action=AUDIT_ACTION_CAP_SYNCED,
-            staff_discord_id=interaction.user.id,
-            staff_display_name=getattr(interaction.user, "display_name", None),
-            staff_username=str(interaction.user),
-            details={
-                "from_cap": current_cap,
-                "to_cap": desired_cap,
-                "player_count": current_count,
-                "reason": "tier_change",
-            },
-            collection=collection,
-        )
-
-    return True, f"Updated tier role for <@{coach_id}> and synced roster cap to {desired_cap}."
 
 
 async def _unlock_roster(
@@ -719,7 +717,9 @@ class ManagerPortalView(SafeView):
             return
 
         try:
-            collection = get_collection(settings)
+            cycle_collection = get_collection(settings, record_type="tournament_cycle")
+            team_rosters = get_collection(settings, record_type="team_roster")
+            roster_players = get_collection(settings, record_type="roster_player")
         except Exception:
             await interaction.followup.send(
                 embed=make_embed(
@@ -732,7 +732,7 @@ class ManagerPortalView(SafeView):
             return
 
         try:
-            cycle = ensure_active_cycle(collection=collection)
+            cycle = ensure_active_cycle(collection=cycle_collection)
         except Exception:
             await interaction.followup.send(
                 embed=make_embed(
@@ -745,7 +745,7 @@ class ManagerPortalView(SafeView):
             return
 
         rosters = list(
-            collection.find(
+            team_rosters.find(
                 {"record_type": "team_roster", "cycle_id": cycle["_id"]},
                 sort=[("created_at", 1)],
             )
@@ -769,7 +769,7 @@ class ManagerPortalView(SafeView):
                     {"$match": {"record_type": "roster_player", "roster_id": {"$in": roster_ids}}},
                     {"$group": {"_id": "$roster_id", "count": {"$sum": 1}}},
                 ]
-                for doc in collection.aggregate(pipeline):
+                for doc in roster_players.aggregate(pipeline):
                     counts[doc.get("_id")] = int(doc.get("count") or 0)
             except Exception:
                 counts = {}
@@ -822,7 +822,6 @@ class ManagerPortalView(SafeView):
                         "player_count": player_count,
                         "reason": "active_cycle_sync",
                     },
-                    collection=collection,
                 )
                 continue
 
@@ -830,7 +829,7 @@ class ManagerPortalView(SafeView):
                 unchanged += 1
                 continue
 
-            update_roster_cap(roster_id, desired_cap, collection=collection)
+            update_roster_cap(roster_id, desired_cap)
             updated += 1
             record_staff_action(
                 roster_id=roster_id,
@@ -844,7 +843,6 @@ class ManagerPortalView(SafeView):
                     "player_count": player_count,
                     "reason": "active_cycle_sync",
                 },
-                collection=collection,
             )
 
         test_mode = bool(getattr(interaction.client, "test_mode", False))

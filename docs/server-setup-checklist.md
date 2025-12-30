@@ -19,8 +19,8 @@ Role hierarchy:
 
 Auto-setup and per-guild IDs require MongoDB:
 - `MONGODB_URI`
-- `MONGODB_DB_NAME`
-- `MONGODB_COLLECTION`
+- `MONGODB_DB_NAME` (optional; defaults to `OffsideDiscordBot`)
+- `MONGODB_COLLECTION` (optional; legacy single-collection mode)
 
 ## 3) Configure staff access (recommended)
 

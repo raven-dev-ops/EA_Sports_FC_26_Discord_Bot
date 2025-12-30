@@ -12,6 +12,27 @@ from services import tournament_service as ts
 def _now():
     return datetime.now(timezone.utc)
 
+GROUP_RECORD_TYPE = "tournament_group"
+GROUP_TEAM_RECORD_TYPE = "group_team"
+GROUP_MATCH_RECORD_TYPE = "group_match"
+GROUP_FIXTURE_RECORD_TYPE = "group_fixture"
+
+
+def _groups(collection: Collection | None) -> Collection:
+    return collection or get_collection(record_type=GROUP_RECORD_TYPE)
+
+
+def _group_teams(collection: Collection | None) -> Collection:
+    return collection or get_collection(record_type=GROUP_TEAM_RECORD_TYPE)
+
+
+def _group_matches(collection: Collection | None) -> Collection:
+    return collection or get_collection(record_type=GROUP_MATCH_RECORD_TYPE)
+
+
+def _group_fixtures(collection: Collection | None) -> Collection:
+    return collection or get_collection(record_type=GROUP_FIXTURE_RECORD_TYPE)
+
 
 def ensure_group(
     *,
@@ -19,14 +40,13 @@ def ensure_group(
     group_name: str,
     collection: Collection | None = None,
 ) -> dict[str, Any]:
-    if collection is None:
-        collection = get_collection()
     tour = ts.get_tournament(tournament_name, collection=collection)
     if tour is None:
         raise RuntimeError("Tournament not found.")
-    existing = collection.find_one(
+    groups = _groups(collection)
+    existing = groups.find_one(
         {
-            "record_type": "tournament_group",
+            "record_type": GROUP_RECORD_TYPE,
             "tournament": tour["_id"],
             "name": group_name,
         }
@@ -35,13 +55,13 @@ def ensure_group(
         return existing
     now = _now()
     doc = {
-        "record_type": "tournament_group",
+        "record_type": GROUP_RECORD_TYPE,
         "tournament": tour["_id"],
         "name": group_name,
         "created_at": now,
         "updated_at": now,
     }
-    result = collection.insert_one(doc)
+    result = groups.insert_one(doc)
     doc["_id"] = result.inserted_id
     return doc
 
@@ -54,16 +74,15 @@ def add_group_team(
     coach_id: int,
     collection: Collection | None = None,
 ) -> dict[str, Any]:
-    if collection is None:
-        collection = get_collection()
     group = ensure_group(
         tournament_name=tournament_name,
         group_name=group_name,
         collection=collection,
     )
-    existing = collection.find_one(
+    teams = _group_teams(collection)
+    existing = teams.find_one(
         {
-            "record_type": "group_team",
+            "record_type": GROUP_TEAM_RECORD_TYPE,
             "group_id": group["_id"],
             "team_name": team_name,
         }
@@ -72,7 +91,7 @@ def add_group_team(
         return existing
     now = _now()
     doc = {
-        "record_type": "group_team",
+        "record_type": GROUP_TEAM_RECORD_TYPE,
         "group_id": group["_id"],
         "tournament": group["tournament"],
         "team_name": team_name,
@@ -87,7 +106,7 @@ def add_group_team(
         "created_at": now,
         "updated_at": now,
     }
-    result = collection.insert_one(doc)
+    result = teams.insert_one(doc)
     doc["_id"] = result.inserted_id
     return doc
 
@@ -97,10 +116,9 @@ def list_group_teams(
     group_id: Any,
     collection: Collection | None = None,
 ) -> list[dict[str, Any]]:
-    if collection is None:
-        collection = get_collection()
+    teams = _group_teams(collection)
     return list(
-        collection.find({"record_type": "group_team", "group_id": group_id}).sort(
+        teams.find({"record_type": GROUP_TEAM_RECORD_TYPE, "group_id": group_id}).sort(
             [("team_name", 1)]
         )
     )
@@ -135,18 +153,17 @@ def record_group_match(
     score_b: int,
     collection: Collection | None = None,
 ) -> dict[str, Any]:
-    if collection is None:
-        collection = get_collection()
     group = ensure_group(
         tournament_name=tournament_name,
         group_name=group_name,
         collection=collection,
     )
-    ta = collection.find_one(
-        {"record_type": "group_team", "group_id": group["_id"], "team_name": team_a}
+    teams = _group_teams(collection)
+    ta = teams.find_one(
+        {"record_type": GROUP_TEAM_RECORD_TYPE, "group_id": group["_id"], "team_name": team_a}
     )
-    tb = collection.find_one(
-        {"record_type": "group_team", "group_id": group["_id"], "team_name": team_b}
+    tb = teams.find_one(
+        {"record_type": GROUP_TEAM_RECORD_TYPE, "group_id": group["_id"], "team_name": team_b}
     )
     if ta is None or tb is None:
         raise RuntimeError("Both teams must be registered in the group.")
@@ -156,7 +173,7 @@ def record_group_match(
 
     now = _now()
     for team in (ta, tb):
-        collection.update_one(
+        teams.update_one(
             {"_id": team["_id"]},
             {
                 "$set": {
@@ -173,7 +190,7 @@ def record_group_match(
         )
 
     match_doc = {
-        "record_type": "group_match",
+        "record_type": GROUP_MATCH_RECORD_TYPE,
         "group_id": group["_id"],
         "tournament": group["tournament"],
         "team_a": ta["_id"],
@@ -182,7 +199,7 @@ def record_group_match(
         "score_b": score_b,
         "played_at": now,
     }
-    collection.insert_one(match_doc)
+    _group_matches(collection).insert_one(match_doc)
     return match_doc
 
 
@@ -192,15 +209,13 @@ def get_standings(
     group_name: str,
     collection: Collection | None = None,
 ) -> list[dict[str, Any]]:
-    if collection is None:
-        collection = get_collection()
     group = ensure_group(
         tournament_name=tournament_name,
         group_name=group_name,
         collection=collection,
     )
     teams = list(
-        collection.find({"record_type": "group_team", "group_id": group["_id"]})
+        _group_teams(collection).find({"record_type": GROUP_TEAM_RECORD_TYPE, "group_id": group["_id"]})
     )
     teams.sort(
         key=lambda t: (
@@ -264,10 +279,8 @@ def fixtures_exist(
     group_id: Any,
     collection: Collection | None = None,
 ) -> bool:
-    if collection is None:
-        collection = get_collection()
     return (
-        collection.count_documents({"record_type": "group_fixture", "group_id": group_id})
+        _group_fixtures(collection).count_documents({"record_type": GROUP_FIXTURE_RECORD_TYPE, "group_id": group_id})
         > 0
     )
 
@@ -279,8 +292,6 @@ def generate_group_fixtures(
     double_round: bool = False,
     collection: Collection | None = None,
 ) -> list[dict[str, Any]]:
-    if collection is None:
-        collection = get_collection()
     group = ensure_group(
         tournament_name=tournament_name,
         group_name=group_name,
@@ -288,8 +299,8 @@ def generate_group_fixtures(
     )
     if fixtures_exist(group_id=group["_id"], collection=collection):
         return list(
-            collection.find(
-                {"record_type": "group_fixture", "group_id": group["_id"]}
+            _group_fixtures(collection).find(
+                {"record_type": GROUP_FIXTURE_RECORD_TYPE, "group_id": group["_id"]}
             ).sort([("round", 1), ("sequence", 1)])
         )
     teams = list_group_teams(group_id=group["_id"], collection=collection)
@@ -299,10 +310,11 @@ def generate_group_fixtures(
     rounds = generate_round_robin_pairs(team_ids, double_round=double_round)
     now = _now()
     fixtures: list[dict[str, Any]] = []
+    fixtures_collection = _group_fixtures(collection)
     for rnd_idx, matches in enumerate(rounds, start=1):
         for seq_idx, (a, b) in enumerate(matches, start=1):
             doc = {
-                "record_type": "group_fixture",
+                "record_type": GROUP_FIXTURE_RECORD_TYPE,
                 "group_id": group["_id"],
                 "tournament": group["tournament"],
                 "round": rnd_idx,
@@ -311,7 +323,7 @@ def generate_group_fixtures(
                 "team_b": b,
                 "created_at": now,
             }
-            result = collection.insert_one(doc)
+            result = fixtures_collection.insert_one(doc)
             doc["_id"] = result.inserted_id
             fixtures.append(doc)
     return fixtures
@@ -323,15 +335,13 @@ def list_group_fixtures(
     group_name: str,
     collection: Collection | None = None,
 ) -> list[dict[str, Any]]:
-    if collection is None:
-        collection = get_collection()
     group = ensure_group(
         tournament_name=tournament_name,
         group_name=group_name,
         collection=collection,
     )
     return list(
-        collection.find(
-            {"record_type": "group_fixture", "group_id": group["_id"]}
+        _group_fixtures(collection).find(
+            {"record_type": GROUP_FIXTURE_RECORD_TYPE, "group_id": group["_id"]}
         ).sort([("round", 1), ("sequence", 1)])
     )

@@ -7,6 +7,8 @@ from pymongo.collection import Collection
 
 from database import get_collection
 
+RECORD_TYPE = "club_ad_audit"
+
 CLUB_AD_ACTION_APPROVED = "APPROVED"
 CLUB_AD_ACTION_REJECTED = "REJECTED"
 
@@ -21,10 +23,10 @@ def record_club_ad_action(
     collection: Collection | None = None,
 ) -> dict[str, Any]:
     if collection is None:
-        collection = get_collection()
+        collection = get_collection(record_type=RECORD_TYPE)
     now = datetime.now(timezone.utc)
     doc = {
-        "record_type": "club_ad_audit",
+        "record_type": RECORD_TYPE,
         "guild_id": guild_id,
         "owner_id": owner_id,
         "action": action,
@@ -35,4 +37,3 @@ def record_club_ad_action(
     result = collection.insert_one(doc)
     doc["_id"] = result.inserted_id
     return doc
-
