@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.29] - 2025-12-30
+
+### Added
+- Dashboard: shared app shell (topbar + sidebar) with server selector, plan badge, and install CTA.
+
+### Changed
+- Dashboard pages now share consistent navigation/layout across modules.
+
 ## [0.2.28] - 2025-12-30
 
 ### Added

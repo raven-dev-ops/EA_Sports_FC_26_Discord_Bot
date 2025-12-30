@@ -130,6 +130,18 @@ def _html_page(*, title: str, body: str) -> str:
       .btn.secondary {{ background:#374151; }}
       .btn.blue {{ background:#2563eb; }}
       .btn.red {{ background:#b91c1c; }}
+      .badge.warn {{ background:#fecaca; color:#991b1b; }}
+      .topbar {{ display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:18px; }}
+      .topbar .brand {{ font-weight:800; font-size:18px; color:#111827; }}
+      .layout {{ display:flex; gap:16px; align-items:flex-start; }}
+      .sidebar {{ width:220px; flex: 0 0 220px; }}
+      .sidebar .card {{ position: sticky; top: 16px; }}
+      .navlink {{ display:block; padding:10px 12px; border-radius:10px; color:#111827; }}
+      .navlink:hover {{ text-decoration:none; background:#f3f4f6; }}
+      .navlink.active {{ background:#111827; color:white; }}
+      .navlink.active:hover {{ background:#111827; }}
+      .content {{ flex: 1 1 auto; min-width: 320px; }}
+      select {{ padding:10px 12px; border-radius:10px; border:1px solid #e5e7eb; background:white; }}
       .footer {{ margin-top: 32px; padding-top: 12px; border-top: 1px solid #e5e7eb; font-size: 12px; color: #6b7280; }}
       .footer a {{ color: #6b7280; }}
     </style>
@@ -141,6 +153,107 @@ def _html_page(*, title: str, body: str) -> str:
     </footer>
   </body>
 </html>"""
+
+
+def _guild_section_url(guild_id: str, *, section: str) -> str:
+    gid = urllib.parse.quote(str(guild_id))
+    if section == "settings":
+        return f"/guild/{gid}/settings"
+    if section == "permissions":
+        return f"/guild/{gid}/permissions"
+    if section == "audit":
+        return f"/guild/{gid}/audit"
+    if section == "billing":
+        return f"/app/billing?guild_id={gid}"
+    return f"/guild/{gid}"
+
+
+def _app_shell(
+    *,
+    settings: Settings,
+    session: SessionData,
+    section: str,
+    selected_guild_id: int | None,
+    installed: bool | None,
+    content: str,
+) -> str:
+    user = session.user
+    username = _escape_html(f"{user.get('username','')}#{user.get('discriminator','')}".strip("#"))
+
+    selected_guild_str = str(selected_guild_id) if selected_guild_id is not None else ""
+    options = "\n".join(
+        f"<option value=\"{_guild_section_url(str(g.get('id')), section=section)}\""
+        f"{' selected' if str(g.get('id')) == selected_guild_str else ''}>"
+        f"{_escape_html(g.get('name') or g.get('id'))}</option>"
+        for g in session.owner_guilds
+    )
+
+    plan_badge = ""
+    if selected_guild_id is not None:
+        plan = entitlements_service.get_guild_plan(settings, guild_id=selected_guild_id)
+        plan_badge = f"<span class='badge {plan}'>{_escape_html(plan.upper())}</span>"
+
+    install_badge = ""
+    invite_cta = ""
+    if selected_guild_id is not None:
+        invite_href = _invite_url(settings, guild_id=str(selected_guild_id), disable_guild_select=True)
+        if installed is False:
+            install_badge = "<span class='badge warn'>NOT INSTALLED</span>"
+            invite_cta = f"<a class='btn blue' href=\"{invite_href}\">Invite bot</a>"
+        elif installed is None:
+            install_badge = "<span class='badge warn'>UNKNOWN</span>"
+            invite_cta = f"<a class='btn blue' href=\"{invite_href}\">Invite bot</a>"
+
+    nav_guild = str(selected_guild_id or "")
+    nav_items = [
+        ("Analytics", _guild_section_url(nav_guild, section="analytics"), section == "analytics"),
+        ("Settings", _guild_section_url(nav_guild, section="settings"), section == "settings"),
+        ("Permissions", _guild_section_url(nav_guild, section="permissions"), section == "permissions"),
+        ("Audit Log", _guild_section_url(nav_guild, section="audit"), section == "audit"),
+        ("Billing", _guild_section_url(nav_guild, section="billing"), section == "billing"),
+    ]
+    nav_links = "\n".join(
+        f"<a class=\"navlink{' active' if active else ''}\" href=\"{href}\">{_escape_html(label)}</a>"
+        for label, href, active in nav_items
+        if nav_guild
+    ) or "<div class='muted'>Select a server to see modules.</div>"
+
+    selector_html = ""
+    if session.owner_guilds:
+        selector_html = (
+            f"<select aria-label=\"Select server\" onchange=\"window.location=this.value\">{options}</select>"
+        )
+
+    topbar = f"""
+      <div class="topbar">
+        <div><a class="brand" href="/">Offside</a></div>
+        <div style="display:flex; gap:10px; align-items:center;">
+          {selector_html}
+          {plan_badge}
+          {install_badge}
+        </div>
+        <div style="display:flex; gap:10px; align-items:center;">
+          {invite_cta}
+          <span class="muted">{username}</span>
+          <a class="btn secondary" href="/logout">Logout</a>
+        </div>
+      </div>
+    """
+
+    layout = f"""
+      {topbar}
+      <div class="layout">
+        <aside class="sidebar">
+          <div class="card">
+            {nav_links}
+          </div>
+        </aside>
+        <main class="content">
+          {content}
+        </main>
+      </div>
+    """
+    return layout
 
 
 def _require_env(name: str) -> str:
@@ -657,8 +770,6 @@ async def index(request: web.Request) -> web.Response:
         """
         return web.Response(text=_html_page(title="Offside Dashboard", body=body), content_type="text/html")
 
-    user = session.user
-    username = _escape_html(f"{user.get('username','')}#{user.get('discriminator','')}".strip("#"))
     guild_cards = []
     eligible_ids = {str(g.get("id")) for g in session.owner_guilds}
     for g in session.all_guilds:
@@ -697,16 +808,32 @@ async def index(request: web.Request) -> web.Response:
         )
     cards_html = "\n".join(guild_cards) if guild_cards else "<p>No servers found.</p>"
     invite_href = _invite_url(settings)
-    body = f"""
-      <h1>Offside Dashboard</h1>
-      <p class="muted">Logged in as <strong>{username}</strong> (<code>{_escape_html(user.get('id'))}</code>)</p>
-      <p><a href="/logout">Logout</a></p>
-      <h2>Your servers</h2>
+    selected_guild_id = None
+    if session.owner_guilds:
+        gid = str(session.owner_guilds[0].get("id") or "").strip()
+        if gid.isdigit():
+            selected_guild_id = int(gid)
+    installed, _install_error = (
+        await _detect_bot_installed(request, guild_id=selected_guild_id)
+        if selected_guild_id is not None
+        else (None, None)
+    )
+
+    content = f"""
+      <h1 style="margin-top:0;">Your servers</h1>
       {cards_html}
       <h2>Invite link</h2>
       <p class="muted">Direct invite URL (shareable):</p>
       <p><a href="{invite_href}">{invite_href}</a></p>
     """
+    body = _app_shell(
+        settings=settings,
+        session=session,
+        section="analytics",
+        selected_guild_id=selected_guild_id,
+        installed=installed,
+        content=content,
+    )
     return web.Response(text=_html_page(title="Offside Dashboard", body=body), content_type="text/html")
 
 
@@ -734,7 +861,7 @@ async def terms_page(_request: web.Request) -> web.Response:
         raise web.HTTPNotFound(text="TERMS_OF_SERVICE.md not found.")
     html = _markdown_to_html(text)
     body = f"""
-      <p><a href="/">← Back</a></p>
+      <p><a href="/">&larr; Back</a></p>
       <h1>Terms of Service</h1>
       <div class="card">{html}</div>
     """
@@ -747,7 +874,7 @@ async def privacy_page(_request: web.Request) -> web.Response:
         raise web.HTTPNotFound(text="PRIVACY_POLICY.md not found.")
     html = _markdown_to_html(text)
     body = f"""
-      <p><a href="/">← Back</a></p>
+      <p><a href="/">&larr; Back</a></p>
       <h1>Privacy Policy</h1>
       <div class="card">{html}</div>
     """
@@ -993,7 +1120,7 @@ async def guild_settings_page(request: web.Request) -> web.Response:
     if installed is False:
         invite_href = _invite_url(settings, guild_id=str(guild_id), disable_guild_select=True)
         body = f"""
-          <p><a href="/">← Back</a></p>
+          <p><a href="/">&larr; Back</a></p>
           <h1>Settings</h1>
           <div class="card">
             <h2 style="margin-top:0;">Invite bot to this server</h2>
@@ -1003,7 +1130,20 @@ async def guild_settings_page(request: web.Request) -> web.Response:
             <p><a href="{invite_href}">{invite_href}</a></p>
           </div>
         """
-        return web.Response(text=_html_page(title="Guild Settings", body=body), content_type="text/html")
+        return web.Response(
+            text=_html_page(
+                title="Guild Settings",
+                body=_app_shell(
+                    settings=settings,
+                    session=session,
+                    section="settings",
+                    selected_guild_id=guild_id,
+                    installed=installed,
+                    content=body,
+                ),
+            ),
+            content_type="text/html",
+        )
 
     cfg: dict[str, Any] = {}
     try:
@@ -1213,7 +1353,7 @@ async def guild_settings_page(request: web.Request) -> web.Response:
     ) or "<tr><td colspan='2' class='muted'>No config found yet (bot may not be installed).</td></tr>"
 
     body = f"""
-      <p><a href="/">&lt;- Back</a></p>
+      <p><a href="/">&larr; Back</a></p>
       <h1>Guild Settings</h1>
       <div class="row">
         <div class="card">
@@ -1252,7 +1392,20 @@ async def guild_settings_page(request: web.Request) -> web.Response:
         </div>
       </div>
     """
-    return web.Response(text=_html_page(title="Guild Settings", body=body), content_type="text/html")
+    return web.Response(
+        text=_html_page(
+            title="Guild Settings",
+            body=_app_shell(
+                settings=settings,
+                session=session,
+                section="settings",
+                selected_guild_id=guild_id,
+                installed=installed,
+                content=body,
+            ),
+        ),
+        content_type="text/html",
+    )
 
 
 async def guild_settings_save(request: web.Request) -> web.Response:
@@ -1384,6 +1537,7 @@ async def guild_page(request: web.Request) -> web.Response:
     guild_id_str = request.match_info["guild_id"]
     guild_id = _require_owned_guild(session, guild_id=guild_id_str)
 
+    installed, _install_error = await _detect_bot_installed(request, guild_id=guild_id)
     analytics = get_guild_analytics(settings, guild_id=guild_id)
 
     count_rows = "\n".join(
@@ -1396,7 +1550,7 @@ async def guild_page(request: web.Request) -> web.Response:
     )
 
     body = f"""
-      <p><a href="/">← Back</a></p>
+      <p><a href="/">&larr; Back</a></p>
       <h1>Guild Analytics</h1>
       <div class="row">
         <div class="card">
@@ -1421,7 +1575,20 @@ async def guild_page(request: web.Request) -> web.Response:
         </div>
       </div>
     """
-    return web.Response(text=_html_page(title="Guild Analytics", body=body), content_type="text/html")
+    return web.Response(
+        text=_html_page(
+            title="Guild Analytics",
+            body=_app_shell(
+                settings=settings,
+                session=session,
+                section="analytics",
+                selected_guild_id=guild_id,
+                installed=installed,
+                content=body,
+            ),
+        ),
+        content_type="text/html",
+    )
 
 
 async def guild_permissions_page(request: web.Request) -> web.Response:
@@ -1435,7 +1602,7 @@ async def guild_permissions_page(request: web.Request) -> web.Response:
     installed, install_error = await _detect_bot_installed(request, guild_id=guild_id)
     if installed is False:
         body = f"""
-          <p><a href="/guild/{guild_id}">ƒ+? Back</a></p>
+          <p><a href="/guild/{guild_id}">&larr; Back</a></p>
           <h1>Permissions Check</h1>
           <div class="card">
             <p class="muted">{_escape_html(install_error or 'Bot is not installed in this server yet.')}</p>
@@ -1444,7 +1611,20 @@ async def guild_permissions_page(request: web.Request) -> web.Response:
             </div>
           </div>
         """
-        return web.Response(text=_html_page(title="Permissions", body=body), content_type="text/html")
+        return web.Response(
+            text=_html_page(
+                title="Permissions",
+                body=_app_shell(
+                    settings=settings,
+                    session=session,
+                    section="permissions",
+                    selected_guild_id=guild_id,
+                    installed=installed,
+                    content=body,
+                ),
+            ),
+            content_type="text/html",
+        )
 
     roles: list[dict[str, Any]] = []
     channels: list[dict[str, Any]] = []
@@ -1471,7 +1651,7 @@ async def guild_permissions_page(request: web.Request) -> web.Response:
     if bot_member is None or not roles:
         message = metadata_error or install_error or "Unable to load bot membership details."
         body = f"""
-          <p><a href="/guild/{guild_id}">ƒ+? Back</a></p>
+          <p><a href="/guild/{guild_id}">&larr; Back</a></p>
           <h1>Permissions Check</h1>
           <div class="card">
             <p class="muted">{_escape_html(message)}</p>
@@ -1480,7 +1660,20 @@ async def guild_permissions_page(request: web.Request) -> web.Response:
             </div>
           </div>
         """
-        return web.Response(text=_html_page(title="Permissions", body=body), content_type="text/html")
+        return web.Response(
+            text=_html_page(
+                title="Permissions",
+                body=_app_shell(
+                    settings=settings,
+                    session=session,
+                    section="permissions",
+                    selected_guild_id=guild_id,
+                    installed=installed,
+                    content=body,
+                ),
+            ),
+            content_type="text/html",
+        )
 
     roles_by_id: dict[int, dict[str, Any]] = {}
     for role_doc in roles:
@@ -1580,7 +1773,7 @@ async def guild_permissions_page(request: web.Request) -> web.Response:
             f"Target: <code>{_escape_html(target_role.get('name') or rid)}</code> (pos {role_pos})"
         )
         hint = (
-            "Move the bot's role above the Coach roles in Server Settings → Roles."
+            "Move the bot's role above the Coach roles in Server Settings &rarr; Roles."
             if not ok
             else details
         )
@@ -1637,7 +1830,7 @@ async def guild_permissions_page(request: web.Request) -> web.Response:
 
     admin_badge = "<span class='badge pro'>ADMIN</span>" if is_admin else ""
     body = f"""
-      <p><a href="/guild/{guild_id}">ƒ+? Back</a></p>
+      <p><a href="/guild/{guild_id}">&larr; Back</a></p>
       <h1>Permissions Check {admin_badge}</h1>
       <div class="row">
         <div class="card">
@@ -1651,7 +1844,7 @@ async def guild_permissions_page(request: web.Request) -> web.Response:
         <div class="card">
           <div><strong>Fix steps</strong></div>
           <div class="muted" style="margin-top:8px;">
-            1) Server Settings → Roles: ensure the bot role has Manage Channels/Roles/Messages.<br/>
+            1) Server Settings &rarr; Roles: ensure the bot role has Manage Channels/Roles/Messages.<br/>
             2) Drag the bot role above Coach roles (role hierarchy).<br/>
             3) Channel settings: ensure the bot can View/Send/Embed/Read in Offside channels.
           </div>
@@ -1674,7 +1867,20 @@ async def guild_permissions_page(request: web.Request) -> web.Response:
         <p class="muted" style="margin-top:10px;">Only checks channels currently saved in guild settings.</p>
       </div>
     """
-    return web.Response(text=_html_page(title="Permissions", body=body), content_type="text/html")
+    return web.Response(
+        text=_html_page(
+            title="Permissions",
+            body=_app_shell(
+                settings=settings,
+                session=session,
+                section="permissions",
+                selected_guild_id=guild_id,
+                installed=installed,
+                content=body,
+            ),
+        ),
+        content_type="text/html",
+    )
 
 
 async def guild_audit_page(request: web.Request) -> web.Response:
@@ -1684,6 +1890,7 @@ async def guild_audit_page(request: web.Request) -> web.Response:
     guild_id_str = request.match_info["guild_id"]
     guild_id = _require_owned_guild(session, guild_id=guild_id_str)
 
+    installed, _install_error = await _detect_bot_installed(request, guild_id=guild_id)
     limit = _parse_int(request.query.get("limit")) or 200
     limit = max(1, min(500, limit))
 
@@ -1731,7 +1938,7 @@ async def guild_audit_page(request: web.Request) -> web.Response:
     table_body = "\n".join(rows) if rows else "<tr><td colspan='6' class='muted'>No events yet.</td></tr>"
 
     body = f"""
-      <p><a href="/guild/{guild_id}">ƒ+? Back</a></p>
+      <p><a href="/guild/{guild_id}">&larr; Back</a></p>
       <h1>Audit Log</h1>
       <div class="row">
         <div class="card">
@@ -1748,7 +1955,20 @@ async def guild_audit_page(request: web.Request) -> web.Response:
         </table>
       </div>
     """
-    return web.Response(text=_html_page(title="Audit Log", body=body), content_type="text/html")
+    return web.Response(
+        text=_html_page(
+            title="Audit Log",
+            body=_app_shell(
+                settings=settings,
+                session=session,
+                section="audit",
+                selected_guild_id=guild_id,
+                installed=installed,
+                content=body,
+            ),
+        ),
+        content_type="text/html",
+    )
 
 
 async def guild_audit_csv(request: web.Request) -> web.Response:
@@ -1889,12 +2109,26 @@ async def billing_page(request: web.Request) -> web.Response:
 
     if not guild_id:
         body = """
-          <p><a href="/">← Back</a></p>
+          <p><a href="/">&larr; Back</a></p>
           <h1>Billing</h1>
           <p class="muted">No owned guilds found.</p>
         """
-        return web.Response(text=_html_page(title="Billing", body=body), content_type="text/html")
+        return web.Response(
+            text=_html_page(
+                title="Billing",
+                body=_app_shell(
+                    settings=settings,
+                    session=session,
+                    section="billing",
+                    selected_guild_id=None,
+                    installed=None,
+                    content=body,
+                ),
+            ),
+            content_type="text/html",
+        )
 
+    installed, _install_error = await _detect_bot_installed(request, guild_id=guild_id)
     current_plan = entitlements_service.get_guild_plan(settings, guild_id=guild_id)
     subscription = get_guild_subscription(settings, guild_id=guild_id) if settings.mongodb_uri else None
     customer_id = str(subscription.get("customer_id") or "") if subscription else ""
@@ -1930,7 +2164,7 @@ async def billing_page(request: web.Request) -> web.Response:
         """
 
     body = f"""
-      <p><a href="/">← Back</a></p>
+      <p><a href="/">&larr; Back</a></p>
       <h1>Billing</h1>
       {status_msg}
       <div class="card">
@@ -1954,7 +2188,20 @@ async def billing_page(request: web.Request) -> web.Response:
         </form>
       </div>
     """
-    return web.Response(text=_html_page(title="Billing", body=body), content_type="text/html")
+    return web.Response(
+        text=_html_page(
+            title="Billing",
+            body=_app_shell(
+                settings=settings,
+                session=session,
+                section="billing",
+                selected_guild_id=guild_id,
+                installed=installed,
+                content=body,
+            ),
+        ),
+        content_type="text/html",
+    )
 
 
 async def billing_portal(request: web.Request) -> web.Response:
