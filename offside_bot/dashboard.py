@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import os
 import secrets
 import time
@@ -26,6 +27,7 @@ MY_GUILDS_URL = f"{DISCORD_API_BASE}/users/@me/guilds"
 COOKIE_NAME = "offside_dashboard_session"
 SESSION_TTL_SECONDS = int(os.environ.get("DASHBOARD_SESSION_TTL_SECONDS", "21600").strip() or "21600")
 STATE_TTL_SECONDS = 600
+GUILD_METADATA_TTL_SECONDS = int(os.environ.get("DASHBOARD_GUILD_METADATA_TTL_SECONDS", "60").strip() or "60")
 
 # Minimal permissions needed for auto-setup and dashboard posting:
 # - Manage Channels, Manage Roles, View Channel, Send Messages, Embed Links, Read Message History
@@ -141,13 +143,35 @@ def _build_authorize_url(
     return f"{AUTHORIZE_URL}?{query}"
 
 
+async def _discord_get_json_with_auth(http: ClientSession, *, url: str, authorization: str) -> Any:
+    headers = {"Authorization": authorization}
+    last_error: str | None = None
+    for _ in range(5):
+        async with http.get(url, headers=headers) as resp:
+            try:
+                data = await resp.json()
+            except Exception:
+                data = await resp.text()
+
+            if resp.status == 429 and isinstance(data, dict):
+                retry_after = float(data.get("retry_after") or 1.0)
+                await asyncio.sleep(max(0.0, retry_after))
+                last_error = f"rate limited; retry_after={retry_after}"
+                continue
+
+            if resp.status >= 400:
+                raise web.HTTPBadRequest(text=f"Discord API error ({resp.status}): {data}")
+            return data
+
+    raise web.HTTPBadRequest(text=f"Discord API request failed after retries: {last_error or 'unknown'}")
+
+
 async def _discord_get_json(http: ClientSession, *, url: str, access_token: str) -> Any:
-    headers = {"Authorization": f"Bearer {access_token}"}
-    async with http.get(url, headers=headers) as resp:
-        data = await resp.json()
-        if resp.status >= 400:
-            raise web.HTTPBadRequest(text=f"Discord API error ({resp.status}): {data}")
-        return data
+    return await _discord_get_json_with_auth(http, url=url, authorization=f"Bearer {access_token}")
+
+
+async def _discord_bot_get_json(http: ClientSession, *, url: str, bot_token: str) -> Any:
+    return await _discord_get_json_with_auth(http, url=url, authorization=f"Bot {bot_token}")
 
 
 async def _exchange_code(
@@ -170,6 +194,53 @@ async def _exchange_code(
         if resp.status >= 400:
             raise web.HTTPBadRequest(text=f"OAuth token exchange failed ({resp.status}): {data}")
         return data
+
+
+async def _fetch_guild_roles(http: ClientSession, *, bot_token: str, guild_id: int) -> list[dict[str, Any]]:
+    url = f"{DISCORD_API_BASE}/guilds/{guild_id}/roles"
+    data = await _discord_bot_get_json(http, url=url, bot_token=bot_token)
+    if not isinstance(data, list):
+        raise web.HTTPBadRequest(text="Discord returned an invalid roles payload.")
+    roles = [r for r in data if isinstance(r, dict)]
+    roles.sort(key=lambda r: int(r.get("position") or 0), reverse=True)
+    return roles
+
+
+async def _fetch_guild_channels(http: ClientSession, *, bot_token: str, guild_id: int) -> list[dict[str, Any]]:
+    url = f"{DISCORD_API_BASE}/guilds/{guild_id}/channels"
+    data = await _discord_bot_get_json(http, url=url, bot_token=bot_token)
+    if not isinstance(data, list):
+        raise web.HTTPBadRequest(text="Discord returned an invalid channels payload.")
+    channels = [c for c in data if isinstance(c, dict)]
+    channels.sort(key=lambda c: (int(c.get("type") or 0), int(c.get("position") or 0)))
+    return channels
+
+
+async def _get_guild_discord_metadata(
+    request: web.Request,
+    *,
+    guild_id: int,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    cache: dict[int, dict[str, Any]] = request.app["guild_metadata_cache"]
+    now = time.time()
+    cached = cache.get(guild_id)
+    if isinstance(cached, dict):
+        fetched_at = cached.get("fetched_at")
+        if isinstance(fetched_at, (int, float)) and now - float(fetched_at) <= GUILD_METADATA_TTL_SECONDS:
+            roles = cached.get("roles")
+            channels = cached.get("channels")
+            if isinstance(roles, list) and isinstance(channels, list):
+                return [r for r in roles if isinstance(r, dict)], [c for c in channels if isinstance(c, dict)]
+
+    settings: Settings = request.app["settings"]
+    http = request.app.get("http")
+    if not isinstance(http, ClientSession):
+        raise web.HTTPInternalServerError(text="Dashboard HTTP client is not ready yet.")
+
+    roles = await _fetch_guild_roles(http, bot_token=settings.discord_token, guild_id=guild_id)
+    channels = await _fetch_guild_channels(http, bot_token=settings.discord_token, guild_id=guild_id)
+    cache[guild_id] = {"fetched_at": now, "roles": roles, "channels": channels}
+    return roles, channels
 
 
 @web.middleware
@@ -504,10 +575,53 @@ async def guild_settings_page(request: web.Request) -> web.Response:
         cfg = {}
 
     staff_role_ids_raw = cfg.get("staff_role_ids")
+    staff_role_ids: set[int] = set()
     if isinstance(staff_role_ids_raw, list):
-        staff_role_ids_value = ", ".join(str(x) for x in staff_role_ids_raw if isinstance(x, int))
+        staff_role_ids = {x for x in staff_role_ids_raw if isinstance(x, int)}
+    staff_role_ids_value = ", ".join(str(x) for x in sorted(staff_role_ids))
+
+    roles: list[dict[str, Any]] = []
+    roles_error: str | None = None
+    try:
+        roles, _channels = await _get_guild_discord_metadata(request, guild_id=guild_id)
+    except web.HTTPException as exc:
+        roles_error = exc.text or str(exc)
+    except Exception as exc:
+        roles_error = str(exc)
+
+    if roles:
+        role_options: list[str] = []
+        for role in roles:
+            role_id = role.get("id")
+            if role_id is None:
+                continue
+            try:
+                role_id_int = int(role_id)
+            except (TypeError, ValueError):
+                continue
+            name = _escape_html(role.get("name") or role_id_int)
+            selected = "selected" if role_id_int in staff_role_ids else ""
+            role_options.append(f"<option value=\"{role_id_int}\" {selected}>{name}</option>")
+        options_html = "\n".join(role_options) or "<option disabled>(no roles found)</option>"
+        staff_roles_control_html = f"""
+            <label>Staff roles</label><br/>
+            <select multiple name="staff_role_ids" size="10" style="width:100%; padding:10px; margin-top:6px;">
+              {options_html}
+            </select>
+            <p class="muted">Select one or more roles. Leave empty to require Manage Server (or env <code>STAFF_ROLE_IDS</code>).</p>
+        """
     else:
-        staff_role_ids_value = ""
+        warning = (
+            f"<p class='muted'>Unable to load roles from Discord: <code>{_escape_html(roles_error)}</code></p>"
+            if roles_error
+            else ""
+        )
+        staff_roles_control_html = f"""
+            {warning}
+            <label>Staff role IDs (comma-separated)</label><br/>
+            <input name="staff_role_ids_csv" style="width:100%; padding:10px; margin-top:6px;" value="{_escape_html(staff_role_ids_value)}" />
+            <p class="muted">Leave blank to require Manage Server (or env <code>STAFF_ROLE_IDS</code>).</p>
+        """
 
     fc25_value = cfg.get("fc25_stats_enabled")
     if fc25_value is True:
@@ -544,17 +658,15 @@ async def guild_settings_page(request: web.Request) -> web.Response:
       </div>
       {message_html}
       <div class="row">
-        <div class="card">
-          <h2 style="margin-top:0;">Access</h2>
-          <form method="post" action="/guild/{guild_id}/settings">
-            <input type="hidden" name="csrf" value="{session.csrf_token}" />
-            <label>Staff role IDs (comma-separated)</label><br/>
-            <input name="staff_role_ids" style="width:100%; padding:10px; margin-top:6px;" value="{_escape_html(staff_role_ids_value)}" />
-            <p class="muted">Leave blank to require Manage Server (or env <code>STAFF_ROLE_IDS</code>).</p>
-            <label>FC25 stats override</label><br/>
-            <select name="fc25_stats_enabled" style="width:100%; padding:10px; margin-top:6px;">
-              <option value="default" {selected_default}>Default</option>
-              <option value="true" {selected_true}>Enabled</option>
+         <div class="card">
+           <h2 style="margin-top:0;">Access</h2>
+           <form method="post" action="/guild/{guild_id}/settings">
+             <input type="hidden" name="csrf" value="{session.csrf_token}" />
+             {staff_roles_control_html}
+             <label>FC25 stats override</label><br/>
+             <select name="fc25_stats_enabled" style="width:100%; padding:10px; margin-top:6px;">
+               <option value="default" {selected_default}>Default</option>
+               <option value="true" {selected_true}>Enabled</option>
               <option value="false" {selected_false}>Disabled</option>
             </select>
             <div style="margin-top:12px;">
@@ -586,14 +698,28 @@ async def guild_settings_save(request: web.Request) -> web.Response:
     except Exception:
         cfg = {}
 
-    staff_raw = str(data.get("staff_role_ids", "")).strip()
-    parsed_staff = _parse_int_list(staff_raw)
-    if parsed_staff is None:
-        raise web.HTTPBadRequest(text="staff_role_ids must be a comma-separated list of integers.")
-    if parsed_staff:
-        cfg["staff_role_ids"] = parsed_staff
+    selected_roles: list[str] = []
+    try:
+        selected_roles = [str(v).strip() for v in data.getall("staff_role_ids") if str(v).strip()]
+    except Exception:
+        selected_roles = []
+
+    if selected_roles:
+        parsed_staff_selected: list[int] = []
+        for token in selected_roles:
+            if not token.isdigit():
+                raise web.HTTPBadRequest(text="staff_role_ids must be a list of role IDs.")
+            parsed_staff_selected.append(int(token))
+        cfg["staff_role_ids"] = parsed_staff_selected
     else:
-        cfg.pop("staff_role_ids", None)
+        staff_raw = str(data.get("staff_role_ids_csv", "")).strip()
+        parsed_staff_csv = _parse_int_list(staff_raw)
+        if parsed_staff_csv is None:
+            raise web.HTTPBadRequest(text="staff_role_ids must be a comma-separated list of integers.")
+        if parsed_staff_csv:
+            cfg["staff_role_ids"] = parsed_staff_csv
+        else:
+            cfg.pop("staff_role_ids", None)
 
     fc25_raw = str(data.get("fc25_stats_enabled", "default")).strip().lower()
     if fc25_raw in {"", "default"}:
@@ -677,6 +803,14 @@ async def guild_analytics_json(request: web.Request) -> web.Response:
     )
 
 
+async def guild_discord_metadata_json(request: web.Request) -> web.Response:
+    session = _require_session(request)
+    guild_id_str = request.match_info["guild_id"]
+    guild_id = _require_owned_guild(session, guild_id=guild_id_str)
+    roles, channels = await _get_guild_discord_metadata(request, guild_id=guild_id)
+    return web.json_response({"guild_id": guild_id, "roles": roles, "channels": channels})
+
+
 async def _on_startup(app: web.Application) -> None:
     # aiohttp ClientSession must be created with a running event loop.
     app["http"] = ClientSession()
@@ -695,6 +829,7 @@ def create_app(*, settings: Settings | None = None) -> web.Application:
     session_collection, state_collection = _ensure_dashboard_collections(app_settings)
     app["session_collection"] = session_collection
     app["state_collection"] = state_collection
+    app["guild_metadata_cache"] = {}
     app["http"] = None
     app.on_startup.append(_on_startup)
     app.on_cleanup.append(_on_cleanup)
@@ -708,6 +843,7 @@ def create_app(*, settings: Settings | None = None) -> web.Application:
     app.router.add_get("/guild/{guild_id}/settings", guild_settings_page)
     app.router.add_post("/guild/{guild_id}/settings", guild_settings_save)
     app.router.add_get("/api/guild/{guild_id}/analytics.json", guild_analytics_json)
+    app.router.add_get("/api/guild/{guild_id}/discord_metadata.json", guild_discord_metadata_json)
     return app
 
 
