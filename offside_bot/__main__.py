@@ -256,6 +256,18 @@ class OffsideBot(commands.AutoShardedBot):
 
         updated: dict[str, Any] = dict(existing)
 
+        if me.guild_permissions.manage_roles:
+            try:
+                updated = await ensure_offside_roles(
+                    guild,
+                    existing_config=updated,
+                    actions=actions,
+                )
+            except discord.DiscordException:
+                logging.exception("Auto-setup (guild=%s): role setup failed.", guild.id)
+        else:
+            actions.append("Role setup skipped (missing Manage Roles permission).")
+
         if me.guild_permissions.manage_channels:
             try:
                 updated, channel_actions = await ensure_offside_channels(
@@ -269,15 +281,6 @@ class OffsideBot(commands.AutoShardedBot):
                 logging.exception("Auto-setup (guild=%s): channel setup failed.", guild.id)
         else:
             actions.append("Channel setup skipped (missing Manage Channels permission).")
-
-        try:
-            updated = await ensure_offside_roles(
-                guild,
-                existing_config=updated,
-                actions=actions,
-            )
-        except discord.DiscordException:
-            logging.exception("Auto-setup (guild=%s): role setup failed.", guild.id)
 
         if updated != existing:
             try:

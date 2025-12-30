@@ -38,6 +38,7 @@ async def ensure_offside_channels(
     actions: list[str] = []
 
     staff_roles = _resolve_staff_roles(guild, settings)
+    coach_roles = _resolve_coach_roles(guild, config)
     bot_member = guild.me
 
     dashboard_category = await _ensure_category(guild, DASHBOARD_CATEGORY_NAME, actions=actions)
@@ -79,7 +80,7 @@ async def ensure_offside_channels(
             guild,
             category=dashboard_category,
             name=COACH_PORTAL_CHANNEL_NAME,
-            overwrites=_public_readonly_overwrites(guild, staff_roles, bot_member),
+            overwrites=_coach_portal_overwrites(guild, staff_roles, coach_roles, bot_member),
             existing_channel_id=_parse_int(config.get("channel_coach_portal_id")),
             actions=actions,
         )
@@ -381,8 +382,69 @@ def _public_readonly_overwrites(
     for role in staff_roles:
         overwrites[role] = discord.PermissionOverwrite(
             view_channel=True,
+            read_message_history=True,
+            send_messages=False,
+            manage_messages=True,
+        )
+    if bot_member is not None:
+        overwrites[bot_member] = discord.PermissionOverwrite(
+            view_channel=True,
             send_messages=True,
             read_message_history=True,
+            manage_channels=True,
+            manage_messages=True,
+            embed_links=True,
+            attach_files=True,
+        )
+    return overwrites
+
+
+def _resolve_coach_roles(guild: discord.Guild, config: dict[str, Any]) -> list[discord.Role]:
+    resolved: dict[int, discord.Role] = {}
+
+    for key in ("role_coach_id", "role_coach_premium_id", "role_coach_premium_plus_id"):
+        role_id = _parse_int(config.get(key))
+        if not role_id:
+            continue
+        role = guild.get_role(role_id)
+        if role is not None and not role.is_default():
+            resolved[role.id] = role
+
+    if resolved:
+        return list(resolved.values())
+
+    for name in ("Coach", "Coach Premium", "Coach Premium+"):
+        role = discord.utils.get(guild.roles, name=name)
+        if role is not None and not role.is_default():
+            resolved[role.id] = role
+
+    return list(resolved.values())
+
+
+def _coach_portal_overwrites(
+    guild: discord.Guild,
+    staff_roles: list[discord.Role],
+    coach_roles: list[discord.Role],
+    bot_member: discord.Member | None,
+) -> dict[discord.Role | discord.Member | discord.Object, discord.PermissionOverwrite]:
+    if not coach_roles:
+        return _public_readonly_overwrites(guild, staff_roles, bot_member)
+
+    overwrites: dict[discord.Role | discord.Member | discord.Object, discord.PermissionOverwrite] = {
+        guild.default_role: discord.PermissionOverwrite(view_channel=False)
+    }
+    for role in coach_roles:
+        overwrites[role] = discord.PermissionOverwrite(
+            view_channel=True,
+            send_messages=False,
+            read_message_history=True,
+        )
+    for role in staff_roles:
+        overwrites[role] = discord.PermissionOverwrite(
+            view_channel=True,
+            send_messages=False,
+            read_message_history=True,
+            manage_messages=True,
         )
     if bot_member is not None:
         overwrites[bot_member] = discord.PermissionOverwrite(
