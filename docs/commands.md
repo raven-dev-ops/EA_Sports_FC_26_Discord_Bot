@@ -38,11 +38,6 @@
 
 ## Operations
 
-### /setup_channels
-
-- Description: Create/update Offside categories, portal/listing channels (including Club Managers), and coach roles in this guild.
-- Permissions: Staff
-
 ### /ping
 
 - Description: Health check.

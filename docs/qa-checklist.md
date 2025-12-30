@@ -2,11 +2,11 @@
 
 ## Setup
 - Start bot with `TEST_MODE=true`
-- Run `/setup_channels` (creates `--OFFSIDE DASHBOARD--` and `--OFFSIDE REPORTS--`)
+- Confirm auto-setup creates `--OFFSIDE DASHBOARD--` and `--OFFSIDE REPORTS--`
 - Verify portals are posted:
-  - `staff-portal`, `club-portal`, `coach-portal`, `recruit-portal`
+  - `staff-portal`, `club-managers-portal`, `club-portal`, `coach-portal`, `recruit-portal`
 - Verify reports channels exist:
-  - `staff-monitor` (test mode only), `roster-listing`, `recruit-listing`, `club-listing`
+  - `staff-monitor` (test mode only), `roster-listing`, `recruit-listing`, `club-listing`, `premium-coaches`
 
 ## Test Mode Routing
 - With `TEST_MODE=true`, confirm all dashboards/posts/logs route to `staff-monitor`
@@ -59,4 +59,3 @@
   - Selecting a player opens add-player modal with Discord ID prefilled
 - Submit roster:
   - Confirm staff review flow posts to staff portal and decisions are logged
-

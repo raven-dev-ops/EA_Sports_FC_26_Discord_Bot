@@ -296,11 +296,11 @@ class AdminPortalView(SafeView):
             test_mode=test_mode,
         )
         if not target_channel_id:
-            await interaction.response.send_message(
-                "Club Managers portal is not configured. Ask staff to run `/setup_channels`.",
-                ephemeral=True,
-            )
-            return
+                await interaction.response.send_message(
+                    "Club Managers portal is not configured yet. Ensure the bot has `Manage Channels` and MongoDB is configured, then restart the bot.",
+                    ephemeral=True,
+                )
+                return
         await interaction.response.send_message(
             f"Open the Club Managers portal here: <#{target_channel_id}>",
             ephemeral=True,
@@ -666,7 +666,7 @@ async def send_admin_portal_message(
     )
     if not target_channel_id:
         await interaction.response.send_message(
-            "Staff portal channel is not configured. Ask staff to run `/setup_channels`.",
+            "Staff portal channel is not configured yet. Ensure the bot has `Manage Channels` and MongoDB is configured, then restart the bot.",
             ephemeral=True,
         )
         return
@@ -714,13 +714,18 @@ async def send_admin_portal_message(
     )
 
 
-async def post_admin_portal(bot: commands.Bot | commands.AutoShardedBot) -> None:
+async def post_admin_portal(
+    bot: commands.Bot | commands.AutoShardedBot,
+    *,
+    guilds: list[discord.Guild] | None = None,
+) -> None:
     settings = getattr(bot, "settings", None)
     if settings is None:
         return
 
     test_mode = bool(getattr(bot, "test_mode", False))
-    for guild in bot.guilds:
+    target_guilds = bot.guilds if guilds is None else guilds
+    for guild in target_guilds:
         target_channel_id = resolve_channel_id(
             settings,
             guild_id=guild.id,

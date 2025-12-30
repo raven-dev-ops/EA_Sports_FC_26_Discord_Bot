@@ -12,4 +12,4 @@ These are manual/automation-ready scenarios that can be exercised with mocked cr
 4) **Permissions**
    - Non-staff user attempts tournament commands and is denied; staff user succeeds.
 
-For automation, stub Discord interactions with the integration tests pattern in `tests/integration/`, or wire a test bot token in a staging guild and run the above sequentially. Keep `TEST_MODE=true` and route noise to the staff monitor channel created by `/setup_channels`.
+For automation, stub Discord interactions with the integration tests pattern in `tests/integration/`, or wire a test bot token in a staging guild and run the above sequentially. Keep `TEST_MODE=true` and route noise to the staff monitor channel created automatically under `--OFFSIDE REPORTS--`.

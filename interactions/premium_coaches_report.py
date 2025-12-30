@@ -211,13 +211,18 @@ async def upsert_premium_coaches_report(
         logging.debug("Failed to persist premium coaches message id (guild=%s).", guild_id)
 
 
-async def post_premium_coaches_report(bot: commands.Bot | commands.AutoShardedBot) -> None:
+async def post_premium_coaches_report(
+    bot: commands.Bot | commands.AutoShardedBot,
+    *,
+    guilds: list[discord.Guild] | None = None,
+) -> None:
     settings = getattr(bot, "settings", None)
     if settings is None:
         return
 
     test_mode = bool(getattr(bot, "test_mode", False))
-    for guild in bot.guilds:
+    target_guilds = bot.guilds if guilds is None else guilds
+    for guild in target_guilds:
         try:
             await upsert_premium_coaches_report(
                 bot,
@@ -227,4 +232,3 @@ async def post_premium_coaches_report(bot: commands.Bot | commands.AutoShardedBo
             )
         except Exception:
             logging.exception("Failed to upsert premium coaches report (guild=%s).", guild.id)
-

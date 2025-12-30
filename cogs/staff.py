@@ -220,7 +220,7 @@ class StaffCog(commands.Cog):
         )
         if not listing_channel_id:
             await interaction.response.send_message(
-                "Recruit listing channel is not configured. Ask staff to run `/setup_channels`.",
+                "Recruit listing channel is not configured yet. Ensure the bot has `Manage Channels` and MongoDB is configured, then restart the bot.",
                 ephemeral=True,
             )
             return

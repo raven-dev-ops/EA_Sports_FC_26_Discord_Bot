@@ -362,13 +362,18 @@ async def _delete_profile_posts(client: discord.Client, profile: dict) -> None:
         await delete_message(msg)
 
 
-async def post_recruit_portal(bot: commands.Bot | commands.AutoShardedBot) -> None:
+async def post_recruit_portal(
+    bot: commands.Bot | commands.AutoShardedBot,
+    *,
+    guilds: list[discord.Guild] | None = None,
+) -> None:
     settings = getattr(bot, "settings", None)
     if settings is None:
         return
 
     test_mode = bool(getattr(bot, "test_mode", False))
-    for guild in bot.guilds:
+    target_guilds = bot.guilds if guilds is None else guilds
+    for guild in target_guilds:
         target_channel_id = resolve_channel_id(
             settings,
             guild_id=guild.id,

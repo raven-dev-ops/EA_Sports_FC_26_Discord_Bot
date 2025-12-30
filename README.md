@@ -6,7 +6,7 @@ Roster management and staff review bot for Discord tournaments.
 
 1. Set up Discord channels and roles:
    - Invite the bot with permissions to manage channels/roles, send messages, read message history, and use slash commands.
-   - Run `/setup_channels` once per guild to create the `--OFFSIDE DASHBOARD--` / `--OFFSIDE REPORTS--` layout, required channels (including Club Managers + Premium Coaches), and the coach roles (`Coach`, `Coach Premium`, `Coach Premium+`).
+   - On join/startup, the bot auto-creates the `--OFFSIDE DASHBOARD--` / `--OFFSIDE REPORTS--` layout, required channels (including Club Managers + Premium Coaches), and the coach roles (`Coach`, `Coach Premium`, `Coach Premium+`).
    - Assign the coach roles to your coaches (premium tiers control roster caps).
 2. Configure the bot:
    - Copy `.env.example` to `.env` and fill in the required IDs and tokens.
@@ -79,7 +79,6 @@ Tournament (staff-only)
 - Groups: `/group_create`, `/group_register`, `/group_generate_fixtures [double_round]`, `/group_match_report`, `/group_standings`, `/group_advance <top_n>`
 
 Operations (staff-only)
-- `/setup_channels` creates/repairs Offside categories + channels (including Club Managers + Premium Coaches) and stores per-guild IDs in Mongo; also ensures coach tier roles exist.
 - `/config_view` snapshot of non-secret runtime settings.
 - `/config_set <field> <value>` runtime override (no persistence; restart to reset).
 - `/config_guild_view` / `/config_guild_set <field> <value>` per-guild overrides (staff).
@@ -105,11 +104,11 @@ Required for persistence:
 Optional:
 - `STAFF_ROLE_IDS` (comma-separated role IDs)
 - `TEST_MODE` (defaults to `true`, set `false` for production)
-- Role env overrides (optional; primary source is per-guild config written by `/setup_channels`):
+- Role env overrides (optional; primary source is per-guild config created by auto-setup):
   - `ROLE_COACH_ID` (or legacy `ROLE_SUPER_LEAGUE_COACH_ID`)
   - `ROLE_COACH_PREMIUM_ID`
   - `ROLE_COACH_PREMIUM_PLUS_ID`
-- Channel env overrides (optional; primary source is per-guild config written by `/setup_channels`):
+- Channel env overrides (optional; primary source is per-guild config created by auto-setup):
   - `CHANNEL_STAFF_PORTAL_ID`, `CHANNEL_MANAGER_PORTAL_ID`, `CHANNEL_CLUB_PORTAL_ID`, `CHANNEL_COACH_PORTAL_ID`, `CHANNEL_RECRUIT_PORTAL_ID`
   - `CHANNEL_STAFF_MONITOR_ID` (test-mode sink)
   - `CHANNEL_ROSTER_LISTING_ID` (fallback to legacy `CHANNEL_ROSTER_PORTAL_ID`)
@@ -142,7 +141,7 @@ Optional:
 
 When `TEST_MODE=true`, all portal posts, listing posts, and forwarded logs are routed to the
 staff monitor channel (`channel_staff_monitor_id`) only.
-- The staff monitor channel is created by `/setup_channels` under `--OFFSIDE REPORTS--`.
+- The staff monitor channel is created automatically under `--OFFSIDE REPORTS--`.
 - When `TEST_MODE=false`, the bot will delete the staff monitor channel if it is marked as bot-managed.
 
 ## Roster rules

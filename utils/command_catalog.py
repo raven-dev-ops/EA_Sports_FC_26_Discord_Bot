@@ -48,15 +48,6 @@ COMMANDS: List[CommandInfo] = [
         permissions="Staff",
     ),
     CommandInfo(
-        name="/setup_channels",
-        category="Operations",
-        description=(
-            "Create/update Offside categories, portal/listing channels (including Club Managers), "
-            "and coach roles in this guild."
-        ),
-        permissions="Staff",
-    ),
-    CommandInfo(
         name="/ping",
         category="Operations",
         description="Health check.",

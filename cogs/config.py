@@ -120,7 +120,7 @@ class ConfigCog(commands.Cog):
         if field == "test_mode":
             await interaction.response.send_message(
                 "Test mode is controlled via `TEST_MODE` in the environment; set it and restart the bot. "
-                "Use `/setup_channels` while test mode is enabled to create the staff monitor channel.",
+                "When enabled, the bot auto-creates a staff monitor channel on startup/invite.",
                 ephemeral=True,
             )
             return

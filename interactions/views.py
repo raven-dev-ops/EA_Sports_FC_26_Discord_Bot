@@ -579,7 +579,7 @@ class SubmitRosterConfirmView(SafeView):
         )
         if not staff_channel_id:
             await interaction.response.edit_message(
-                content="Staff channel is not configured. Ask staff to run `/setup_channels`.",
+                content="Staff channel is not configured yet. Ensure the bot has `Manage Channels` and MongoDB is configured, then restart the bot.",
                 view=None,
             )
             return
@@ -791,7 +791,7 @@ class StaffReviewView(SafeView):
                 if not roster_channel_id:
                     await interaction.followup.send(
                         "Roster was approved, but the roster listing channel is not configured. "
-                        "Ask staff to run `/setup_channels`.",
+                        "Ensure the bot has `Manage Channels` and MongoDB is configured, then restart the bot.",
                         ephemeral=True,
                     )
                     return

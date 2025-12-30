@@ -125,7 +125,10 @@ async def _set_coach_tier(
         settings, guild_id=guild.id, field="role_coach_premium_plus_id"
     )
     if not coach_role_id or not premium_role_id or not premium_plus_role_id:
-        return False, "Coach tier roles are not configured. Ask staff to run `/setup_channels`."
+        return (
+            False,
+            "Coach tier roles are not configured yet. Ensure the bot has `Manage Roles` and MongoDB is configured, then restart the bot.",
+        )
 
     member = await _fetch_member(guild, coach_id)
     if member is None:
@@ -145,7 +148,10 @@ async def _set_coach_tier(
 
     tier_role = guild.get_role(tier_role_id)
     if tier_role is None:
-        return False, "Tier role not found. Re-run `/setup_channels`."
+        return (
+            False,
+            "Tier role not found. Ensure the bot has `Manage Roles` and MongoDB is configured, then restart the bot.",
+        )
 
     remove_ids = {coach_role_id, premium_role_id, premium_plus_role_id} - {tier_role_id}
     to_remove = [r for r in member.roles if r.id in remove_ids]
@@ -473,13 +479,18 @@ class ManagerPortalView(SafeView):
         await interaction.response.send_modal(DeleteRosterManagerModal())
 
 
-async def post_manager_portal(bot: commands.Bot | commands.AutoShardedBot) -> None:
+async def post_manager_portal(
+    bot: commands.Bot | commands.AutoShardedBot,
+    *,
+    guilds: list[discord.Guild] | None = None,
+) -> None:
     settings = getattr(bot, "settings", None)
     if settings is None:
         return
 
     test_mode = bool(getattr(bot, "test_mode", False))
-    for guild in bot.guilds:
+    target_guilds = bot.guilds if guilds is None else guilds
+    for guild in target_guilds:
         target_channel_id = resolve_channel_id(
             settings,
             guild_id=guild.id,

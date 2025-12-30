@@ -4,7 +4,7 @@ import os
 import pkgutil
 import signal
 import sys
-from typing import TypeAlias
+from typing import Any, TypeAlias
 
 import discord
 from discord.ext import commands
@@ -20,11 +20,12 @@ from interactions.manager_portal import post_manager_portal
 from interactions.premium_coaches_report import post_premium_coaches_report
 from interactions.recruit_portal import post_recruit_portal
 from migrations import apply_migrations
-from services.channel_setup_service import cleanup_staff_monitor_channel
+from services.channel_setup_service import cleanup_staff_monitor_channel, ensure_offside_channels
 from services.fc25_stats_feature import fc25_stats_enabled
 from services.fc25_stats_service import list_links
 from services.guild_config_service import get_guild_config, set_guild_config
 from services.recovery_service import run_startup_recovery
+from services.role_setup_service import ensure_offside_roles
 from services.scheduler import Scheduler
 from utils.command_registry import validate_command_tree
 from utils.discord_wrappers import fetch_channel, send_message
@@ -179,43 +180,129 @@ class OffsideBot(commands.AutoShardedBot):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.scheduler = Scheduler()
+        self._auto_setup_lock = asyncio.Lock()
 
-    async def post_portals(self) -> None:
+    async def post_portals(self, *, guilds: list[discord.Guild] | None = None) -> None:
         try:
-            await post_admin_portal(self)
+            await post_admin_portal(self, guilds=guilds)
             logging.info("Posted admin/staff portal embed.")
         except Exception:
             logging.exception("Failed to post admin portal.")
         await asyncio.sleep(0.5)
         try:
-            await post_manager_portal(self)
+            await post_manager_portal(self, guilds=guilds)
             logging.info("Posted club managers portal embed.")
         except Exception:
             logging.exception("Failed to post club managers portal.")
         await asyncio.sleep(0.5)
         try:
-            await post_coach_portal(self)
+            await post_coach_portal(self, guilds=guilds)
             logging.info("Posted coach portal embed.")
         except Exception:
             logging.exception("Failed to post coach portal.")
         await asyncio.sleep(0.5)
         try:
-            await post_recruit_portal(self)
+            await post_recruit_portal(self, guilds=guilds)
             logging.info("Posted recruit portal embed.")
         except Exception:
             logging.exception("Failed to post recruit portal.")
         await asyncio.sleep(0.5)
         try:
-            await post_club_portal(self)
+            await post_club_portal(self, guilds=guilds)
             logging.info("Posted club portal embed.")
         except Exception:
             logging.exception("Failed to post club portal.")
         await asyncio.sleep(0.5)
         try:
-            await post_premium_coaches_report(self)
+            await post_premium_coaches_report(self, guilds=guilds)
             logging.info("Posted premium coaches report embed.")
         except Exception:
             logging.exception("Failed to post premium coaches report.")
+
+    async def _auto_setup_guild(self, guild: discord.Guild) -> None:
+        settings = getattr(self, "settings", None)
+        if settings is None:
+            return
+        if not (settings.mongodb_uri and settings.mongodb_db_name and settings.mongodb_collection):
+            logging.warning("Auto-setup skipped (guild=%s): MongoDB not configured.", guild.id)
+            return
+
+        bot_user = self.user
+        if bot_user and guild.me is None:
+            try:
+                await guild.fetch_member(bot_user.id)
+            except discord.DiscordException:
+                pass
+
+        me = guild.me
+        if me is None:
+            logging.warning("Auto-setup skipped (guild=%s): bot member unavailable.", guild.id)
+            return
+
+        test_mode = bool(getattr(self, "test_mode", False))
+        actions: list[str] = []
+
+        try:
+            collection = get_collection(settings)
+        except Exception:
+            logging.exception("Auto-setup skipped (guild=%s): failed to connect to MongoDB.", guild.id)
+            return
+
+        existing: dict[str, Any] = {}
+        try:
+            existing = get_guild_config(guild.id, collection=collection)
+        except Exception:
+            logging.exception("Auto-setup (guild=%s): failed to load guild config.", guild.id)
+
+        updated: dict[str, Any] = dict(existing)
+
+        if me.guild_permissions.manage_channels:
+            try:
+                updated, channel_actions = await ensure_offside_channels(
+                    guild,
+                    settings=settings,
+                    existing_config=updated,
+                    test_mode=test_mode,
+                )
+                actions.extend(channel_actions)
+            except discord.DiscordException:
+                logging.exception("Auto-setup (guild=%s): channel setup failed.", guild.id)
+        else:
+            actions.append("Channel setup skipped (missing Manage Channels permission).")
+
+        try:
+            updated = await ensure_offside_roles(
+                guild,
+                existing_config=updated,
+                actions=actions,
+            )
+        except discord.DiscordException:
+            logging.exception("Auto-setup (guild=%s): role setup failed.", guild.id)
+
+        if updated != existing:
+            try:
+                set_guild_config(guild.id, updated, collection=collection)
+            except Exception:
+                logging.exception("Auto-setup (guild=%s): failed to persist guild config.", guild.id)
+
+        for action in actions:
+            logging.info("Auto-setup (guild=%s): %s", guild.id, action)
+
+        if test_mode:
+            staff_monitor = updated.get("channel_staff_monitor_id")
+            if isinstance(staff_monitor, int) and not getattr(self, "staff_monitor_channel_id", None):
+                self.staff_monitor_channel_id = staff_monitor
+
+    async def _auto_setup_all_guilds(self) -> None:
+        if getattr(self, "_auto_setup_done", False):
+            return
+        async with self._auto_setup_lock:
+            if getattr(self, "_auto_setup_done", False):
+                return
+            for guild in list(self.guilds):
+                await self._auto_setup_guild(guild)
+                await asyncio.sleep(0.25)
+            self._auto_setup_done = True
 
     async def _cleanup_test_mode_channels(self) -> None:
         if getattr(self, "test_mode", False):
@@ -261,12 +348,21 @@ class OffsideBot(commands.AutoShardedBot):
             logging.exception("Failed to sync app commands.")
         await self._start_scheduler()
 
+    async def on_guild_join(self, guild: discord.Guild) -> None:
+        async with self._auto_setup_lock:
+            await self._auto_setup_guild(guild)
+        try:
+            await self.post_portals(guilds=[guild])
+        except Exception:
+            logging.exception("Failed to post portals on guild join (guild=%s).", guild.id)
+
     async def on_ready(self) -> None:
         user = self.user
         if user:
             logging.info("Bot ready as %s (ID: %s).", user, user.id)
         else:
             logging.info("Bot ready (user not available yet).")
+        await self._auto_setup_all_guilds()
         if not getattr(self, "_test_mode_cleanup_done", False):
             await self._cleanup_test_mode_channels()
             self._test_mode_cleanup_done = True

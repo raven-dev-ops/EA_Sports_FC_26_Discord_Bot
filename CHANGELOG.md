@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.17] - 2025-12-30
+
+### Added
+- Auto-setup: bot now provisions Offside categories/channels/roles on guild join and on startup.
+- Guild-scoped portal posting helpers (used for guild-join auto-deploy).
+
+### Changed
+- `/setup_channels` removed; docs and user-facing copy now refer to auto-setup instead of a manual setup command.
+- `.env.example` updated to clarify that channel/role IDs are normally created + stored by auto-setup.
+
+### Removed
+- `futwiz_player_evolution_github_issues.md` after importing issues into GitHub.
+
 ## [0.2.16] - 2025-12-30
 
 ### Added
