@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.28] - 2025-12-30
+
+### Added
+- Dashboard: permissions validator UI (`/guild/{guild_id}/permissions`) with role hierarchy + channel access checks.
+
 ## [0.2.27] - 2025-12-30
 
 ### Added

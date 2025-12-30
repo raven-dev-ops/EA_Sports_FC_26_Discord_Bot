@@ -233,3 +233,87 @@ async def test_settings_blocks_when_bot_not_installed(monkeypatch) -> None:
         assert "Invite" in text or "installed" in text
     finally:
         await client.close()
+
+
+@pytest.mark.asyncio
+async def test_permissions_page_renders(monkeypatch) -> None:
+    from aiohttp.test_utils import TestClient, TestServer
+
+    monkeypatch.setattr(database, "MongoClient", mongomock.MongoClient)
+    monkeypatch.setattr(database, "_CLIENT", None)
+
+    async def fake_bot_get_json(*_args, url: str, **_kwargs):
+        if url.endswith("/guilds/123"):
+            return {"id": "123", "name": "Managed"}
+        if url.endswith("/guilds/123/roles"):
+            bot_perms = (
+                (1 << 4)
+                | (1 << 10)
+                | (1 << 11)
+                | (1 << 13)
+                | (1 << 14)
+                | (1 << 16)
+                | (1 << 28)
+            )
+            return [
+                {"id": "123", "name": "@everyone", "permissions": "0", "position": 0},
+                {"id": "10", "name": "Offside Bot", "permissions": str(bot_perms), "position": 10},
+                {"id": "11", "name": "Coach", "permissions": "0", "position": 1},
+                {"id": "12", "name": "Coach Premium", "permissions": "0", "position": 2},
+                {"id": "13", "name": "Coach Premium+", "permissions": "0", "position": 3},
+            ]
+        if url.endswith("/guilds/123/channels"):
+            return [
+                {
+                    "id": "20",
+                    "type": 0,
+                    "name": "staff-portal",
+                    "position": 1,
+                    "permission_overwrites": [],
+                }
+            ]
+        if url.endswith("/guilds/123/members/1"):
+            return {"roles": ["10"], "user": {"id": "1"}}
+        raise AssertionError(f"Unexpected bot Discord URL: {url}")
+
+    monkeypatch.setattr(dashboard, "_discord_bot_get_json", fake_bot_get_json)
+    monkeypatch.setattr(
+        dashboard,
+        "get_guild_config",
+        lambda _gid: {
+            "role_coach_id": 11,
+            "role_coach_premium_id": 12,
+            "role_coach_premium_plus_id": 13,
+            "channel_staff_portal_id": 20,
+        },
+    )
+
+    app = dashboard.create_app(settings=_settings())
+    sessions = app["session_collection"]
+    sessions.insert_one(
+        {
+            "_id": "sess1",
+            "created_at": time.time(),
+            "expires_at": datetime.now(timezone.utc) + timedelta(hours=6),
+            "user": {"id": "1", "username": "alice"},
+            "owner_guilds": [{"id": "123", "name": "Managed"}],
+            "all_guilds": [{"id": "123", "name": "Managed"}],
+            "csrf_token": "csrf_good",
+        }
+    )
+
+    client = TestClient(TestServer(app))
+    await client.start_server()
+    try:
+        resp = await client.get(
+            "/guild/123/permissions",
+            headers={"Cookie": f"{dashboard.COOKIE_NAME}=sess1"},
+            allow_redirects=False,
+        )
+        assert resp.status == 200
+        html = await resp.text()
+        assert "Permissions Check" in html
+        assert "Guild-level permissions" in html
+        assert "staff-portal" in html
+    finally:
+        await client.close()

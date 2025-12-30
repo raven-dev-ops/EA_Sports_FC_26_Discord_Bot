@@ -260,6 +260,108 @@ async def _fetch_guild_channels(http: ClientSession, *, bot_token: str, guild_id
     return channels
 
 
+async def _fetch_guild_member(
+    http: ClientSession,
+    *,
+    bot_token: str,
+    guild_id: int,
+    user_id: int,
+) -> dict[str, Any] | None:
+    url = f"{DISCORD_API_BASE}/guilds/{guild_id}/members/{user_id}"
+    try:
+        data = await _discord_bot_get_json(http, url=url, bot_token=bot_token)
+    except (web.HTTPForbidden, web.HTTPNotFound):
+        return None
+    if not isinstance(data, dict):
+        raise web.HTTPBadRequest(text="Discord returned an invalid member payload.")
+    return data
+
+
+def _parse_permissions(value: Any) -> int:
+    if value is None or isinstance(value, bool):
+        return 0
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str):
+        raw = value.strip()
+        if raw.isdigit():
+            return int(raw)
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _apply_overwrite(perms: int, *, allow: int, deny: int) -> int:
+    return (perms & ~deny) | allow
+
+
+def _compute_base_permissions(*, roles_by_id: dict[int, dict[str, Any]], role_ids: set[int]) -> int:
+    perms = 0
+    for rid in role_ids:
+        role = roles_by_id.get(rid) or {}
+        if isinstance(role, dict):
+            perms |= _parse_permissions(role.get("permissions"))
+    return perms
+
+
+def _compute_channel_permissions(
+    *,
+    base_perms: int,
+    channel: dict[str, Any],
+    guild_id: int,
+    member_role_ids: set[int],
+    member_id: int,
+) -> int:
+    if base_perms & PERM_ADMINISTRATOR:
+        return base_perms
+
+    perms = base_perms
+    overwrites_raw = channel.get("permission_overwrites")
+    overwrites = overwrites_raw if isinstance(overwrites_raw, list) else []
+
+    everyone_allow = 0
+    everyone_deny = 0
+    roles_allow = 0
+    roles_deny = 0
+    member_allow = 0
+    member_deny = 0
+
+    for ow in overwrites:
+        if not isinstance(ow, dict):
+            continue
+        oid = _parse_int(ow.get("id"))
+        if oid is None:
+            continue
+        otype_raw = ow.get("type")
+        if isinstance(otype_raw, str):
+            if otype_raw == "role":
+                otype = 0
+            elif otype_raw == "member":
+                otype = 1
+            else:
+                continue
+        else:
+            otype = _parse_int(otype_raw) or -1
+        allow = _parse_permissions(ow.get("allow"))
+        deny = _parse_permissions(ow.get("deny"))
+
+        if otype == 0 and oid == guild_id:
+            everyone_allow |= allow
+            everyone_deny |= deny
+        elif otype == 0 and oid in member_role_ids:
+            roles_allow |= allow
+            roles_deny |= deny
+        elif otype == 1 and oid == member_id:
+            member_allow |= allow
+            member_deny |= deny
+
+    perms = _apply_overwrite(perms, allow=everyone_allow, deny=everyone_deny)
+    perms = _apply_overwrite(perms, allow=roles_allow, deny=roles_deny)
+    perms = _apply_overwrite(perms, allow=member_allow, deny=member_deny)
+    return perms
+
+
 async def _get_guild_discord_metadata(
     request: web.Request,
     *,
@@ -518,7 +620,14 @@ def _invite_url(
 
 
 PERM_ADMINISTRATOR = 1 << 3
+PERM_MANAGE_CHANNELS = 1 << 4
 PERM_MANAGE_GUILD = 1 << 5
+PERM_VIEW_CHANNEL = 1 << 10
+PERM_SEND_MESSAGES = 1 << 11
+PERM_MANAGE_MESSAGES = 1 << 13
+PERM_EMBED_LINKS = 1 << 14
+PERM_READ_MESSAGE_HISTORY = 1 << 16
+PERM_MANAGE_ROLES = 1 << 28
 
 
 def _guild_is_eligible(guild: dict[str, Any]) -> bool:
@@ -1297,6 +1406,7 @@ async def guild_page(request: web.Request) -> web.Response:
           <div class="muted">Generated: {analytics.generated_at.isoformat()}</div>
           <div style="margin-top:10px;"><a href="/api/guild/{guild_id}/analytics.json">Download JSON</a></div>
           <div style="margin-top:10px;"><a class="btn secondary" href="/guild/{guild_id}/settings">Settings</a></div>
+          <div style="margin-top:10px;"><a class="btn secondary" href="/guild/{guild_id}/permissions">Permissions</a></div>
           <div style="margin-top:10px;"><a class="btn secondary" href="/guild/{guild_id}/audit">Audit Log</a></div>
         </div>
       </div>
@@ -1312,6 +1422,259 @@ async def guild_page(request: web.Request) -> web.Response:
       </div>
     """
     return web.Response(text=_html_page(title="Guild Analytics", body=body), content_type="text/html")
+
+
+async def guild_permissions_page(request: web.Request) -> web.Response:
+    session = _require_session(request)
+    settings: Settings = request.app["settings"]
+
+    guild_id_str = request.match_info["guild_id"]
+    guild_id = _require_owned_guild(session, guild_id=guild_id_str)
+
+    invite_href = _invite_url(settings, guild_id=str(guild_id), disable_guild_select=True)
+    installed, install_error = await _detect_bot_installed(request, guild_id=guild_id)
+    if installed is False:
+        body = f"""
+          <p><a href="/guild/{guild_id}">ƒ+? Back</a></p>
+          <h1>Permissions Check</h1>
+          <div class="card">
+            <p class="muted">{_escape_html(install_error or 'Bot is not installed in this server yet.')}</p>
+            <div style="margin-top:10px;">
+              <a class="btn blue" href="{invite_href}">Invite bot to this server</a>
+            </div>
+          </div>
+        """
+        return web.Response(text=_html_page(title="Permissions", body=body), content_type="text/html")
+
+    roles: list[dict[str, Any]] = []
+    channels: list[dict[str, Any]] = []
+    metadata_error: str | None = None
+    try:
+        roles, channels = await _get_guild_discord_metadata(request, guild_id=guild_id)
+    except web.HTTPException as exc:
+        metadata_error = exc.text or str(exc)
+    except Exception as exc:
+        metadata_error = str(exc)
+
+    http = request.app.get("http")
+    if not isinstance(http, ClientSession):
+        raise web.HTTPInternalServerError(text="Dashboard HTTP client is not ready yet.")
+
+    bot_user_id = int(settings.discord_application_id)
+    bot_member = await _fetch_guild_member(
+        http,
+        bot_token=settings.discord_token,
+        guild_id=guild_id,
+        user_id=bot_user_id,
+    )
+
+    if bot_member is None or not roles:
+        message = metadata_error or install_error or "Unable to load bot membership details."
+        body = f"""
+          <p><a href="/guild/{guild_id}">ƒ+? Back</a></p>
+          <h1>Permissions Check</h1>
+          <div class="card">
+            <p class="muted">{_escape_html(message)}</p>
+            <div style="margin-top:10px;">
+              <a class="btn blue" href="{invite_href}">Invite bot to this server</a>
+            </div>
+          </div>
+        """
+        return web.Response(text=_html_page(title="Permissions", body=body), content_type="text/html")
+
+    roles_by_id: dict[int, dict[str, Any]] = {}
+    for role_doc in roles:
+        rid = _parse_int(role_doc.get("id"))
+        if rid is not None:
+            roles_by_id[rid] = role_doc
+
+    member_role_ids: set[int] = {guild_id}
+    member_roles_raw = bot_member.get("roles")
+    if isinstance(member_roles_raw, list):
+        for rid in member_roles_raw:
+            rid_int = _parse_int(rid)
+            if rid_int is not None:
+                member_role_ids.add(rid_int)
+
+    base_perms = _compute_base_permissions(roles_by_id=roles_by_id, role_ids=member_role_ids)
+    is_admin = bool(base_perms & PERM_ADMINISTRATOR)
+
+    required_guild_perms = [
+        ("Manage Channels", PERM_MANAGE_CHANNELS, "Create/repair Offside channels and categories."),
+        ("Manage Roles", PERM_MANAGE_ROLES, "Create/assign Coach tier roles."),
+        ("Manage Messages", PERM_MANAGE_MESSAGES, "Pin/unpin listings and clean up bot messages."),
+    ]
+    guild_rows = []
+    for name, bit, why in required_guild_perms:
+        ok = is_admin or bool(base_perms & bit)
+        status = "OK" if ok else "Missing"
+        guild_rows.append(
+            "<tr>"
+            f"<td>{_escape_html(name)}</td>"
+            f"<td><code>{status}</code></td>"
+            f"<td class='muted'>{_escape_html(why)}</td>"
+            "</tr>"
+        )
+    guild_table = "\n".join(guild_rows)
+
+    top_role_name = ""
+    top_role_pos = 0
+    for rid in member_role_ids:
+        if rid == guild_id:
+            continue
+        role_doc = roles_by_id.get(rid) or {}
+        if not isinstance(role_doc, dict):
+            continue
+        pos = _parse_int(role_doc.get("position")) or 0
+        if pos > top_role_pos:
+            top_role_pos = pos
+            top_role_name = str(role_doc.get("name") or rid)
+
+    cfg: dict[str, Any]
+    try:
+        cfg = get_guild_config(guild_id)
+    except Exception:
+        cfg = {}
+
+    def _best_role_id_by_name(name: str) -> int | None:
+        best_id = None
+        best_pos = -1
+        target = name.casefold()
+        for role_doc in roles:
+            if str(role_doc.get("name") or "").casefold() != target:
+                continue
+            rid = _parse_int(role_doc.get("id"))
+            pos = _parse_int(role_doc.get("position")) or 0
+            if rid is not None and pos > best_pos:
+                best_id = rid
+                best_pos = pos
+        return best_id
+
+    coach_role_ids = [
+        ("Coach", _parse_int(cfg.get("role_coach_id")) or _best_role_id_by_name("Coach")),
+        ("Coach Premium", _parse_int(cfg.get("role_coach_premium_id")) or _best_role_id_by_name("Coach Premium")),
+        (
+            "Coach Premium+",
+            _parse_int(cfg.get("role_coach_premium_plus_id")) or _best_role_id_by_name("Coach Premium+"),
+        ),
+    ]
+
+    hierarchy_rows: list[str] = []
+    for label, rid in coach_role_ids:
+        if rid is None:
+            hierarchy_rows.append(
+                f"<tr><td>{_escape_html(label)}</td><td><code>Not configured</code></td><td class='muted'>Run setup to create roles.</td></tr>"
+            )
+            continue
+        target_role = roles_by_id.get(rid)
+        if target_role is None:
+            hierarchy_rows.append(
+                f"<tr><td>{_escape_html(label)}</td><td><code>Missing role</code></td><td class='muted'>Role ID <code>{rid}</code> not found.</td></tr>"
+            )
+            continue
+        role_pos = _parse_int(target_role.get("position")) or 0
+        ok = top_role_pos > role_pos
+        status = "OK" if ok else "Bot role too low"
+        details = (
+            f"Bot top role: <code>{_escape_html(top_role_name or 'unknown')}</code> (pos {top_role_pos}); "
+            f"Target: <code>{_escape_html(target_role.get('name') or rid)}</code> (pos {role_pos})"
+        )
+        hint = (
+            "Move the bot's role above the Coach roles in Server Settings → Roles."
+            if not ok
+            else details
+        )
+        hierarchy_rows.append(
+            "<tr>"
+            f"<td>{_escape_html(label)}</td>"
+            f"<td><code>{status}</code></td>"
+            f"<td class='muted'>{hint}</td>"
+            "</tr>"
+        )
+    hierarchy_table = "\n".join(hierarchy_rows)
+
+    channels_by_id: dict[int, dict[str, Any]] = {}
+    for ch in channels:
+        cid = _parse_int(ch.get("id"))
+        if cid is not None:
+            channels_by_id[cid] = ch
+
+    required_channel_bits = [
+        ("View Channel", PERM_VIEW_CHANNEL),
+        ("Send Messages", PERM_SEND_MESSAGES),
+        ("Embed Links", PERM_EMBED_LINKS),
+        ("Read History", PERM_READ_MESSAGE_HISTORY),
+    ]
+    channel_rows: list[str] = []
+    for field, label in GUILD_CHANNEL_FIELDS:
+        channel_id = _parse_int(cfg.get(field))
+        if channel_id is None:
+            continue
+        channel = channels_by_id.get(channel_id)
+        if channel is None:
+            channel_rows.append(
+                f"<tr><td>{_escape_html(label)}</td><td><code>Missing channel</code></td><td class='muted'>Channel ID <code>{channel_id}</code> not found.</td></tr>"
+            )
+            continue
+        perms = _compute_channel_permissions(
+            base_perms=base_perms,
+            channel=channel,
+            guild_id=guild_id,
+            member_role_ids=member_role_ids,
+            member_id=bot_user_id,
+        )
+        missing = [name for name, bit in required_channel_bits if not (is_admin or bool(perms & bit))]
+        status = "OK" if not missing else "Missing: " + ", ".join(missing)
+        channel_name = str(channel.get("name") or channel_id)
+        channel_rows.append(
+            "<tr>"
+            f"<td>{_escape_html(label)}</td>"
+            f"<td><code>{_escape_html(status)}</code></td>"
+            f"<td class='muted'>#{_escape_html(channel_name)} (<code>{channel_id}</code>)</td>"
+            "</tr>"
+        )
+    channel_table = "\n".join(channel_rows) or "<tr><td colspan='3' class='muted'>No channels configured yet.</td></tr>"
+
+    admin_badge = "<span class='badge pro'>ADMIN</span>" if is_admin else ""
+    body = f"""
+      <p><a href="/guild/{guild_id}">ƒ+? Back</a></p>
+      <h1>Permissions Check {admin_badge}</h1>
+      <div class="row">
+        <div class="card">
+          <div><strong>Guild</strong></div>
+          <div class="muted">ID: <code>{guild_id}</code></div>
+          <div class="muted">Bot top role: <code>{_escape_html(top_role_name or 'unknown')}</code> (pos {top_role_pos})</div>
+          <div style="margin-top:10px;">
+            <a class="btn secondary" href="/guild/{guild_id}/settings">Open settings</a>
+          </div>
+        </div>
+        <div class="card">
+          <div><strong>Fix steps</strong></div>
+          <div class="muted" style="margin-top:8px;">
+            1) Server Settings → Roles: ensure the bot role has Manage Channels/Roles/Messages.<br/>
+            2) Drag the bot role above Coach roles (role hierarchy).<br/>
+            3) Channel settings: ensure the bot can View/Send/Embed/Read in Offside channels.
+          </div>
+          <div style="margin-top:10px;">
+            <a class="btn blue" href="{invite_href}">Re-invite with permissions</a>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <h2 style="margin-top:0;">Guild-level permissions</h2>
+        <table><thead><tr><th>permission</th><th>status</th><th>why</th></tr></thead><tbody>{guild_table}</tbody></table>
+      </div>
+      <div class="card">
+        <h2 style="margin-top:0;">Role hierarchy</h2>
+        <table><thead><tr><th>role</th><th>status</th><th>details</th></tr></thead><tbody>{hierarchy_table}</tbody></table>
+      </div>
+      <div class="card">
+        <h2 style="margin-top:0;">Configured channels access</h2>
+        <table><thead><tr><th>channel</th><th>status</th><th>details</th></tr></thead><tbody>{channel_table}</tbody></table>
+        <p class="muted" style="margin-top:10px;">Only checks channels currently saved in guild settings.</p>
+      </div>
+    """
+    return web.Response(text=_html_page(title="Permissions", body=body), content_type="text/html")
 
 
 async def guild_audit_page(request: web.Request) -> web.Response:
@@ -1758,6 +2121,7 @@ def create_app(*, settings: Settings | None = None) -> web.Application:
     app.router.add_get("/app/billing/success", billing_success)
     app.router.add_get("/app/billing/cancel", billing_cancel)
     app.router.add_get("/guild/{guild_id}", guild_page)
+    app.router.add_get("/guild/{guild_id}/permissions", guild_permissions_page)
     app.router.add_get("/guild/{guild_id}/audit", guild_audit_page)
     app.router.add_get("/guild/{guild_id}/audit.csv", guild_audit_csv)
     app.router.add_get("/guild/{guild_id}/settings", guild_settings_page)
