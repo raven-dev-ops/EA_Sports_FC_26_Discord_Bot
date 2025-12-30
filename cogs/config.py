@@ -16,7 +16,7 @@ SAFE_CONFIG_FIELDS = {
     "interactions_endpoint_url",
     "test_mode",
     "role_broskie_id",
-    "role_super_league_coach_id",
+    "role_coach_id",
     "role_coach_premium_id",
     "role_coach_premium_plus_id",
     "channel_staff_portal_id",
@@ -27,6 +27,7 @@ SAFE_CONFIG_FIELDS = {
     "channel_roster_listing_id",
     "channel_recruit_listing_id",
     "channel_club_listing_id",
+    "channel_premium_coaches_id",
     "banlist_sheet_id",
     "banlist_range",
     "banlist_cache_ttl_seconds",
@@ -115,6 +116,13 @@ class ConfigCog(commands.Cog):
         if field not in SAFE_CONFIG_FIELDS:
             await interaction.response.send_message("Field not allowed or does not exist.", ephemeral=True)
             return
+        if field == "test_mode":
+            await interaction.response.send_message(
+                "Test mode is controlled via `TEST_MODE` in the environment; set it and restart the bot. "
+                "Use `/setup_channels` while test mode is enabled to create the staff monitor channel.",
+                ephemeral=True,
+            )
+            return
         # Update runtime settings on the bot object only (no persistence).
         settings = getattr(self.bot, "settings", None)
         if settings is None:
@@ -145,8 +153,6 @@ class ConfigCog(commands.Cog):
             return
         setattr(self.bot, "settings", new_settings)
         self.settings = new_settings
-        if field == "test_mode":
-            setattr(self.bot, "test_mode", bool(parsed))
         if field == "channel_staff_monitor_id":
             setattr(self.bot, "staff_monitor_channel_id", int(parsed) if parsed else None)
         await interaction.response.send_message(

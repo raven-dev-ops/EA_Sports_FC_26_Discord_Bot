@@ -16,6 +16,7 @@ from interactions.admin_portal import post_admin_portal
 from interactions.club_portal import post_club_portal
 from interactions.coach_portal import post_coach_portal
 from interactions.fc25_stats_modals import refresh_fc25_stats_for_user
+from interactions.premium_coaches_report import post_premium_coaches_report
 from interactions.recruit_portal import post_recruit_portal
 from migrations import apply_migrations
 from services.channel_setup_service import cleanup_staff_monitor_channel
@@ -202,6 +203,12 @@ class OffsideBot(commands.AutoShardedBot):
             logging.info("Posted club portal embed.")
         except Exception:
             logging.exception("Failed to post club portal.")
+        await asyncio.sleep(0.5)
+        try:
+            await post_premium_coaches_report(self)
+            logging.info("Posted premium coaches report embed.")
+        except Exception:
+            logging.exception("Failed to post premium coaches report.")
 
     async def _cleanup_test_mode_channels(self) -> None:
         if getattr(self, "test_mode", False):

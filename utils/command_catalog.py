@@ -50,7 +50,7 @@ COMMANDS: List[CommandInfo] = [
     CommandInfo(
         name="/setup_channels",
         category="Operations",
-        description="Create/update Offside categories + portal/listing channels in this guild.",
+        description="Create/update Offside categories, portal/listing channels, and coach roles in this guild.",
         permissions="Staff",
     ),
     CommandInfo(

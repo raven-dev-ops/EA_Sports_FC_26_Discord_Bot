@@ -11,7 +11,7 @@ from repositories.tournament_repo import (
     ensure_cycle_by_name,
     get_cycle_by_id,
 )
-from services.permission_service import resolve_roster_cap_from_settings
+from services.permission_service import resolve_roster_cap_for_guild
 from services.roster_service import (
     count_roster_players,
     get_roster_for_coach,
@@ -31,7 +31,11 @@ def build_roster_dashboard(
 
     roles = getattr(interaction.user, "roles", [])
     role_ids = [role.id for role in roles]
-    cap = resolve_roster_cap_from_settings(role_ids, settings)
+    cap = resolve_roster_cap_for_guild(
+        role_ids,
+        settings=settings,
+        guild_id=getattr(interaction.guild, "id", None),
+    )
 
     normalized_cycle_name = cycle_name.strip() if cycle_name else None
     cycle = get_cycle_by_id(cycle_id) if cycle_id is not None else None
@@ -62,10 +66,10 @@ def build_roster_dashboard(
 
     if cap is None and not has_roster:
         logging.warning(
-            "Roster eligibility failed for user %s roles=%s (expected: super=%s, premium=%s, premium_plus=%s)",
+            "Roster eligibility failed for user %s roles=%s (expected: coach=%s, premium=%s, premium_plus=%s)",
             interaction.user.id if interaction.user else "unknown",
             role_ids,
-            settings.role_super_league_coach_id,
+            getattr(settings, "role_coach_id", None),
             settings.role_coach_premium_id,
             settings.role_coach_premium_plus_id,
         )

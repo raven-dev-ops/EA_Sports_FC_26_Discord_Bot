@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.15] - 2025-12-30
+
+### Added
+- `/setup_channels` now also ensures coach roles (`Coach`, `Coach Premium`, `Coach Premium+`) and stores per-guild role IDs in Mongo.
+- Offside Reports: `premium-coaches` channel and an auto-updating Premium Coaches embed (roster name, openings, practice times).
+- Roster dashboard: Practice Times button + modal; premium listings refresh on roster changes.
+
+### Changed
+- Coach role IDs are no longer required env vars; `ROLE_COACH_ID` (or legacy `ROLE_SUPER_LEAGUE_COACH_ID`) is supported as an optional override.
+- Added optional `CHANNEL_PREMIUM_COACHES_ID` env override (primary source remains per-guild config written by `/setup_channels`).
+
 ## [0.2.14] - 2025-12-29
 
 ### Fixed

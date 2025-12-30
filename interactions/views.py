@@ -7,6 +7,7 @@ import discord
 from interactions.modals import (
     AddPlayerModal,
     CreateRosterModal,
+    PracticeTimesModal,
     RemovePlayerModal,
     RenameRosterModal,
 )
@@ -141,6 +142,14 @@ class RosterDashboardView(SafeView):
         setattr(rename_button, "callback", self.on_rename_team)
         self.add_item(rename_button)
 
+        practice_button: discord.ui.Button = discord.ui.Button(
+            label="Practice Times",
+            style=discord.ButtonStyle.secondary,
+            disabled=not has_roster,
+        )
+        setattr(practice_button, "callback", self.on_practice_times)
+        self.add_item(practice_button)
+
     async def on_create_roster(self, interaction: discord.Interaction) -> None:
         await interaction.response.send_modal(CreateRosterModal(cycle_id=self.cycle_id))
 
@@ -268,6 +277,15 @@ class RosterDashboardView(SafeView):
             )
             return
         await interaction.response.send_modal(RenameRosterModal(roster_id=self.roster_id))
+
+    async def on_practice_times(self, interaction: discord.Interaction) -> None:
+        if self.roster_id is None:
+            await interaction.response.send_message(
+                "Roster not found. Please open the dashboard again.",
+                ephemeral=True,
+            )
+            return
+        await interaction.response.send_modal(PracticeTimesModal(roster_id=self.roster_id))
 
 
 class RosterPlayerSearchView(SafeView):

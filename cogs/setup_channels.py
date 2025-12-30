@@ -6,6 +6,7 @@ from discord.ext import commands
 
 from services.channel_setup_service import ensure_offside_channels
 from services.guild_config_service import get_guild_config, set_guild_config
+from services.role_setup_service import ensure_offside_roles
 from utils.permissions import is_staff_user
 
 
@@ -16,7 +17,7 @@ class SetupChannelsCog(commands.Cog):
 
     @app_commands.command(
         name="setup_channels",
-        description="Create/update Offside categories + channels for this guild (staff only).",
+        description="Create/update Offside categories, channels, and coach roles for this guild (staff only).",
     )
     async def setup_channels(self, interaction: discord.Interaction) -> None:
         settings = getattr(interaction.client, "settings", None)
@@ -58,6 +59,11 @@ class SetupChannelsCog(commands.Cog):
             existing_config=existing,
             test_mode=test_mode,
         )
+        updated = await ensure_offside_roles(
+            guild,
+            existing_config=updated,
+            actions=actions,
+        )
         set_guild_config(guild.id, updated)
 
         staff_monitor_id = updated.get("channel_staff_monitor_id")
@@ -86,10 +92,24 @@ class SetupChannelsCog(commands.Cog):
             "channel_roster_listing_id",
             "channel_recruit_listing_id",
             "channel_club_listing_id",
+            "channel_premium_coaches_id",
         ):
             value = updated.get(key)
             if isinstance(value, int):
                 lines.append(f"- {key}: <#{value}>")
+            else:
+                lines.append(f"- {key}: {value}")
+
+        lines.append("")
+        lines.append("Stored role IDs:")
+        for key in (
+            "role_coach_id",
+            "role_coach_premium_id",
+            "role_coach_premium_plus_id",
+        ):
+            value = updated.get(key)
+            if isinstance(value, int):
+                lines.append(f"- {key}: <@&{value}>")
             else:
                 lines.append(f"- {key}: {value}")
 

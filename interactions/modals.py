@@ -8,11 +8,12 @@ from zoneinfo import ZoneInfo
 import discord
 
 from interactions.club_posts import upsert_club_ad_posts
+from interactions.premium_coaches_report import upsert_premium_coaches_report
 from interactions.recruit_posts import upsert_recruit_profile_posts
 from repositories.tournament_repo import ensure_cycle_by_name
 from services.banlist_service import get_ban_reason
 from services.clubs_service import update_club_ad_posts, upsert_club_ad
-from services.permission_service import resolve_roster_cap_from_settings
+from services.permission_service import resolve_roster_cap_for_guild
 from services.recruitment_service import (
     recruit_profile_is_listing_ready,
     update_recruit_profile_posts,
@@ -26,6 +27,7 @@ from services.roster_service import (
     get_roster_for_coach,
     remove_player,
     roster_is_locked,
+    update_practice_times,
     update_roster_name,
 )
 from utils.cooldowns import Cooldown
@@ -86,7 +88,11 @@ class CreateRosterModal(SafeModal, title="Create Roster"):
 
         roles = getattr(interaction.user, "roles", [])
         role_ids = [role.id for role in roles]
-        cap = resolve_roster_cap_from_settings(role_ids, settings)
+        cap = resolve_roster_cap_for_guild(
+            role_ids,
+            settings=settings,
+            guild_id=getattr(interaction.guild, "id", None),
+        )
         if cap is None:
             await interaction.response.send_message(
                 "You are not eligible to create a roster.", ephemeral=True
@@ -132,6 +138,15 @@ class CreateRosterModal(SafeModal, title="Create Roster"):
         await interaction.response.send_message(
             "Roster created.", embed=embed, view=view, ephemeral=True
         )
+
+        if cap in {22, 25} and interaction.guild is not None:
+            test_mode = bool(getattr(interaction.client, "test_mode", False))
+            await upsert_premium_coaches_report(
+                interaction.client,
+                settings=settings,
+                guild_id=interaction.guild.id,
+                test_mode=test_mode,
+            )
 
 
 class AddPlayerModal(SafeModal, title="Add Player"):
@@ -220,6 +235,20 @@ class AddPlayerModal(SafeModal, title="Add Player"):
             ephemeral=True,
         )
 
+        cap_value = roster.get("cap")
+        if (
+            interaction.guild is not None
+            and isinstance(cap_value, int)
+            and cap_value in {22, 25}
+        ):
+            test_mode = bool(getattr(interaction.client, "test_mode", False))
+            await upsert_premium_coaches_report(
+                interaction.client,
+                settings=settings,
+                guild_id=interaction.guild.id,
+                test_mode=test_mode,
+            )
+
 
 class RemovePlayerModal(SafeModal, title="Remove Player"):
     def __init__(self, *, roster_id: Any) -> None:
@@ -237,6 +266,13 @@ class RemovePlayerModal(SafeModal, title="Remove Player"):
             await interaction.response.send_message(
                 "Roster not found. Please open the dashboard again.",
                 ephemeral=True,
+            )
+            return
+
+        settings = getattr(interaction.client, "settings", None)
+        if settings is None:
+            await interaction.response.send_message(
+                "Bot configuration is not loaded.", ephemeral=True
             )
             return
 
@@ -273,6 +309,20 @@ class RemovePlayerModal(SafeModal, title="Remove Player"):
             ephemeral=True,
         )
 
+        cap_value = roster.get("cap")
+        if (
+            interaction.guild is not None
+            and isinstance(cap_value, int)
+            and cap_value in {22, 25}
+        ):
+            test_mode = bool(getattr(interaction.client, "test_mode", False))
+            await upsert_premium_coaches_report(
+                interaction.client,
+                settings=settings,
+                guild_id=interaction.guild.id,
+                test_mode=test_mode,
+            )
+
 
 class RenameRosterModal(SafeModal, title="Edit Team Name"):
     def __init__(self, *, roster_id: Any) -> None:
@@ -295,6 +345,13 @@ class RenameRosterModal(SafeModal, title="Edit Team Name"):
             )
             return
 
+        settings = getattr(interaction.client, "settings", None)
+        if settings is None:
+            await interaction.response.send_message(
+                "Bot configuration is not loaded.", ephemeral=True
+            )
+            return
+
         if roster_is_locked(roster):
             await interaction.response.send_message(
                 "This roster is locked and cannot be edited.",
@@ -314,6 +371,85 @@ class RenameRosterModal(SafeModal, title="Edit Team Name"):
         await interaction.response.send_message(
             f"Team name updated to **{name}**.", ephemeral=True
         )
+
+        cap_value = roster.get("cap")
+        if (
+            interaction.guild is not None
+            and isinstance(cap_value, int)
+            and cap_value in {22, 25}
+        ):
+            test_mode = bool(getattr(interaction.client, "test_mode", False))
+            await upsert_premium_coaches_report(
+                interaction.client,
+                settings=settings,
+                guild_id=interaction.guild.id,
+                test_mode=test_mode,
+            )
+
+
+class PracticeTimesModal(SafeModal, title="Practice Times"):
+    def __init__(self, *, roster_id: Any) -> None:
+        super().__init__()
+        self.roster_id = roster_id
+        roster = get_roster_by_id(self.roster_id)
+        if roster is None:
+            return
+        existing = roster.get("practice_times")
+        if isinstance(existing, str) and existing.strip():
+            self.practice_times.default = existing.strip()
+
+    practice_times: discord.ui.TextInput = discord.ui.TextInput(
+        label="Practice times (optional)",
+        required=False,
+        style=discord.TextStyle.paragraph,
+        max_length=200,
+        placeholder="e.g., Tue/Thu 8-10pm ET",
+    )
+
+    async def on_submit(self, interaction: discord.Interaction) -> None:
+        roster = get_roster_by_id(self.roster_id)
+        if roster is None:
+            await interaction.response.send_message(
+                "Roster not found. Please open the dashboard again.",
+                ephemeral=True,
+            )
+            return
+
+        settings = getattr(interaction.client, "settings", None)
+        if settings is None:
+            await interaction.response.send_message(
+                "Bot configuration is not loaded.", ephemeral=True
+            )
+            return
+
+        raw_value = self.practice_times.value.strip()
+        value = None
+        if raw_value:
+            try:
+                value = ensure_safe_text(raw_value, max_length=200)
+            except ValueError as exc:
+                await interaction.response.send_message(str(exc), ephemeral=True)
+                return
+
+        update_practice_times(self.roster_id, value)
+        await interaction.response.send_message(
+            "Practice times updated." if value else "Practice times cleared.",
+            ephemeral=True,
+        )
+
+        cap_value = roster.get("cap")
+        if (
+            interaction.guild is not None
+            and isinstance(cap_value, int)
+            and cap_value in {22, 25}
+        ):
+            test_mode = bool(getattr(interaction.client, "test_mode", False))
+            await upsert_premium_coaches_report(
+                interaction.client,
+                settings=settings,
+                guild_id=interaction.guild.id,
+                test_mode=test_mode,
+            )
 
 
 class RecruitProfileModalStep1(SafeModal, title="Recruit Profile (1/2)"):

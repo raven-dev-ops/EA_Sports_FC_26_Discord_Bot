@@ -15,10 +15,10 @@ class Settings:
     discord_public_key: str | None
     interactions_endpoint_url: str | None
     test_mode: bool
-    role_broskie_id: int
-    role_super_league_coach_id: int
-    role_coach_premium_id: int
-    role_coach_premium_plus_id: int
+    role_broskie_id: int | None
+    role_coach_id: int | None
+    role_coach_premium_id: int | None
+    role_coach_premium_plus_id: int | None
     channel_staff_portal_id: int | None
     channel_club_portal_id: int | None
     channel_coach_portal_id: int | None
@@ -27,6 +27,7 @@ class Settings:
     channel_roster_listing_id: int | None
     channel_recruit_listing_id: int | None
     channel_club_listing_id: int | None
+    channel_premium_coaches_id: int | None
     staff_role_ids: set[int]
     mongodb_uri: str | None
     mongodb_db_name: str | None
@@ -138,15 +139,6 @@ def load_settings() -> Settings:
     discord_token = _required_str(constants.DISCORD_TOKEN_ENV, missing)
     discord_application_id = _required_int(constants.DISCORD_APPLICATION_ID_ENV, missing, invalid)
 
-    role_broskie_id = _required_int(constants.ROLE_BROSKIE_ID_ENV, missing, invalid)
-    role_super_league_coach_id = _required_int(
-        constants.ROLE_SUPER_LEAGUE_COACH_ID_ENV, missing, invalid
-    )
-    role_coach_premium_id = _required_int(constants.ROLE_COACH_PREMIUM_ID_ENV, missing, invalid)
-    role_coach_premium_plus_id = _required_int(
-        constants.ROLE_COACH_PREMIUM_PLUS_ID_ENV, missing, invalid
-    )
-
     if missing or invalid:
         details = []
         if missing:
@@ -173,6 +165,7 @@ def load_settings() -> Settings:
         channel_roster_listing_id = _optional_int(constants.CHANNEL_ROSTER_PORTAL_ID_ENV)
     channel_recruit_listing_id = _optional_int(constants.CHANNEL_RECRUIT_LISTING_ID_ENV)
     channel_club_listing_id = _optional_int(constants.CHANNEL_CLUB_LISTING_ID_ENV)
+    channel_premium_coaches_id = _optional_int(constants.CHANNEL_PREMIUM_COACHES_ID_ENV)
 
     fc25_stats_cache_ttl_seconds = _optional_int_default(
         constants.FC25_STATS_CACHE_TTL_SECONDS_ENV, default=900
@@ -197,6 +190,13 @@ def load_settings() -> Settings:
     if fc25_stats_rate_limit_per_guild <= 0:
         raise RuntimeError("FC25_STATS_RATE_LIMIT_PER_GUILD must be > 0.")
 
+    role_broskie_id = _optional_int(constants.ROLE_BROSKIE_ID_ENV)
+    role_coach_id = _optional_int(constants.ROLE_COACH_ID_ENV) or _optional_int(
+        constants.ROLE_SUPER_LEAGUE_COACH_ID_ENV
+    )
+    role_coach_premium_id = _optional_int(constants.ROLE_COACH_PREMIUM_ID_ENV)
+    role_coach_premium_plus_id = _optional_int(constants.ROLE_COACH_PREMIUM_PLUS_ID_ENV)
+
     return Settings(
         discord_token=discord_token,
         discord_application_id=discord_application_id,
@@ -205,7 +205,7 @@ def load_settings() -> Settings:
         interactions_endpoint_url=_optional_str(constants.DISCORD_INTERACTIONS_ENDPOINT_URL_ENV),
         test_mode=test_mode,
         role_broskie_id=role_broskie_id,
-        role_super_league_coach_id=role_super_league_coach_id,
+        role_coach_id=role_coach_id,
         role_coach_premium_id=role_coach_premium_id,
         role_coach_premium_plus_id=role_coach_premium_plus_id,
         channel_staff_portal_id=channel_staff_portal_id,
@@ -216,6 +216,7 @@ def load_settings() -> Settings:
         channel_roster_listing_id=channel_roster_listing_id,
         channel_recruit_listing_id=channel_recruit_listing_id,
         channel_club_listing_id=channel_club_listing_id,
+        channel_premium_coaches_id=channel_premium_coaches_id,
         staff_role_ids=staff_role_ids,
         mongodb_uri=_optional_str(constants.MONGODB_URI_ENV),
         mongodb_db_name=_optional_str(constants.MONGODB_DB_NAME_ENV),
@@ -266,10 +267,11 @@ def summarize_settings(settings: Settings) -> dict[str, object]:
             "roster_listing": settings.channel_roster_listing_id,
             "recruit_listing": settings.channel_recruit_listing_id,
             "club_listing": settings.channel_club_listing_id,
+            "premium_coaches": settings.channel_premium_coaches_id,
         },
         "roles": {
             "broskie": settings.role_broskie_id,
-            "super_league_coach": settings.role_super_league_coach_id,
+            "coach": settings.role_coach_id,
             "coach_premium": settings.role_coach_premium_id,
             "coach_premium_plus": settings.role_coach_premium_plus_id,
             "staff_roles_defined": bool(settings.staff_role_ids),

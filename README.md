@@ -5,9 +5,9 @@ Roster management and staff review bot for Discord tournaments.
 ## Getting Started (Tournament Operators)
 
 1. Set up Discord channels and roles:
-   - Create required roles (Broskie, Super League Coach, Coach Premium, Coach Premium Plus) and staff roles.
-   - Invite the bot with permissions to manage channels, send messages, and use slash commands.
-   - Run `/setup_channels` once per guild to create the `--OFFSIDE DASHBOARD--` and `--OFFSIDE REPORTS--` layout.
+   - Invite the bot with permissions to manage channels/roles, send messages, read message history, and use slash commands.
+   - Run `/setup_channels` once per guild to create the `--OFFSIDE DASHBOARD--` and `--OFFSIDE REPORTS--` layout and the coach roles (`Coach`, `Coach Premium`, `Coach Premium+`).
+   - Assign the coach roles to your coaches (premium tiers control roster caps).
 2. Configure the bot:
    - Copy `.env.example` to `.env` and fill in the required IDs and tokens.
    - Keep `TEST_MODE=true` while validating in a staging guild (routes all portal/listing posts + forwarded logs to the staff monitor channel).
@@ -21,6 +21,7 @@ Roster management and staff review bot for Discord tournaments.
 - Ephemeral roster workflow with role-based caps and min-8 submission rule; identity checks enforce no duplicates and required player fields.
 - Staff review with approve/reject/unlock; decisions DM coaches with reasons; staff cards cleaned after action.
 - Portals auto-post on startup: coach portal (dashboard/help), staff portal (controls/review), roster portal (approved only); bot cleans prior portal embeds before posting new ones.
+- Premium coaches report channel auto-updates with roster name, openings, and practice times.
 - Audit trail for staff actions; unlock clears stale submissions for resubmission.
 - Tournament scaffold with staff-only commands, bracket preview/publish, match/dispute flows, and leaderboard stats.
 - Optional Google Sheets ban list checks.
@@ -41,7 +42,7 @@ Roster management and staff review bot for Discord tournaments.
 
 ### Dashboard embeds & buttons
 - Coach portal: intro embed + roster portal embed. Buttons open the roster dashboard (add/remove/view/submit, rename) and coach help. Responses are ephemeral; portal is idempotent and cleans prior portal embeds.
-- Staff portal: intro embed + admin control panel. Buttons for Bot Controls (test mode, ping), Tournaments (quick reference), Coaches/Rosters (unlock guidance, review tips), Players (ban list note), DB/Analytics (schema/index info). Staff actions are ephemeral; the submission review message is cleaned after approve/reject.
+- Staff portal: intro embed + admin control panel. Buttons for Tournaments (quick reference), Coaches/Rosters (unlock guidance, review tips), Players (ban list note), DB/Analytics (schema/index info), and Delete Roster (admin-only). Staff actions are ephemeral; the submission review message is cleaned after approve/reject.
 - Roster portal: receives approved roster embeds only; staff review/decision happens in the staff portal, not here.
 - Help command: `/help` returns an embed with coach/staff/tournament/ops categories and submission steps; all responses are ephemeral.
 
@@ -89,10 +90,6 @@ Use `.env.example` as the template for your `.env`. Required fields are listed b
 Required (startup):
 - `DISCORD_TOKEN`
 - `DISCORD_APPLICATION_ID`
-- `ROLE_BROSKIE_ID`
-- `ROLE_SUPER_LEAGUE_COACH_ID`
-- `ROLE_COACH_PREMIUM_ID`
-- `ROLE_COACH_PREMIUM_PLUS_ID`
 
 Required for persistence:
 - `MONGODB_URI`
@@ -102,11 +99,15 @@ Required for persistence:
 Optional:
 - `STAFF_ROLE_IDS` (comma-separated role IDs)
 - `TEST_MODE` (defaults to `true`, set `false` for production)
+- Role env overrides (optional; primary source is per-guild config written by `/setup_channels`):
+  - `ROLE_COACH_ID` (or legacy `ROLE_SUPER_LEAGUE_COACH_ID`)
+  - `ROLE_COACH_PREMIUM_ID`
+  - `ROLE_COACH_PREMIUM_PLUS_ID`
 - Channel env overrides (optional; primary source is per-guild config written by `/setup_channels`):
   - `CHANNEL_STAFF_PORTAL_ID`, `CHANNEL_CLUB_PORTAL_ID`, `CHANNEL_COACH_PORTAL_ID`, `CHANNEL_RECRUIT_PORTAL_ID`
   - `CHANNEL_STAFF_MONITOR_ID` (test-mode sink)
   - `CHANNEL_ROSTER_LISTING_ID` (fallback to legacy `CHANNEL_ROSTER_PORTAL_ID`)
-  - `CHANNEL_RECRUIT_LISTING_ID`, `CHANNEL_CLUB_LISTING_ID`
+  - `CHANNEL_RECRUIT_LISTING_ID`, `CHANNEL_CLUB_LISTING_ID`, `CHANNEL_PREMIUM_COACHES_ID`
 - `DISCORD_CLIENT_ID`
 - `DISCORD_PUBLIC_KEY`
 - `DISCORD_INTERACTIONS_ENDPOINT_URL`

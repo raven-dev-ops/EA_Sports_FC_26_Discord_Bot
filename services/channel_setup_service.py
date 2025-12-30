@@ -18,6 +18,7 @@ STAFF_MONITOR_CHANNEL_NAME = "staff-monitor"
 ROSTER_LISTING_CHANNEL_NAME = "roster-listing"
 RECRUIT_LISTING_CHANNEL_NAME = "recruit-listing"
 CLUB_LISTING_CHANNEL_NAME = "club-listing"
+PREMIUM_COACHES_CHANNEL_NAME = "premium-coaches"
 
 STAFF_MONITOR_MANAGED_KEY = "channel_staff_monitor_managed"
 
@@ -149,12 +150,21 @@ async def ensure_offside_channels(
         existing_channel_id=_parse_int(config.get("channel_club_listing_id")),
         actions=actions,
     )
+    premium_coaches = await _ensure_text_channel(
+        guild,
+        category=reports_category,
+        name=PREMIUM_COACHES_CHANNEL_NAME,
+        overwrites=_public_readonly_overwrites(guild, staff_roles, bot_member),
+        existing_channel_id=_parse_int(config.get("channel_premium_coaches_id")),
+        actions=actions,
+    )
 
-    reports_channels.extend([roster_listing, recruit_listing, club_listing])
+    reports_channels.extend([roster_listing, recruit_listing, club_listing, premium_coaches])
 
     config["channel_roster_listing_id"] = roster_listing.id
     config["channel_recruit_listing_id"] = recruit_listing.id
     config["channel_club_listing_id"] = club_listing.id
+    config["channel_premium_coaches_id"] = premium_coaches.id
 
     await _order_under_category(
         dashboard_category,

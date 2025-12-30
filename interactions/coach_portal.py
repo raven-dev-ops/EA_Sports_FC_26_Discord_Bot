@@ -43,7 +43,7 @@ def build_coach_intro_embed() -> discord.Embed:
     embed = discord.Embed(
         title="Coach Portal Overview",
         description=(
-            "@Super League Coach\n"
+            "@Coach\n"
             "@Coach Premium @Coach Premium+\n\n"
             "Coaches, welcome to the Offside Bot Portal\n\n"
             "This portal is the official system used for signing players and submitting your team roster. "
@@ -52,8 +52,8 @@ def build_coach_intro_embed() -> discord.Embed:
             "and edit your team name. All players must be added using their correct player DISCORD ID copied from their profile. "
             "The roster name must exactly match the team name that was assigned to you by staff; no extra words, symbols, or changes are allowed.\n\n"
             "**Roster Requirements & Limits**\n"
-            "A minimum of 8 players is required in order to submit a roster. Super League coaches are permitted to sign up to 16 players. "
-            "Coaches with a Premium membership may sign up to 22 players, while Premium Plus coaches may sign up to 25 players. "
+            "A minimum of 8 players is required in order to submit a roster. Coaches are permitted to sign up to 16 players. "
+            "Coaches with a Premium membership may sign up to 22 players, while Premium+ coaches may sign up to 25 players. "
             "It is the coach’s responsibility to ensure their roster does not exceed these limits.\n\n"
             "🚨 **Submission & Approval Process**\n"
             "Once your roster is complete, you may submit it. Each team is allowed one initial submission. After submission, a staff member will review your roster. "
@@ -62,7 +62,9 @@ def build_coach_intro_embed() -> discord.Embed:
             "✅ **Resubmission & Finalization**\n"
             "If your roster is rejected, review the feedback carefully, then go to your team’s ticket and ping the staff member who declined your roster. "
             "That staff member will unlock your roster, allowing you to make the required changes and submit again. After resubmission, wait for approval. "
-            "Once your roster is approved, it is finalized and cannot be changed under the roster lock date, which will be announced below this message."
+            "Once your roster is approved, it is finalized and cannot be changed under the roster lock date, which will be announced below this message.\n\n"
+            "📣 **Premium Coach Listings**\n"
+            "Premium coaches can set Practice Times from the roster dashboard to keep the #premium-coaches report up to date."
         ),
         color=discord.Color.orange(),
     )

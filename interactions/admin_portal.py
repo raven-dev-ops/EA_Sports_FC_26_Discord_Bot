@@ -5,6 +5,7 @@ import logging
 import discord
 from discord.ext import commands
 
+from interactions.premium_coaches_report import upsert_premium_coaches_report
 from interactions.views import SafeView
 from repositories.tournament_repo import ensure_cycle_by_name
 from services.roster_service import (
@@ -82,11 +83,6 @@ def build_admin_embed() -> discord.Embed:
             "and command references. All responses are ephemeral to you."
         ),
         color=discord.Color.blue(),
-    )
-    embed.add_field(
-        name="Bot Controls",
-        value="Toggle test mode, health checks.",
-        inline=False,
     )
     embed.add_field(
         name="Tournaments",
@@ -571,6 +567,22 @@ class DeleteRosterModal(discord.ui.Modal, title="Delete Roster"):
             f"Roster deleted for coach <@{coach_id}>.",
             ephemeral=True,
         )
+
+        cap_value = roster.get("cap")
+        settings = getattr(interaction.client, "settings", None)
+        if (
+            settings is not None
+            and interaction.guild is not None
+            and isinstance(cap_value, int)
+            and cap_value in {22, 25}
+        ):
+            test_mode = bool(getattr(interaction.client, "test_mode", False))
+            await upsert_premium_coaches_report(
+                interaction.client,
+                settings=settings,
+                guild_id=interaction.guild.id,
+                test_mode=test_mode,
+            )
 
 
 class UnlockRosterModal(discord.ui.Modal, title="Unlock Roster"):

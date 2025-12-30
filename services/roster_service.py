@@ -83,6 +83,7 @@ def create_roster(
         "cycle_id": cycle["_id"],
         "coach_discord_id": coach_discord_id,
         "team_name": team_name,
+        "practice_times": None,
         "cap": cap,
         "status": ROSTER_STATUS_DRAFT,
         "created_at": now,
@@ -267,4 +268,19 @@ def update_roster_name(
     collection.update_one(
         {"record_type": "team_roster", "_id": roster_id},
         {"$set": {"team_name": team_name, "updated_at": now}},
+    )
+
+
+def update_practice_times(
+    roster_id: Any,
+    practice_times: str | None,
+    *,
+    collection: Collection | None = None,
+) -> None:
+    if collection is None:
+        collection = get_collection()
+    now = datetime.now(timezone.utc)
+    collection.update_one(
+        {"record_type": "team_roster", "_id": roster_id},
+        {"$set": {"practice_times": practice_times, "updated_at": now}},
     )

@@ -40,7 +40,7 @@
 
 ### /setup_channels
 
-- Description: Create/update Offside categories + portal/listing channels in this guild.
+- Description: Create/update Offside categories, portal/listing channels, and coach roles in this guild.
 - Permissions: Staff
 
 ### /ping
