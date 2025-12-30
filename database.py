@@ -21,6 +21,11 @@ DEFAULT_DB_NAME = "OffsideDiscordBot"
 # One collection per record type (recommended). We keep the record_type field in documents for
 # backward compatibility and easier debugging, but physical separation makes indexes simpler.
 COLLECTION_BY_RECORD_TYPE: dict[str, str] = {
+    "coach": "coaches",
+    "manager": "managers",
+    "player": "players",
+    "league": "leagues",
+    "stat": "stats",
     "guild_settings": "guild_settings",
     "tournament_cycle": "tournament_cycles",
     "team_roster": "team_rosters",
@@ -171,6 +176,45 @@ def ensure_indexes(collection: Collection) -> list[str]:
     indexes.append(collection.create_index([("record_type", 1)]))
     indexes.append(
         collection.create_index(
+            [("record_type", 1), ("guild_id", 1), ("user_id", 1)],
+            unique=True,
+            name="uniq_coach",
+            partialFilterExpression={"record_type": "coach"},
+        )
+    )
+    indexes.append(
+        collection.create_index(
+            [("record_type", 1), ("guild_id", 1), ("user_id", 1)],
+            unique=True,
+            name="uniq_manager",
+            partialFilterExpression={"record_type": "manager"},
+        )
+    )
+    indexes.append(
+        collection.create_index(
+            [("record_type", 1), ("guild_id", 1), ("user_id", 1)],
+            unique=True,
+            name="uniq_player",
+            partialFilterExpression={"record_type": "player"},
+        )
+    )
+    indexes.append(
+        collection.create_index(
+            [("record_type", 1), ("guild_id", 1), ("name", 1)],
+            unique=True,
+            name="uniq_league",
+            partialFilterExpression={"record_type": "league"},
+        )
+    )
+    indexes.append(
+        collection.create_index(
+            [("record_type", 1), ("guild_id", 1), ("type", 1), ("created_at", -1)],
+            name="idx_stats",
+            partialFilterExpression={"record_type": "stat"},
+        )
+    )
+    indexes.append(
+        collection.create_index(
             [("record_type", 1), ("cycle_id", 1), ("coach_discord_id", 1)],
             unique=True,
             name="uniq_roster_by_coach",
@@ -262,6 +306,41 @@ def ensure_offside_indexes(db: Database) -> list[str]:
     Create/update indexes for the recommended multi-collection schema.
     """
     indexes: list[str] = []
+
+    coaches = db[COLLECTION_BY_RECORD_TYPE["coach"]]
+    indexes.append(
+        coaches.create_index(
+            [("guild_id", 1), ("user_id", 1)],
+            unique=True,
+            name="uniq_coach",
+        )
+    )
+    managers = db[COLLECTION_BY_RECORD_TYPE["manager"]]
+    indexes.append(
+        managers.create_index(
+            [("guild_id", 1), ("user_id", 1)],
+            unique=True,
+            name="uniq_manager",
+        )
+    )
+    players = db[COLLECTION_BY_RECORD_TYPE["player"]]
+    indexes.append(
+        players.create_index(
+            [("guild_id", 1), ("user_id", 1)],
+            unique=True,
+            name="uniq_player",
+        )
+    )
+    leagues = db[COLLECTION_BY_RECORD_TYPE["league"]]
+    indexes.append(
+        leagues.create_index(
+            [("guild_id", 1), ("name", 1)],
+            unique=True,
+            name="uniq_league",
+        )
+    )
+    stats = db[COLLECTION_BY_RECORD_TYPE["stat"]]
+    indexes.append(stats.create_index([("guild_id", 1), ("type", 1), ("created_at", -1)], name="idx_stats"))
 
     guild_settings = db[COLLECTION_BY_RECORD_TYPE["guild_settings"]]
     indexes.append(guild_settings.create_index([("guild_id", 1)], unique=True, name="uniq_guild_settings"))

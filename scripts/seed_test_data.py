@@ -152,6 +152,11 @@ def main() -> None:
     now = datetime.now(timezone.utc)
 
     collections: dict[str, Any] = {
+        "coaches": get_collection(settings, record_type="coach", guild_id=guild_id),
+        "managers": get_collection(settings, record_type="manager", guild_id=guild_id),
+        "players": get_collection(settings, record_type="player", guild_id=guild_id),
+        "leagues": get_collection(settings, record_type="league", guild_id=guild_id),
+        "stats": get_collection(settings, record_type="stat", guild_id=guild_id),
         "guild_settings": get_collection(settings, record_type="guild_settings", guild_id=guild_id),
         "tournament_cycles": get_collection(settings, record_type="tournament_cycle", guild_id=guild_id),
         "team_rosters": get_collection(settings, record_type="team_roster", guild_id=guild_id),
@@ -358,6 +363,112 @@ def main() -> None:
                 filter_doc={"record_type": "roster_audit", "seed_tag": seed_tag, "seed_key": audit_doc["seed_key"]},
                 doc=audit_doc,
             )
+
+    # --- coaches / managers / players / leagues / stats ---
+    coaches_col = collections["coaches"]
+    managers_col = collections["managers"]
+    players_col = collections["players"]
+    leagues_col = collections["leagues"]
+    stats_col = collections["stats"]
+
+    manager_doc = {
+        "record_type": "manager",
+        "guild_id": guild_id,
+        "user_id": seed_staff_id,
+        "display_name": "Seed Staff",
+        "username": "seed_staff#0001",
+        "created_at": now - timedelta(days=30),
+        "updated_at": now,
+        "seed_tag": seed_tag,
+    }
+    _replace_one(
+        managers_col,
+        filter_doc={"record_type": "manager", "guild_id": guild_id, "user_id": seed_staff_id},
+        doc=manager_doc,
+    )
+
+    for roster in roster_docs:
+        coach_id = roster.get("coach_discord_id")
+        if not isinstance(coach_id, int):
+            continue
+        cap = int(roster.get("cap") or 0)
+        tier = "premium_plus" if cap >= 25 else "premium" if cap >= 22 else "standard"
+        coach_doc = {
+            "record_type": "coach",
+            "guild_id": guild_id,
+            "user_id": coach_id,
+            "tier": tier,
+            "cap": cap,
+            "team_name": roster.get("team_name"),
+            "practice_times": roster.get("practice_times"),
+            "active_roster_id": roster.get("_id"),
+            "created_at": now - timedelta(days=7),
+            "updated_at": now,
+            "seed_tag": seed_tag,
+        }
+        _replace_one(
+            coaches_col,
+            filter_doc={"record_type": "coach", "guild_id": guild_id, "user_id": coach_id},
+            doc=coach_doc,
+        )
+
+    for player in roster_players_col.find({"record_type": "roster_player", "seed_tag": seed_tag}):
+        user_id = player.get("player_discord_id")
+        if not isinstance(user_id, int):
+            continue
+        player_doc = {
+            "record_type": "player",
+            "guild_id": guild_id,
+            "user_id": user_id,
+            "gamertag": player.get("gamertag"),
+            "ea_id": player.get("ea_id"),
+            "console": player.get("console"),
+            "created_at": now - timedelta(days=14),
+            "updated_at": now,
+            "seed_tag": seed_tag,
+        }
+        _replace_one(
+            players_col,
+            filter_doc={"record_type": "player", "guild_id": guild_id, "user_id": user_id},
+            doc=player_doc,
+        )
+
+    league_name = f"[SEED:{seed_tag}] Offside League"
+    league_doc = {
+        "record_type": "league",
+        "guild_id": guild_id,
+        "name": league_name,
+        "season": "2025",
+        "created_at": now - timedelta(days=10),
+        "updated_at": now,
+        "seed_tag": seed_tag,
+    }
+    _replace_one(
+        leagues_col,
+        filter_doc={"record_type": "league", "guild_id": guild_id, "name": league_name},
+        doc=league_doc,
+    )
+
+    stat_events = [
+        ("seed_run", {"tag": seed_tag}),
+        ("rosters_seeded", {"count": len(roster_docs)}),
+        ("players_seeded", {"count": roster_players_col.count_documents({"seed_tag": seed_tag})}),
+    ]
+    for idx, (event_type, payload) in enumerate(stat_events, start=1):
+        stat_doc = {
+            "record_type": "stat",
+            "guild_id": guild_id,
+            "type": event_type,
+            "payload": payload,
+            "created_at": now - timedelta(minutes=idx),
+            "seed_tag": seed_tag,
+            "seed_key": f"stat:{event_type}",
+        }
+        _replace_one(
+            stats_col,
+            filter_doc={"record_type": "stat", "seed_tag": seed_tag, "seed_key": stat_doc["seed_key"]},
+            doc=stat_doc,
+        )
 
     # --- recruit_profiles ---
     recruits_col = collections["recruit_profiles"]
