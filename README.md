@@ -176,7 +176,7 @@ staff monitor channel (`channel_staff_monitor_id`) only.
 - Type check: `mypy .`
 - Tests: `python -m pytest`
 - Seed demo data: `python -m scripts.seed_test_data --env-file .env --collection Isaac_Elera --guild-id <id> --purge`
-- Dashboard (optional): `python -m offside_bot.dashboard` (requires `DISCORD_CLIENT_SECRET` and `DASHBOARD_REDIRECT_URI`)
+- Dashboard (optional): `python -m offside_bot.dashboard` (requires `DISCORD_CLIENT_SECRET`, `DASHBOARD_REDIRECT_URI`, and `MONGODB_URI` for durable sessions)
 - Register commands: `python -m scripts.register_commands --guild <id>` during dev; use `--global` for production sync after validation.
 - Logging: structured key/value logging with command context (guild/channel/user/command); set `LOG_LEVEL=DEBUG` for verbose output in staging.
 - Signals & shutdown: SIGTERM/SIGINT trigger a graceful shutdown and close the Mongo client; Discord backoff helpers use timeouts and honor `retry_after`.

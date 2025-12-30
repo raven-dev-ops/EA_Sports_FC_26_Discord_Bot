@@ -5,11 +5,15 @@ import secrets
 import time
 import urllib.parse
 from dataclasses import dataclass
+from datetime import datetime, timedelta
 from typing import Any
 
 from aiohttp import ClientSession, web
+from pymongo.collection import Collection
+from pymongo.errors import DuplicateKeyError
 
 from config import Settings, load_settings
+from database import get_global_collection
 from services.analytics_service import get_guild_analytics
 from services.guild_config_service import get_guild_config, set_guild_config
 
@@ -27,14 +31,45 @@ STATE_TTL_SECONDS = 600
 # - Manage Channels, Manage Roles, View Channel, Send Messages, Embed Links, Read Message History
 DEFAULT_BOT_PERMISSIONS = 268520464
 
+DASHBOARD_SESSIONS_COLLECTION = "dashboard_sessions"
+DASHBOARD_OAUTH_STATES_COLLECTION = "dashboard_oauth_states"
+
 
 @dataclass
 class SessionData:
     created_at: float
-    access_token: str
     user: dict[str, Any]
     owner_guilds: list[dict[str, Any]]
     csrf_token: str
+
+
+def _utc_now() -> datetime:
+    return datetime.utcnow()
+
+
+def _ensure_dashboard_collections(settings: Settings) -> tuple[Collection, Collection]:
+    sessions = get_global_collection(settings, name=DASHBOARD_SESSIONS_COLLECTION)
+    states = get_global_collection(settings, name=DASHBOARD_OAUTH_STATES_COLLECTION)
+    sessions.create_index("expires_at", expireAfterSeconds=0, name="ttl_expires_at")
+    states.create_index("expires_at", expireAfterSeconds=0, name="ttl_expires_at")
+    return sessions, states
+
+
+def _insert_unique(col: Collection, doc_factory) -> str:
+    """
+    Insert a document with a unique _id. Returns the inserted _id.
+    """
+    for _ in range(5):
+        doc = doc_factory()
+        doc_id = doc.get("_id")
+        if not isinstance(doc_id, str) or not doc_id:
+            raise RuntimeError("doc_factory() must return a dict with a non-empty string _id")
+        try:
+            col.insert_one(doc)
+            return doc_id
+        except DuplicateKeyError:
+            continue
+    raise RuntimeError("Failed to insert a unique document after multiple attempts.")
 
 
 def _html_page(*, title: str, body: str) -> str:
@@ -140,12 +175,25 @@ async def _exchange_code(
 @web.middleware
 async def session_middleware(request: web.Request, handler):
     session_id = request.cookies.get(COOKIE_NAME)
-    sessions: dict[str, SessionData] = request.app["sessions"]
     request["session_id"] = session_id
-    session = sessions.get(session_id) if session_id else None
-    if session is not None and time.time() - session.created_at > SESSION_TTL_SECONDS:
-        sessions.pop(session_id, None)
-        session = None
+    session: SessionData | None = None
+    if session_id:
+        sessions: Collection = request.app["session_collection"]
+        doc = sessions.find_one({"_id": session_id}) or {}
+        created_at = doc.get("created_at")
+        if isinstance(created_at, (int, float)) and time.time() - float(created_at) <= SESSION_TTL_SECONDS:
+            user = doc.get("user")
+            owner_guilds = doc.get("owner_guilds")
+            csrf_token = doc.get("csrf_token")
+            if isinstance(user, dict) and isinstance(owner_guilds, list) and isinstance(csrf_token, str) and csrf_token:
+                session = SessionData(
+                    created_at=float(created_at),
+                    user=user,
+                    owner_guilds=[g for g in owner_guilds if isinstance(g, dict)],
+                    csrf_token=csrf_token,
+                )
+        if session is None:
+            sessions.delete_one({"_id": session_id})
     request["session"] = session
     return await handler(request)
 
@@ -163,6 +211,39 @@ def _is_https(request: web.Request) -> bool:
         proto = forwarded.split(",")[0].strip().lower()
         return proto == "https"
     return bool(getattr(request, "secure", False))
+
+
+@web.middleware
+async def security_headers_middleware(request: web.Request, handler):
+    try:
+        response = await handler(request)
+    except web.HTTPException as exc:
+        response = exc
+
+    if not isinstance(response, web.StreamResponse):
+        return response
+
+    response.headers.setdefault("Cache-Control", "no-store")
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Referrer-Policy", "no-referrer")
+    response.headers.setdefault("Permissions-Policy", "interest-cohort=()")
+
+    # Inline CSS is used in _html_page, so allow 'unsafe-inline' for styles.
+    response.headers.setdefault(
+        "Content-Security-Policy",
+        "default-src 'self'; "
+        "base-uri 'self'; "
+        "frame-ancestors 'none'; "
+        "img-src 'self' data:; "
+        "style-src 'self' 'unsafe-inline'; "
+        "form-action 'self';",
+    )
+
+    if _is_https(request):
+        response.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+
+    return response
 
 
 def _sanitize_next_path(raw: str) -> str:
@@ -256,10 +337,13 @@ async def index(request: web.Request) -> web.Response:
 async def login(request: web.Request) -> web.Response:
     settings: Settings = request.app["settings"]
     client_id, _client_secret, redirect_uri = _oauth_config(settings)
-    state = secrets.token_urlsafe(24)
     next_path = _sanitize_next_path(request.query.get("next", ""))
-    pending: dict[str, dict[str, Any]] = request.app["pending_states"]
-    pending[state] = {"issued_at": time.time(), "next": next_path}
+    states: Collection = request.app["state_collection"]
+    expires_at = _utc_now() + timedelta(seconds=STATE_TTL_SECONDS)
+    state = _insert_unique(
+        states,
+        lambda: {"_id": secrets.token_urlsafe(24), "issued_at": time.time(), "next": next_path, "expires_at": expires_at},
+    )
     raise web.HTTPFound(
         _build_authorize_url(
             client_id=client_id,
@@ -273,7 +357,6 @@ async def login(request: web.Request) -> web.Response:
 async def install(request: web.Request) -> web.Response:
     settings: Settings = request.app["settings"]
     client_id, _client_secret, redirect_uri = _oauth_config(settings)
-    state = secrets.token_urlsafe(24)
 
     requested_guild_id = request.query.get("guild_id", "").strip()
     next_path = "/"
@@ -283,8 +366,12 @@ async def install(request: web.Request) -> web.Response:
         extra["disable_guild_select"] = "true"
         next_path = f"/guild/{requested_guild_id}"
 
-    pending: dict[str, dict[str, Any]] = request.app["pending_states"]
-    pending[state] = {"issued_at": time.time(), "next": next_path}
+    states: Collection = request.app["state_collection"]
+    expires_at = _utc_now() + timedelta(seconds=STATE_TTL_SECONDS)
+    state = _insert_unique(
+        states,
+        lambda: {"_id": secrets.token_urlsafe(24), "issued_at": time.time(), "next": next_path, "expires_at": expires_at},
+    )
     raise web.HTTPFound(
         _build_authorize_url(
             client_id=client_id,
@@ -306,9 +393,13 @@ async def oauth_callback(request: web.Request) -> web.Response:
     if not code or not state:
         raise web.HTTPBadRequest(text="Missing code/state.")
 
-    pending: dict[str, dict[str, Any]] = request.app["pending_states"]
-    pending_state = pending.pop(state, None)
-    issued_at = float(pending_state.get("issued_at")) if pending_state else None
+    states: Collection = request.app["state_collection"]
+    pending_state = states.find_one_and_delete({"_id": state})
+    issued_at_value = pending_state.get("issued_at") if pending_state else None
+    try:
+        issued_at = float(issued_at_value) if issued_at_value is not None else None
+    except (TypeError, ValueError):
+        issued_at = None
     next_path = str(pending_state.get("next") or "/") if pending_state else "/"
     next_path = _sanitize_next_path(next_path)
     if issued_at is None or time.time() - issued_at > STATE_TTL_SECONDS:
@@ -336,14 +427,19 @@ async def oauth_callback(request: web.Request) -> web.Response:
                 next_path = f"/guild/{installed_guild_id}"
                 break
 
-    session_id = secrets.token_urlsafe(32)
-    sessions: dict[str, SessionData] = request.app["sessions"]
-    sessions[session_id] = SessionData(
-        created_at=time.time(),
-        access_token=access_token,
-        user=user,
-        owner_guilds=owner_guilds,
-        csrf_token=secrets.token_urlsafe(24),
+    sessions: Collection = request.app["session_collection"]
+    expires_at = _utc_now() + timedelta(seconds=SESSION_TTL_SECONDS)
+    csrf_token = secrets.token_urlsafe(24)
+    session_id = _insert_unique(
+        sessions,
+        lambda: {
+            "_id": secrets.token_urlsafe(32),
+            "created_at": time.time(),
+            "expires_at": expires_at,
+            "user": user,
+            "owner_guilds": owner_guilds,
+            "csrf_token": csrf_token,
+        },
     )
 
     resp = web.HTTPFound(next_path)
@@ -360,9 +456,9 @@ async def oauth_callback(request: web.Request) -> web.Response:
 
 async def logout(request: web.Request) -> web.Response:
     session_id = request.cookies.get(COOKIE_NAME)
-    sessions: dict[str, SessionData] = request.app["sessions"]
     if session_id:
-        sessions.pop(session_id, None)
+        sessions: Collection = request.app["session_collection"]
+        sessions.delete_one({"_id": session_id})
     resp = web.HTTPFound("/")
     resp.del_cookie(COOKIE_NAME)
     raise resp
@@ -593,10 +689,12 @@ async def _on_cleanup(app: web.Application) -> None:
 
 
 def create_app(*, settings: Settings | None = None) -> web.Application:
-    app = web.Application(middlewares=[session_middleware])
-    app["settings"] = settings or load_settings()
-    app["sessions"] = {}
-    app["pending_states"] = {}
+    app = web.Application(middlewares=[security_headers_middleware, session_middleware])
+    app_settings = settings or load_settings()
+    app["settings"] = app_settings
+    session_collection, state_collection = _ensure_dashboard_collections(app_settings)
+    app["session_collection"] = session_collection
+    app["state_collection"] = state_collection
     app["http"] = None
     app.on_startup.append(_on_startup)
     app.on_cleanup.append(_on_cleanup)

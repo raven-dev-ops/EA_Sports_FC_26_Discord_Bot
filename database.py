@@ -121,6 +121,22 @@ def get_database(settings: Settings | None = None, *, guild_id: int | None = Non
     return get_client(settings)[db_name]
 
 
+def get_global_database(settings: Settings | None = None) -> Database:
+    """
+    Return the global (non per-guild) database used for shared data like web sessions.
+
+    This intentionally ignores MONGODB_PER_GUILD_DB so the web/dashboard can store cross-guild
+    state even when the bot uses per-guild databases for feature data.
+    """
+    settings = _settings_or_default(settings)
+    db_name = _normalize_db_name(settings.mongodb_db_name or DEFAULT_DB_NAME)
+    return get_client(settings)[db_name]
+
+
+def get_global_collection(settings: Settings | None = None, *, name: str) -> Collection:
+    return get_global_database(settings)[name]
+
+
 def get_collection(
     settings: Settings | None = None,
     *,
