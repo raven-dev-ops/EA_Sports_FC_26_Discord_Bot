@@ -966,16 +966,45 @@ async def privacy_page(_request: web.Request) -> web.Response:
 
 
 async def support_page(_request: web.Request) -> web.Response:
-    content = """
+    support_discord = os.environ.get("SUPPORT_DISCORD_INVITE_URL", "").strip()
+    support_email = os.environ.get("SUPPORT_EMAIL", "").strip()
+    repo = "https://github.com/raven-dev-ops/EA_Sports_FC_26_Discord_Bot"
+    issues_href = f"{repo}/issues"
+    bug_href = f"{repo}/issues/new?template=bug_report.yml"
+    feature_href = f"{repo}/issues/new?template=feature_request.yml"
+    docs_href = f"{repo}/tree/main/docs"
+    readme_href = f"{repo}#readme"
+
+    support_items: list[str] = []
+    if support_discord:
+        support_items.append(
+            f'<li><a href="{_escape_html(support_discord)}">Join support Discord</a></li>'
+        )
+    else:
+        support_items.append("<li><span class='muted'>Join support Discord (coming soon)</span></li>")
+
+    if support_email:
+        mailto = "mailto:" + urllib.parse.quote(support_email)
+        support_items.append(
+            f'<li><a href="{_escape_html(mailto)}">{_escape_html(support_email)}</a></li>'
+        )
+    else:
+        support_items.append("<li><span class='muted'>Email support (coming soon)</span></li>")
+
+    support_items.append(f'<li><a href="{bug_href}">Report a bug</a></li>')
+    support_items.append(f'<li><a href="{feature_href}">Request a feature</a></li>')
+    support_items.append(f'<li><a href="{issues_href}">Browse issues</a></li>')
+    support_items.append(f'<li><a href="{readme_href}">README</a></li>')
+    support_items.append(f'<li><a href="{docs_href}">Docs</a></li>')
+
+    content = f"""
       <p><a href="/">&larr; Back</a></p>
       <h1>Support</h1>
       <div class="card">
         <p><strong>Need help?</strong></p>
-        <p class="muted">Use the links below to get support and troubleshooting help.</p>
+        <p class="muted">Use the links below to get help, report bugs, and request features.</p>
         <ul>
-          <li><a href="https://github.com/raven-dev-ops/EA_Sports_FC_26_Discord_Bot/issues">GitHub Issues</a></li>
-          <li><a href="https://github.com/raven-dev-ops/EA_Sports_FC_26_Discord_Bot#readme">README</a></li>
-          <li><a href="https://github.com/raven-dev-ops/EA_Sports_FC_26_Discord_Bot/tree/main/docs">Docs</a></li>
+          {"".join(support_items)}
         </ul>
       </div>
     """

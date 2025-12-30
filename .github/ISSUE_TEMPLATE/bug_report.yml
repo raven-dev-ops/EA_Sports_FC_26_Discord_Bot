@@ -2,6 +2,25 @@ name: Bug Report
 description: File a bug report
 labels: ["type:bug"]
 body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting!
+
+        Before filing, please:
+        - Search existing issues: https://github.com/raven-dev-ops/EA_Sports_FC_26_Discord_Bot/issues
+        - Check docs: https://github.com/raven-dev-ops/EA_Sports_FC_26_Discord_Bot/tree/main/docs
+
+        If you need help instead of reporting a bug, use the public support page (if deployed): `/support`.
+
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Bot version (see VERSION file or dashboard footer).
+      placeholder: "0.2.38"
+    validations:
+      required: true
   - type: textarea
     id: description
     attributes:
@@ -16,6 +35,17 @@ body:
       description: Include command, channel, user role, and any payload.
     validations:
       required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Deployment details (Heroku/local), guild ID (if applicable), and any relevant feature flags.
+      placeholder: |
+        Deployment: Heroku
+        Guild ID: 123...
+        Feature flags: fc25_stats
+    validations:
+      required: false
   - type: textarea
     id: logs
     attributes:

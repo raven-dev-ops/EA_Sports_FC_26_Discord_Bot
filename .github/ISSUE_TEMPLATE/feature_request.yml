@@ -2,6 +2,14 @@ name: Feature Request
 description: Suggest an idea or improvement
 labels: ["type:enhancement"]
 body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the idea!
+
+        If you meant to report a bug, please use the Bug Report template:
+        https://github.com/raven-dev-ops/EA_Sports_FC_26_Discord_Bot/issues/new?template=bug_report.yml
+
   - type: textarea
     id: summary
     attributes:

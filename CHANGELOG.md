@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.39] - 2025-12-30
+
+### Added
+- Web: improved public support page (`/support`) with bug/feature links and optional support Discord/email config.
+- GitHub: enhanced issue templates with version/environment prompts and cross-links.
+
 ## [0.2.38] - 2025-12-30
 
 ### Docs
