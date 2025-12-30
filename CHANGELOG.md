@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.33] - 2025-12-30
+
+### Added
+- Dashboard: Setup Wizard (`/guild/{guild_id}/setup`) with step-by-step readiness checks and one-click setup.
+- Ops: `run_full_setup` endpoint queues `run_setup` then `repost_portals` from the dashboard.
+
+### Changed
+- Dashboard nav: added Setup module link.
+
 ## [0.2.32] - 2025-12-30
 
 ### Added

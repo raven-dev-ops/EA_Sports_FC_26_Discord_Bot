@@ -538,3 +538,133 @@ async def test_settings_save_blocks_fc25_override_for_free(monkeypatch) -> None:
         assert "Pro" in text
     finally:
         await client.close()
+
+
+@pytest.mark.asyncio
+async def test_setup_wizard_page_renders(monkeypatch) -> None:
+    from aiohttp.test_utils import TestClient, TestServer
+
+    monkeypatch.setattr(database, "MongoClient", mongomock.MongoClient)
+    monkeypatch.setattr(database, "_CLIENT", None)
+
+    async def fake_bot_get_json(*_args, url: str, **_kwargs):
+        if url.endswith("/guilds/123"):
+            return {"id": "123", "name": "Managed"}
+        if url.endswith("/guilds/123/roles"):
+            bot_perms = (1 << 4) | (1 << 13) | (1 << 28)
+            return [
+                {"id": "123", "name": "@everyone", "permissions": "0", "position": 0},
+                {"id": "10", "name": "Offside Bot", "permissions": str(bot_perms), "position": 10},
+                {"id": "11", "name": "Coach", "permissions": "0", "position": 1},
+            ]
+        if url.endswith("/guilds/123/channels"):
+            return [
+                {"id": "20", "type": 0, "name": "staff-portal", "position": 1, "permission_overwrites": []},
+                {"id": "21", "type": 0, "name": "club-managers-portal", "position": 2, "permission_overwrites": []},
+                {"id": "22", "type": 0, "name": "club-portal", "position": 3, "permission_overwrites": []},
+                {"id": "23", "type": 0, "name": "coach-portal", "position": 4, "permission_overwrites": []},
+                {"id": "24", "type": 0, "name": "recruit-portal", "position": 5, "permission_overwrites": []},
+                {"id": "30", "type": 0, "name": "staff-monitor", "position": 6, "permission_overwrites": []},
+                {"id": "31", "type": 0, "name": "roster-listing", "position": 7, "permission_overwrites": []},
+                {"id": "32", "type": 0, "name": "recruit-listing", "position": 8, "permission_overwrites": []},
+                {"id": "33", "type": 0, "name": "club-listing", "position": 9, "permission_overwrites": []},
+            ]
+        if url.endswith("/guilds/123/members/1"):
+            return {"roles": ["10"], "user": {"id": "1"}}
+        if "/channels/" in url and "/messages" in url:
+            return [{"id": "m1", "author": {"id": "1"}}]
+        raise AssertionError(f"Unexpected bot Discord URL: {url}")
+
+    monkeypatch.setattr(dashboard, "_discord_bot_get_json", fake_bot_get_json)
+    monkeypatch.setattr(
+        dashboard,
+        "get_guild_config",
+        lambda _gid: {
+            "role_coach_id": 11,
+            "channel_staff_portal_id": 20,
+            "channel_manager_portal_id": 21,
+            "channel_club_portal_id": 22,
+            "channel_coach_portal_id": 23,
+            "channel_recruit_portal_id": 24,
+            "channel_staff_monitor_id": 30,
+            "channel_roster_listing_id": 31,
+            "channel_recruit_listing_id": 32,
+            "channel_club_listing_id": 33,
+        },
+    )
+
+    app = dashboard.create_app(settings=_settings())
+    sessions = app["session_collection"]
+    sessions.insert_one(
+        {
+            "_id": "sess1",
+            "created_at": time.time(),
+            "expires_at": datetime.now(timezone.utc) + timedelta(hours=6),
+            "user": {"id": "1", "username": "alice"},
+            "owner_guilds": [{"id": "123", "name": "Managed"}],
+            "all_guilds": [{"id": "123", "name": "Managed"}],
+            "csrf_token": "csrf_good",
+        }
+    )
+
+    client = TestClient(TestServer(app))
+    await client.start_server()
+    try:
+        resp = await client.get(
+            "/guild/123/setup",
+            headers={"Cookie": f"{dashboard.COOKIE_NAME}=sess1"},
+            allow_redirects=False,
+        )
+        assert resp.status == 200
+        html = await resp.text()
+        assert "Setup Wizard" in html
+        assert "/api/guild/123/ops/run_full_setup" in html
+        assert "Run full setup" in html
+    finally:
+        await client.close()
+
+
+@pytest.mark.asyncio
+async def test_run_full_setup_enqueues_tasks(monkeypatch) -> None:
+    from aiohttp.test_utils import TestClient, TestServer
+
+    monkeypatch.setattr(database, "MongoClient", mongomock.MongoClient)
+    monkeypatch.setattr(database, "_CLIENT", None)
+
+    async def fake_detect_installed(*_args, **_kwargs):
+        return True, None
+
+    monkeypatch.setattr(dashboard, "_detect_bot_installed", fake_detect_installed)
+
+    app = dashboard.create_app(settings=_settings())
+    sessions = app["session_collection"]
+    sessions.insert_one(
+        {
+            "_id": "sess1",
+            "created_at": time.time(),
+            "expires_at": datetime.now(timezone.utc) + timedelta(hours=6),
+            "user": {"id": "1", "username": "alice"},
+            "owner_guilds": [{"id": "123", "name": "Managed"}],
+            "all_guilds": [{"id": "123", "name": "Managed"}],
+            "csrf_token": "csrf_good",
+        }
+    )
+
+    client = TestClient(TestServer(app))
+    await client.start_server()
+    try:
+        resp = await client.post(
+            "/api/guild/123/ops/run_full_setup",
+            data={"csrf": "csrf_good"},
+            headers={"Cookie": f"{dashboard.COOKIE_NAME}=sess1"},
+            allow_redirects=False,
+        )
+        assert resp.status == 302
+        assert resp.headers.get("Location") == "/guild/123/setup?queued=1"
+
+        ops_tasks = database.get_global_collection(_settings(), name="ops_tasks")
+        actions = {doc.get("action") for doc in ops_tasks.find({"guild_id": 123})}
+        assert "run_setup" in actions
+        assert "repost_portals" in actions
+    finally:
+        await client.close()

@@ -166,6 +166,8 @@ def _guild_section_url(guild_id: str, *, section: str) -> str:
     gid = urllib.parse.quote(str(guild_id))
     if section == "overview":
         return f"/guild/{gid}/overview"
+    if section == "setup":
+        return f"/guild/{gid}/setup"
     if section == "settings":
         return f"/guild/{gid}/settings"
     if section == "permissions":
@@ -220,6 +222,7 @@ def _app_shell(
     is_pro = guild_plan == entitlements_service.PLAN_PRO
     nav_items = [
         ("Overview", _guild_section_url(nav_guild, section="overview"), section == "overview"),
+        ("Setup", _guild_section_url(nav_guild, section="setup"), section == "setup"),
         ("Analytics", _guild_section_url(nav_guild, section="analytics"), section == "analytics"),
         ("Settings", _guild_section_url(nav_guild, section="settings"), section == "settings"),
         ("Permissions", _guild_section_url(nav_guild, section="permissions"), section == "permissions"),
@@ -2100,6 +2103,395 @@ async def guild_overview_page(request: web.Request) -> web.Response:
     )
 
 
+async def guild_setup_wizard_page(request: web.Request) -> web.Response:
+    session = _require_session(request)
+    settings: Settings = request.app["settings"]
+
+    guild_id_str = request.match_info["guild_id"]
+    guild_id = _require_owned_guild(session, guild_id=guild_id_str)
+
+    plan = entitlements_service.get_guild_plan(settings, guild_id=guild_id)
+    is_pro = plan == entitlements_service.PLAN_PRO
+
+    installed, install_error = await _detect_bot_installed(request, guild_id=guild_id)
+
+    cfg: dict[str, Any] = {}
+    config_error: str | None = None
+    if settings.mongodb_uri:
+        try:
+            cfg = get_guild_config(guild_id)
+        except Exception as exc:
+            cfg = {}
+            config_error = str(exc)
+    else:
+        config_error = "MongoDB is not configured."
+
+    roles: list[dict[str, Any]] = []
+    channels: list[dict[str, Any]] = []
+    metadata_error: str | None = None
+    if installed is True:
+        try:
+            roles, channels = await _get_guild_discord_metadata(request, guild_id=guild_id)
+        except web.HTTPException as exc:
+            metadata_error = exc.text or str(exc)
+        except Exception as exc:
+            metadata_error = str(exc)
+
+    roles_by_id: dict[int, dict[str, Any]] = {}
+    for role_doc in roles:
+        rid = _parse_int(role_doc.get("id"))
+        if rid is not None:
+            roles_by_id[rid] = role_doc
+
+    channel_ids: set[int] = set()
+    for channel_doc in channels:
+        cid = _parse_int(channel_doc.get("id"))
+        if cid is not None:
+            channel_ids.add(cid)
+
+    def _badge(label: str, kind: str) -> str:
+        return f"<span class='badge {kind}'>{_escape_html(label)}</span>"
+
+    def _step_row(*, step: str, status: str, details: str, action_html: str) -> str:
+        return (
+            "<tr>"
+            f"<td><strong>{_escape_html(step)}</strong></td>"
+            f"<td>{status}</td>"
+            f"<td class='muted'>{_escape_html(details)}</td>"
+            f"<td>{action_html}</td>"
+            "</tr>"
+        )
+
+    # Step 1: Permissions (quick summary; full details on /permissions)
+    perms_status = _badge("UNKNOWN", "warn")
+    perms_details = "Unable to verify bot permissions."
+    perms_ok = False
+    if installed is False:
+        perms_status = _badge("WARN", "warn")
+        perms_details = install_error or "Bot is not installed in this server yet."
+    elif installed is True:
+        http = request.app.get("http")
+        if not isinstance(http, ClientSession):
+            perms_details = "Dashboard HTTP client is not ready yet."
+        else:
+            bot_user_id = int(settings.discord_application_id)
+            bot_member = await _fetch_guild_member(
+                http,
+                bot_token=settings.discord_token,
+                guild_id=guild_id,
+                user_id=bot_user_id,
+            )
+            if bot_member is None or not roles:
+                perms_details = metadata_error or "Unable to load bot member/roles."
+            else:
+                member_role_ids: set[int] = {guild_id}
+                member_roles_raw = bot_member.get("roles")
+                if isinstance(member_roles_raw, list):
+                    for rid in member_roles_raw:
+                        rid_int = _parse_int(rid)
+                        if rid_int is not None:
+                            member_role_ids.add(rid_int)
+
+                base_perms = _compute_base_permissions(roles_by_id=roles_by_id, role_ids=member_role_ids)
+                is_admin = bool(base_perms & PERM_ADMINISTRATOR)
+                required = [("Manage Channels", PERM_MANAGE_CHANNELS), ("Manage Roles", PERM_MANAGE_ROLES)]
+                missing_required = [name for name, bit in required if not (base_perms & bit)]
+                missing_optional = ["Manage Messages"] if not (base_perms & PERM_MANAGE_MESSAGES) else []
+
+                if is_admin or not missing_required:
+                    perms_ok = True
+                    perms_status = _badge("OK", "ok")
+                    perms_details = (
+                        "Required permissions are present."
+                        if not missing_optional
+                        else f"Missing optional: {', '.join(missing_optional)}"
+                    )
+                else:
+                    perms_status = _badge("WARN", "warn")
+                    perms_details = f"Missing: {', '.join(missing_required)}"
+
+    # Step 2: Channels + categories
+    required_channel_fields = [
+        (field, label)
+        for field, label in GUILD_CHANNEL_FIELDS
+        if field != "channel_staff_monitor_id" or settings.test_mode
+        if field != "channel_premium_coaches_id" or is_pro
+    ]
+    channels_missing_settings: list[str] = []
+    channels_missing_discord: list[str] = []
+    for field, _label in required_channel_fields:
+        value = _parse_int(cfg.get(field))
+        if value is None:
+            channels_missing_settings.append(field)
+        elif channels and value not in channel_ids:
+            channels_missing_discord.append(field)
+
+    channels_ok = False
+    if config_error:
+        channels_status = _badge("UNKNOWN", "warn")
+        channels_details = f"Settings unavailable: {config_error}"
+    elif installed is not True:
+        channels_status = _badge("WARN", "warn")
+        channels_details = "Install the bot to validate channels."
+    elif metadata_error:
+        channels_status = _badge("UNKNOWN", "warn")
+        channels_details = f"Unable to load Discord channels: {metadata_error}"
+    elif channels_missing_settings or channels_missing_discord:
+        channels_status = _badge("WARN", "warn")
+        parts: list[str] = []
+        if channels_missing_settings:
+            parts.append(f"Missing in settings: {', '.join(channels_missing_settings)}")
+        if channels_missing_discord:
+            parts.append(f"Not found in Discord: {', '.join(channels_missing_discord)}")
+        channels_details = " · ".join(parts) or "Channels are not ready."
+    else:
+        channels_ok = True
+        channels_status = _badge("OK", "ok")
+        channels_details = "Channels are configured."
+
+    # Step 3: Roles
+    required_role_fields = [("role_coach_id", "Coach role")]
+    if is_pro:
+        required_role_fields.extend(
+            [
+                ("role_coach_premium_id", "Coach Premium role"),
+                ("role_coach_premium_plus_id", "Coach Premium+ role"),
+            ]
+        )
+    roles_missing_settings: list[str] = []
+    roles_missing_discord: list[str] = []
+    for field, _label in required_role_fields:
+        value = _parse_int(cfg.get(field))
+        if value is None:
+            roles_missing_settings.append(field)
+        elif roles and value not in roles_by_id:
+            roles_missing_discord.append(field)
+
+    roles_ok = False
+    if config_error:
+        roles_status = _badge("UNKNOWN", "warn")
+        roles_details = f"Settings unavailable: {config_error}"
+    elif installed is not True:
+        roles_status = _badge("WARN", "warn")
+        roles_details = "Install the bot to validate roles."
+    elif metadata_error:
+        roles_status = _badge("UNKNOWN", "warn")
+        roles_details = f"Unable to load Discord roles: {metadata_error}"
+    elif roles_missing_settings or roles_missing_discord:
+        roles_status = _badge("WARN", "warn")
+        parts = []
+        if roles_missing_settings:
+            parts.append(f"Missing in settings: {', '.join(roles_missing_settings)}")
+        if roles_missing_discord:
+            parts.append(f"Not found in Discord: {', '.join(roles_missing_discord)}")
+        roles_details = " · ".join(parts) or "Roles are not ready."
+    else:
+        roles_ok = True
+        roles_status = _badge("OK", "ok")
+        roles_details = "Roles are configured."
+
+    # Step 4: Portals posted
+    portals_ok = False
+    portals_status = _badge("UNKNOWN", "warn")
+    portals_details = "Unable to verify posted portals."
+    if config_error:
+        portals_details = f"Settings unavailable: {config_error}"
+    elif installed is not True:
+        portals_status = _badge("WARN", "warn")
+        portals_details = "Install the bot to validate posted portals."
+    else:
+        http = request.app.get("http")
+        if not isinstance(http, ClientSession):
+            portals_details = "Dashboard HTTP client is not ready yet."
+        else:
+            bot_user_id = int(settings.discord_application_id)
+            portal_fields = [
+                "channel_staff_portal_id",
+                "channel_manager_portal_id",
+                "channel_club_portal_id",
+                "channel_coach_portal_id",
+                "channel_recruit_portal_id",
+                "channel_roster_listing_id",
+                "channel_recruit_listing_id",
+                "channel_club_listing_id",
+            ]
+            if is_pro:
+                portal_fields.append("channel_premium_coaches_id")
+
+            missing_config: list[str] = []
+            missing_posts: list[str] = []
+            unknown_posts: list[str] = []
+            for field in portal_fields:
+                channel_id = _parse_int(cfg.get(field))
+                if channel_id is None:
+                    missing_config.append(field)
+                    continue
+                ok, _err = await _channel_has_recent_bot_message(
+                    http,
+                    bot_token=settings.discord_token,
+                    channel_id=channel_id,
+                    bot_user_id=bot_user_id,
+                    limit=10,
+                )
+                if ok is True:
+                    continue
+                if ok is False:
+                    missing_posts.append(field)
+                else:
+                    unknown_posts.append(field)
+
+            if missing_config:
+                portals_status = _badge("WARN", "warn")
+                portals_details = f"Missing channel settings: {', '.join(missing_config)}"
+            elif unknown_posts:
+                portals_status = _badge("UNKNOWN", "warn")
+                portals_details = "Unable to verify some channels (missing Read Message History?)."
+            elif missing_posts:
+                portals_status = _badge("WARN", "warn")
+                portals_details = f"Missing embeds in: {', '.join(missing_posts)}"
+            else:
+                portals_ok = True
+                portals_status = _badge("OK", "ok")
+                portals_details = "Portals/instructions detected."
+
+    ready = bool(installed is True and perms_ok and channels_ok and roles_ok and portals_ok)
+    ready_badge = _badge("READY", "ok") if ready else _badge("NOT READY", "warn")
+    ready_details = "This server looks ready to use." if ready else "Complete the steps below to finish setup."
+
+    disabled_attr = "disabled" if installed is False or not settings.mongodb_uri else ""
+
+    tasks: list[dict[str, Any]] = []
+    tasks_error: str | None = None
+    if settings.mongodb_uri:
+        try:
+            tasks = list_ops_tasks(settings, guild_id=guild_id, limit=10)
+        except Exception as exc:
+            tasks_error = str(exc)
+            tasks = []
+
+    task_rows: list[str] = []
+    for task in tasks:
+        created_at = task.get("created_at")
+        created = created_at.isoformat() if isinstance(created_at, datetime) else str(created_at or "")
+        action = str(task.get("action") or "")
+        status = str(task.get("status") or "")
+        task_rows.append(
+            "<tr>"
+            f"<td><code>{_escape_html(created)}</code></td>"
+            f"<td><code>{_escape_html(action)}</code></td>"
+            f"<td><code>{_escape_html(status)}</code></td>"
+            "</tr>"
+        )
+    tasks_table = (
+        "\n".join(task_rows)
+        if task_rows
+        else "<tr><td colspan='3' class='muted'>No recent ops tasks yet.</td></tr>"
+    )
+    tasks_note = (
+        f"<p class='muted'>Tasks unavailable: <code>{_escape_html(tasks_error)}</code></p>" if tasks_error else ""
+    )
+
+    steps_table = "\n".join(
+        [
+            _step_row(
+                step="Step 1: Permissions",
+                status=perms_status,
+                details=perms_details,
+                action_html=f"<a href=\"/guild/{guild_id}/permissions\">Open</a>",
+            ),
+            _step_row(
+                step="Step 2: Channels",
+                status=channels_status,
+                details=channels_details,
+                action_html=f"<a href=\"/guild/{guild_id}/settings\">Review</a>",
+            ),
+            _step_row(
+                step="Step 3: Roles",
+                status=roles_status,
+                details=roles_details,
+                action_html=f"<a href=\"/guild/{guild_id}/settings\">Review</a>",
+            ),
+            _step_row(
+                step="Step 4: Post portals",
+                status=portals_status,
+                details=portals_details,
+                action_html=f"<a href=\"/guild/{guild_id}/ops\">Ops</a>",
+            ),
+            _step_row(
+                step="Step 5: Verify",
+                status=_badge("OK", "ok") if ready else _badge("PENDING", "warn"),
+                details="Setup wizard complete." if ready else "Run setup and repost portals, then refresh.",
+                action_html=f"<a href=\"/guild/{guild_id}/overview\">Overview</a>",
+            ),
+        ]
+    )
+
+    queued = request.query.get("queued", "").strip()
+    queued_msg = "<div class='card'><strong>Setup queued.</strong> Refresh this page in a few seconds.</div>" if queued else ""
+
+    body = f"""
+      <h1 style="margin-top:0;">Setup Wizard</h1>
+      {queued_msg}
+      <div class="row">
+        <div class="card">
+          <div><strong>Status</strong></div>
+          <div style="margin-top:6px;">{ready_badge}</div>
+          <p class="muted" style="margin-top:10px;">{_escape_html(ready_details)}</p>
+          <p class="muted">Plan: <span class="badge {plan}">{_escape_html(plan.upper())}</span></p>
+        </div>
+        <div class="card">
+          <div><strong>One-click setup</strong></div>
+          <p class="muted" style="margin-top:8px;">Queues <code>run_setup</code> then <code>repost_portals</code> on the bot worker.</p>
+          <div style="margin-top:10px; display:flex; gap:10px; flex-wrap:wrap;">
+            <form method="post" action="/api/guild/{guild_id}/ops/run_full_setup">
+              <input type="hidden" name="csrf" value="{_escape_html(session.csrf_token)}" />
+              <button class="btn blue" type="submit" {disabled_attr}>Run full setup</button>
+            </form>
+            <form method="post" action="/api/guild/{guild_id}/ops/run_setup">
+              <input type="hidden" name="csrf" value="{_escape_html(session.csrf_token)}" />
+              <button class="btn" type="submit" {disabled_attr}>Run setup</button>
+            </form>
+            <form method="post" action="/api/guild/{guild_id}/ops/repost_portals">
+              <input type="hidden" name="csrf" value="{_escape_html(session.csrf_token)}" />
+              <button class="btn secondary" type="submit" {disabled_attr}>Repost portals</button>
+            </form>
+          </div>
+          <p class="muted" style="margin-top:10px;">If tasks don't run, check worker heartbeat on the Ops page.</p>
+        </div>
+      </div>
+      <div class="card">
+        <h2 style="margin-top:0;">Steps</h2>
+        <table>
+          <thead><tr><th>step</th><th>status</th><th>details</th><th></th></tr></thead>
+          <tbody>{steps_table}</tbody>
+        </table>
+      </div>
+      <div class="card">
+        <h2 style="margin-top:0;">Recent ops tasks</h2>
+        {tasks_note}
+        <table>
+          <thead><tr><th>created</th><th>action</th><th>status</th></tr></thead>
+          <tbody>{tasks_table}</tbody>
+        </table>
+        <p class="muted" style="margin-top:10px;"><a href="/guild/{guild_id}/ops">Open Ops</a></p>
+      </div>
+    """
+    return web.Response(
+        text=_html_page(
+            title="Setup Wizard",
+            body=_app_shell(
+                settings=settings,
+                session=session,
+                section="setup",
+                selected_guild_id=guild_id,
+                installed=installed,
+                content=body,
+            ),
+        ),
+        content_type="text/html",
+    )
+
+
 async def guild_permissions_page(request: web.Request) -> web.Response:
     session = _require_session(request)
     settings: Settings = request.app["settings"]
@@ -2745,6 +3137,60 @@ async def guild_ops_run_setup(request: web.Request) -> web.Response:
     return await _enqueue_ops_from_dashboard(request, action=OPS_TASK_ACTION_RUN_SETUP)
 
 
+async def guild_ops_run_full_setup(request: web.Request) -> web.Response:
+    session = _require_session(request)
+    settings: Settings = request.app["settings"]
+    if not settings.mongodb_uri:
+        raise web.HTTPInternalServerError(text="MongoDB is not configured.")
+
+    guild_id_str = request.match_info["guild_id"]
+    guild_id = _require_owned_guild(session, guild_id=guild_id_str)
+
+    installed, _install_error = await _detect_bot_installed(request, guild_id=guild_id)
+    if installed is False:
+        raise web.HTTPBadRequest(text="Bot is not installed in this server yet. Invite it first.")
+
+    data = await request.post()
+    if str(data.get("csrf", "")) != session.csrf_token:
+        raise web.HTTPBadRequest(text="Invalid CSRF token.")
+
+    actor_id = _parse_int(session.user.get("id"))
+    actor_username = f"{session.user.get('username','')}#{session.user.get('discriminator','')}".strip("#")
+
+    actions = [OPS_TASK_ACTION_RUN_SETUP, OPS_TASK_ACTION_REPOST_PORTALS]
+    for action in actions:
+        task = enqueue_ops_task(
+            settings,
+            guild_id=guild_id,
+            action=action,
+            requested_by_discord_id=actor_id,
+            requested_by_username=actor_username or None,
+            source="dashboard",
+        )
+        try:
+            audit_col = get_collection(settings, record_type="audit_event", guild_id=guild_id)
+            record_audit_event(
+                guild_id=guild_id,
+                category="ops",
+                action="ops_task.enqueued",
+                source="dashboard",
+                actor_discord_id=actor_id,
+                actor_display_name=str(session.user.get("username") or "") or None,
+                actor_username=actor_username or None,
+                details={
+                    "task_id": str(task.get("_id") or ""),
+                    "task_action": str(task.get("action") or ""),
+                    "task_status": str(task.get("status") or ""),
+                    "wizard": True,
+                },
+                collection=audit_col,
+            )
+        except Exception:
+            pass
+
+    raise web.HTTPFound(f"/guild/{guild_id}/setup?queued=1")
+
+
 async def guild_ops_repost_portals(request: web.Request) -> web.Response:
     return await _enqueue_ops_from_dashboard(request, action=OPS_TASK_ACTION_REPOST_PORTALS)
 
@@ -3091,6 +3537,7 @@ def create_app(*, settings: Settings | None = None) -> web.Application:
     app.router.add_get("/app/billing/cancel", billing_cancel)
     app.router.add_get("/guild/{guild_id}", guild_page)
     app.router.add_get("/guild/{guild_id}/overview", guild_overview_page)
+    app.router.add_get("/guild/{guild_id}/setup", guild_setup_wizard_page)
     app.router.add_get("/guild/{guild_id}/permissions", guild_permissions_page)
     app.router.add_get("/guild/{guild_id}/audit", guild_audit_page)
     app.router.add_get("/guild/{guild_id}/audit.csv", guild_audit_csv)
@@ -3100,6 +3547,7 @@ def create_app(*, settings: Settings | None = None) -> web.Application:
     app.router.add_get("/api/guild/{guild_id}/analytics.json", guild_analytics_json)
     app.router.add_get("/api/guild/{guild_id}/discord_metadata.json", guild_discord_metadata_json)
     app.router.add_post("/api/guild/{guild_id}/ops/run_setup", guild_ops_run_setup)
+    app.router.add_post("/api/guild/{guild_id}/ops/run_full_setup", guild_ops_run_full_setup)
     app.router.add_post("/api/guild/{guild_id}/ops/repost_portals", guild_ops_repost_portals)
     app.router.add_post("/api/billing/webhook", billing_webhook)
     return app
