@@ -16,6 +16,7 @@ from pymongo.errors import DuplicateKeyError
 
 from config import Settings, load_settings
 from database import get_global_collection
+from services import entitlements_service
 from services.analytics_service import get_guild_analytics
 from services.guild_config_service import get_guild_config, set_guild_config
 from services.guild_settings_schema import (
@@ -95,6 +96,9 @@ def _html_page(*, title: str, body: str) -> str:
       a:hover {{ text-decoration: underline; }}
       .card {{ border: 1px solid #e5e7eb; border-radius: 12px; padding: 16px; margin: 12px 0; }}
       .muted {{ color: #6b7280; }}
+      .badge {{ display:inline-block; padding:4px 10px; border-radius:999px; font-size:12px; font-weight:600; }}
+      .badge.free {{ background:#e5e7eb; color:#111827; }}
+      .badge.pro {{ background:#fde68a; color:#92400e; }}
       table {{ border-collapse: collapse; width: 100%; }}
       th, td {{ border-bottom: 1px solid #e5e7eb; padding: 8px 10px; text-align: left; }}
       th {{ background: #f9fafb; }}
@@ -292,6 +296,12 @@ def _is_https(request: web.Request) -> bool:
     return bool(getattr(request, "secure", False))
 
 
+def _public_base_url(request: web.Request) -> str:
+    scheme = "https" if _is_https(request) else "http"
+    host = request.headers.get("X-Forwarded-Host", "").strip() or request.host
+    return f"{scheme}://{host}"
+
+
 @web.middleware
 async def security_headers_middleware(request: web.Request, handler):
     try:
@@ -388,12 +398,18 @@ async def index(request: web.Request) -> web.Response:
         gid = g.get("id")
         name = _escape_html(g.get("name") or gid)
         gid_str = str(gid)
+        plan_badge = ""
+        if gid_str.isdigit():
+            plan = entitlements_service.get_guild_plan(settings, guild_id=int(gid_str))
+            plan_badge = f"<span class='badge {plan}'>{_escape_html(plan.upper())}</span>"
         guild_cards.append(
-            f"<div class='card'><div><strong>{name}</strong></div>"
+            f"<div class='card'><div style='display:flex; gap:10px; align-items:center; justify-content:space-between;'>"
+            f"<strong>{name}</strong>{plan_badge}</div>"
             f"<div class='muted'>Guild ID: <code>{gid}</code></div>"
             f"<div style='margin-top:10px; display:flex; gap:10px; flex-wrap:wrap;'>"
             f"<a class='btn' href='/guild/{gid_str}'>Analytics</a>"
             f"<a class='btn secondary' href='/guild/{gid_str}/settings'>Settings</a>"
+            f"<a class='btn secondary' href='/app/billing?guild_id={gid_str}'>Billing</a>"
             f"<a class='btn blue' href='/install?guild_id={gid_str}'>Invite bot</a>"
             f"</div>"
             f"</div>"
@@ -1072,6 +1088,148 @@ async def billing_webhook(request: web.Request) -> web.Response:
     )
 
 
+async def billing_page(request: web.Request) -> web.Response:
+    session = _require_session(request)
+    settings: Settings = request.app["settings"]
+
+    selected_guild_id = request.query.get("guild_id", "").strip()
+    if selected_guild_id:
+        guild_id = _require_owned_guild(session, guild_id=selected_guild_id)
+    elif session.owner_guilds:
+        guild_id = _require_owned_guild(session, guild_id=str(session.owner_guilds[0].get("id") or ""))
+    else:
+        guild_id = 0
+
+    if not guild_id:
+        body = """
+          <p><a href="/">← Back</a></p>
+          <h1>Billing</h1>
+          <p class="muted">No owned guilds found.</p>
+        """
+        return web.Response(text=_html_page(title="Billing", body=body), content_type="text/html")
+
+    current_plan = entitlements_service.get_guild_plan(settings, guild_id=guild_id)
+    options = "\n".join(
+        f"<option value=\"{_escape_html(g.get('id'))}\""
+        f"{' selected' if str(g.get('id')) == str(guild_id) else ''}>"
+        f"{_escape_html(g.get('name') or g.get('id'))}</option>"
+        for g in session.owner_guilds
+    )
+
+    status = request.query.get("status", "").strip()
+    status_msg = ""
+    if status == "cancelled":
+        status_msg = "<div class='card'><strong>Checkout cancelled.</strong></div>"
+    elif status == "success":
+        status_msg = "<div class='card'><strong>Checkout complete.</strong> Activation may take a few seconds.</div>"
+
+    upgrade_disabled = "disabled" if current_plan == entitlements_service.PLAN_PRO else ""
+    upgrade_text = "Already Pro" if current_plan == entitlements_service.PLAN_PRO else "Upgrade to Pro"
+
+    body = f"""
+      <p><a href="/">← Back</a></p>
+      <h1>Billing</h1>
+      {status_msg}
+      <div class="card">
+        <div><strong>Current plan</strong></div>
+        <div style="margin-top:6px;"><span class="badge {current_plan}">{_escape_html(current_plan.upper())}</span></div>
+      </div>
+      <div class="card">
+        <h2 style="margin-top:0;">Upgrade this server</h2>
+        <form method="post" action="/app/billing/checkout">
+          <input type="hidden" name="csrf" value="{_escape_html(session.csrf_token)}" />
+          <label><strong>Guild</strong></label>
+          <select name="guild_id" style="width:100%; padding:10px; margin-top:6px;">{options}</select>
+          <label style="display:block; margin-top:12px;"><strong>Plan</strong></label>
+          <select name="plan" style="width:100%; padding:10px; margin-top:6px;">
+            <option value="pro">Pro</option>
+          </select>
+          <div style="margin-top:12px;">
+            <button class="btn blue" type="submit" {upgrade_disabled}>{_escape_html(upgrade_text)}</button>
+          </div>
+        </form>
+      </div>
+    """
+    return web.Response(text=_html_page(title="Billing", body=body), content_type="text/html")
+
+
+async def billing_checkout(request: web.Request) -> web.Response:
+    session = _require_session(request)
+    data = await request.post()
+    if str(data.get("csrf", "")) != session.csrf_token:
+        raise web.HTTPBadRequest(text="Invalid CSRF token.")
+
+    guild_id = _require_owned_guild(session, guild_id=str(data.get("guild_id") or ""))
+    plan = str(data.get("plan") or "pro").strip().lower()
+    if plan != entitlements_service.PLAN_PRO:
+        raise web.HTTPBadRequest(text="Unsupported plan.")
+
+    secret_key = _require_env("STRIPE_SECRET_KEY")
+    price_id = _require_env("STRIPE_PRICE_PRO_ID")
+
+    base_url = _public_base_url(request)
+    success_url = f"{base_url}/app/billing/success?guild_id={guild_id}&session_id={{CHECKOUT_SESSION_ID}}"
+    cancel_url = f"{base_url}/app/billing/cancel?guild_id={guild_id}"
+
+    try:
+        import stripe  # type: ignore[import-not-found]
+    except Exception as exc:
+        raise web.HTTPInternalServerError(text="Stripe SDK is not installed.") from exc
+
+    stripe.api_key = secret_key
+    checkout = stripe.checkout.Session.create(
+        mode="subscription",
+        line_items=[{"price": price_id, "quantity": 1}],
+        success_url=success_url,
+        cancel_url=cancel_url,
+        metadata={"guild_id": str(guild_id), "plan": plan},
+        subscription_data={"metadata": {"guild_id": str(guild_id), "plan": plan}},
+        client_reference_id=str(guild_id),
+    )
+    url = getattr(checkout, "url", None) or (checkout.get("url") if isinstance(checkout, dict) else None)
+    if not url:
+        raise web.HTTPInternalServerError(text="Stripe did not return a checkout URL.")
+    raise web.HTTPFound(str(url))
+
+
+async def billing_success(request: web.Request) -> web.Response:
+    session = _require_session(request)
+    settings: Settings = request.app["settings"]
+    gid = request.query.get("guild_id", "").strip()
+    guild_id = _require_owned_guild(session, guild_id=gid) if gid else 0
+    if not guild_id:
+        raise web.HTTPBadRequest(text="Missing guild_id.")
+
+    plan = entitlements_service.get_guild_plan(settings, guild_id=guild_id)
+    message = (
+        "Pro enabled for this server."
+        if plan == entitlements_service.PLAN_PRO
+        else "Checkout complete. Waiting for activation (webhook) — refresh in a few seconds."
+    )
+    body = f"""
+      <p><a href="/app/billing?guild_id={guild_id}&status=success">← Billing</a></p>
+      <h1>Checkout Success</h1>
+      <div class="card">
+        <div><strong>{_escape_html(message)}</strong></div>
+        <div style="margin-top:8px;">Plan: <span class="badge {plan}">{_escape_html(plan.upper())}</span></div>
+        <div style="margin-top:10px; display:flex; gap:10px; flex-wrap:wrap;">
+          <a class="btn" href="/guild/{guild_id}">Analytics</a>
+          <a class="btn secondary" href="/guild/{guild_id}/settings">Settings</a>
+        </div>
+      </div>
+    """
+    return web.Response(text=_html_page(title="Checkout Success", body=body), content_type="text/html")
+
+
+async def billing_cancel(request: web.Request) -> web.Response:
+    session = _require_session(request)
+    gid = request.query.get("guild_id", "").strip()
+    guild_id = _require_owned_guild(session, guild_id=gid) if gid else 0
+    if not guild_id:
+        raise web.HTTPBadRequest(text="Missing guild_id.")
+    raise web.HTTPFound(f"/app/billing?guild_id={guild_id}&status=cancelled")
+
+
 async def _on_startup(app: web.Application) -> None:
     # aiohttp ClientSession must be created with a running event loop.
     app["http"] = ClientSession()
@@ -1102,6 +1260,10 @@ def create_app(*, settings: Settings | None = None) -> web.Application:
     app.router.add_get("/install", install)
     app.router.add_get("/oauth/callback", oauth_callback)
     app.router.add_get("/logout", logout)
+    app.router.add_get("/app/billing", billing_page)
+    app.router.add_post("/app/billing/checkout", billing_checkout)
+    app.router.add_get("/app/billing/success", billing_success)
+    app.router.add_get("/app/billing/cancel", billing_cancel)
     app.router.add_get("/guild/{guild_id}", guild_page)
     app.router.add_get("/guild/{guild_id}/settings", guild_settings_page)
     app.router.add_post("/guild/{guild_id}/settings", guild_settings_save)
