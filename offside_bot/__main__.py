@@ -22,6 +22,7 @@ from interactions.premium_coaches_report import post_premium_coaches_report
 from interactions.recruit_portal import post_recruit_portal
 from migrations import apply_migrations
 from services.channel_setup_service import cleanup_staff_monitor_channel, ensure_offside_channels
+from services.error_reporting_service import capture_exception, init_error_reporting
 from services.fc25_stats_feature import fc25_stats_enabled
 from services.fc25_stats_service import list_links
 from services.guild_config_service import get_guild_config, set_guild_config
@@ -58,6 +59,8 @@ def install_excepthook() -> None:
             "Uncaught exception",
             exc_info=(exc_type, exc_value, exc_traceback),
         )
+        if isinstance(exc_value, BaseException):
+            capture_exception(exc_value)
     sys.excepthook = _hook
 
 
@@ -66,6 +69,8 @@ def install_asyncio_exception_handler(loop: asyncio.AbstractEventLoop) -> None:
         msg = context.get("message", "Asyncio task exception")
         exc = context.get("exception")
         logging.error("%s", msg, exc_info=exc)
+        if isinstance(exc, BaseException):
+            capture_exception(exc)
     loop.set_exception_handler(_handle)
 
 
@@ -433,6 +438,7 @@ class OffsideBot(commands.AutoShardedBot):
     ) -> None:
         error_id = new_error_id()
         log_interaction_error(error, interaction, source="app_command", error_id=error_id)
+        capture_exception(error, guild_id=interaction.guild_id)
         try:
             command_name = interaction.command.qualified_name if interaction.command else "unknown"
             record_command(command_name, status="error")
@@ -442,6 +448,9 @@ class OffsideBot(commands.AutoShardedBot):
 
     async def on_error(self, event_method: str, *args, **kwargs) -> None:  # type: ignore[override]
         logging.error("Unhandled error in event %s", event_method, exc_info=sys.exc_info())
+        exc = sys.exc_info()[1]
+        if isinstance(exc, BaseException):
+            capture_exception(exc)
 
     async def _start_scheduler(self) -> None:
         settings = getattr(self, "settings", None)
@@ -558,13 +567,14 @@ def register_commands(bot: OffsideBot) -> None:
 
 def main() -> None:
     setup_logging()
-    install_excepthook()
     settings: Settings
     try:
         settings = load_settings()
     except RuntimeError as exc:
         logging.error("Configuration error: %s", exc)
         raise
+    init_error_reporting(settings=settings, service_name="bot")
+    install_excepthook()
     logging.info("Loaded configuration (non-secret): %s", summarize_settings(settings))
     if settings.mongodb_uri:
         try:

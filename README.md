@@ -118,19 +118,24 @@ Optional:
 - Channel env overrides (optional; primary source is per-guild config created by auto-setup):
   - `CHANNEL_STAFF_PORTAL_ID`, `CHANNEL_MANAGER_PORTAL_ID`, `CHANNEL_CLUB_PORTAL_ID`, `CHANNEL_COACH_PORTAL_ID`, `CHANNEL_RECRUIT_PORTAL_ID`
   - `CHANNEL_STAFF_MONITOR_ID` (test-mode sink)
+  - `CHANNEL_ROSTER_LISTING_ID` (fallback to legacy `CHANNEL_ROSTER_PORTAL_ID`)
+  - `CHANNEL_RECRUIT_LISTING_ID`, `CHANNEL_CLUB_LISTING_ID`, `CHANNEL_PREMIUM_COACHES_ID`
 
 Optional (billing / Pro plan):
 - `STRIPE_SECRET_KEY`
 - `STRIPE_WEBHOOK_SECRET`
 - `STRIPE_PRICE_PRO_ID`
 - Setup guide: `docs/billing.md`
-  - `CHANNEL_ROSTER_LISTING_ID` (fallback to legacy `CHANNEL_ROSTER_PORTAL_ID`)
-  - `CHANNEL_RECRUIT_LISTING_ID`, `CHANNEL_CLUB_LISTING_ID`, `CHANNEL_PREMIUM_COACHES_ID`
+
+Optional (ops):
+- `LOG_LEVEL` (default INFO)
+- `SENTRY_DSN` (error reporting for bot + dashboard)
+  - `SENTRY_ENVIRONMENT` (default `production`)
+  - `SENTRY_TRACES_SAMPLE_RATE` (default `0`)
 - `BANLIST_SHEET_ID`
 - `BANLIST_RANGE`
 - `BANLIST_CACHE_TTL_SECONDS` (default 300)
 - `GOOGLE_SHEETS_CREDENTIALS_JSON`
-- `LOG_LEVEL` (default INFO)
 - `USE_SHARDING` (default false) and optional `SHARD_COUNT` for scale-out.
 - `FEATURE_FLAGS` (comma-separated; e.g., `metrics_log` for scheduler demo).
 - FC25 stats (optional; requires `FEATURE_FLAGS=fc25_stats`, see `docs/fc25-stats-policy.md`; includes a scheduled refresh worker).

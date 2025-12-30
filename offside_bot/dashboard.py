@@ -18,6 +18,7 @@ from config import Settings, load_settings
 from database import get_client, get_global_collection
 from services import entitlements_service
 from services.analytics_service import get_guild_analytics
+from services.error_reporting_service import init_error_reporting, set_guild_tag
 from services.guild_config_service import get_guild_config, set_guild_config
 from services.guild_settings_schema import (
     FC25_STATS_ENABLED_KEY,
@@ -740,6 +741,7 @@ def _require_owned_guild(session: SessionData, *, guild_id: str) -> int:
         raise web.HTTPBadRequest(text="Invalid guild id.") from exc
     for g in session.owner_guilds:
         if str(g.get("id")) == str(guild_id):
+            set_guild_tag(gid_int)
             return gid_int
     raise web.HTTPForbidden(text="You do not have access to this guild.")
 
@@ -1482,6 +1484,7 @@ def create_app(*, settings: Settings | None = None) -> web.Application:
     )
     app_settings = settings or load_settings()
     app["settings"] = app_settings
+    init_error_reporting(settings=app_settings, service_name="dashboard")
     session_collection, state_collection = _ensure_dashboard_collections(app_settings)
     app["session_collection"] = session_collection
     app["state_collection"] = state_collection
