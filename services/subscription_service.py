@@ -47,6 +47,17 @@ def get_guild_subscription(settings: Settings | None, *, guild_id: int) -> dict[
     return doc if isinstance(doc, dict) else None
 
 
+def get_guild_subscription_by_subscription_id(
+    settings: Settings | None, *, subscription_id: str
+) -> dict[str, Any] | None:
+    sub_id = subscription_id.strip()
+    if not sub_id:
+        return None
+    col = get_subscription_collection(settings)
+    doc = col.find_one({"subscription_id": sub_id})
+    return doc if isinstance(doc, dict) else None
+
+
 def upsert_guild_subscription(
     settings: Settings | None,
     *,
@@ -72,4 +83,3 @@ def upsert_guild_subscription(
     }
     col.update_one({"_id": guild_id}, {"$set": doc}, upsert=True)
     return doc
-

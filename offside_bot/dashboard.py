@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 import secrets
 import time
@@ -23,6 +24,7 @@ from services.guild_settings_schema import (
     GUILD_COACH_ROLE_FIELDS,
     PREMIUM_COACHES_PIN_ENABLED_KEY,
 )
+from services.stripe_webhook_service import ensure_stripe_webhook_indexes, handle_stripe_webhook
 
 DISCORD_API_BASE = "https://discord.com/api"
 AUTHORIZE_URL = "https://discord.com/oauth2/authorize"
@@ -1031,6 +1033,45 @@ async def guild_discord_metadata_json(request: web.Request) -> web.Response:
     return web.json_response({"guild_id": guild_id, "roles": roles, "channels": channels})
 
 
+async def billing_webhook(request: web.Request) -> web.Response:
+    settings: Settings = request.app["settings"]
+    if not settings.mongodb_uri:
+        raise web.HTTPInternalServerError(text="MongoDB is not configured.")
+
+    secret = os.environ.get("STRIPE_WEBHOOK_SECRET", "").strip()
+    if not secret:
+        raise web.HTTPInternalServerError(text="STRIPE_WEBHOOK_SECRET is not configured.")
+
+    sig_header = request.headers.get("Stripe-Signature", "").strip()
+    if not sig_header:
+        raise web.HTTPBadRequest(text="Missing Stripe-Signature header.")
+
+    payload = await request.read()
+    try:
+        result = handle_stripe_webhook(
+            settings,
+            payload=payload,
+            sig_header=sig_header,
+            secret=secret,
+        )
+    except ValueError as exc:
+        raise web.HTTPBadRequest(text=str(exc)) from exc
+    except Exception as exc:
+        logging.exception("Stripe webhook processing failed (event unknown).")
+        raise web.HTTPInternalServerError(text="Webhook processing failed.") from exc
+
+    return web.json_response(
+        {
+            "ok": True,
+            "status": result.status,
+            "event_id": result.event_id,
+            "event_type": result.event_type,
+            "handled": result.handled,
+            "guild_id": result.guild_id,
+        }
+    )
+
+
 async def _on_startup(app: web.Application) -> None:
     # aiohttp ClientSession must be created with a running event loop.
     app["http"] = ClientSession()
@@ -1049,6 +1090,8 @@ def create_app(*, settings: Settings | None = None) -> web.Application:
     session_collection, state_collection = _ensure_dashboard_collections(app_settings)
     app["session_collection"] = session_collection
     app["state_collection"] = state_collection
+    if app_settings.mongodb_uri:
+        ensure_stripe_webhook_indexes(app_settings)
     app["guild_metadata_cache"] = {}
     app["http"] = None
     app.on_startup.append(_on_startup)
@@ -1064,6 +1107,7 @@ def create_app(*, settings: Settings | None = None) -> web.Application:
     app.router.add_post("/guild/{guild_id}/settings", guild_settings_save)
     app.router.add_get("/api/guild/{guild_id}/analytics.json", guild_analytics_json)
     app.router.add_get("/api/guild/{guild_id}/discord_metadata.json", guild_discord_metadata_json)
+    app.router.add_post("/api/billing/webhook", billing_webhook)
     return app
 
 
