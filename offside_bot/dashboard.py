@@ -965,6 +965,26 @@ async def privacy_page(_request: web.Request) -> web.Response:
     return web.Response(text=page, content_type="text/html")
 
 
+async def support_page(_request: web.Request) -> web.Response:
+    content = """
+      <p><a href="/">&larr; Back</a></p>
+      <h1>Support</h1>
+      <div class="card">
+        <p><strong>Need help?</strong></p>
+        <p class="muted">Use the links below to get support and troubleshooting help.</p>
+        <ul>
+          <li><a href="https://github.com/raven-dev-ops/EA_Sports_FC_26_Discord_Bot/issues">GitHub Issues</a></li>
+          <li><a href="https://github.com/raven-dev-ops/EA_Sports_FC_26_Discord_Bot#readme">README</a></li>
+          <li><a href="https://github.com/raven-dev-ops/EA_Sports_FC_26_Discord_Bot/tree/main/docs">Docs</a></li>
+        </ul>
+      </div>
+    """
+    from offside_bot.web_templates import render, safe_html
+
+    page = render("pages/markdown_page.html", title="Support", content=safe_html(content))
+    return web.Response(text=page, content_type="text/html")
+
+
 async def health(_request: web.Request) -> web.Response:
     return web.json_response({"ok": True})
 
@@ -3597,6 +3617,7 @@ def create_app(*, settings: Settings | None = None) -> web.Application:
     app.router.add_get("/", index)
     app.router.add_get("/terms", terms_page)
     app.router.add_get("/privacy", privacy_page)
+    app.router.add_get("/support", support_page)
     app.router.add_get("/login", login)
     app.router.add_get("/install", install)
     app.router.add_get("/oauth/callback", oauth_callback)

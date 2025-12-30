@@ -1,10 +1,83 @@
 {% extends "layouts/public.html" %}
-{% from "macros/ui.html" import cta_block %}
+{% from "macros/ui.html" import button, card %}
 
 {% block content %}
-  <h1>Offside Dashboard</h1>
-  <p class="muted">Sign in with Discord to view analytics for servers you own or manage.</p>
-  {{ cta_block(invite_href) }}
-  <p class="muted">By inviting the bot you agree to the <a href="/terms">Terms</a> and <a href="/privacy">Privacy Policy</a>.</p>
-{% endblock %}
+  <div class="card" style="margin-top:0;">
+    <h1 style="margin-top:0;">Offside</h1>
+    <p class="muted" style="font-size:16px;">
+      Run rosters, recruiting, clubs, and tournament ops in Discord — with dashboards and analytics built for EA Sports FC.
+    </p>
+    <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:14px;">
+      {{ button("Add to Discord", "/install", "blue") }}
+      {{ button("Login", "/login", "") }}
+    </div>
+    <p class="muted" style="margin-top:14px;">Direct invite URL:</p>
+    <p><a href="{{ invite_href }}">{{ invite_href }}</a></p>
+  </div>
 
+  <h2>How it works</h2>
+  <div class="row">
+    <div class="card">
+      <strong>1) Invite</strong>
+      <div class="muted" style="margin-top:6px;">Add the bot to your server with the right permissions.</div>
+    </div>
+    <div class="card">
+      <strong>2) Configure</strong>
+      <div class="muted" style="margin-top:6px;">Run setup, confirm roles/channels, and post dashboards.</div>
+    </div>
+    <div class="card">
+      <strong>3) Run</strong>
+      <div class="muted" style="margin-top:6px;">Manage rosters and recruiting while Offside tracks your data.</div>
+    </div>
+  </div>
+
+  <h2>Modules</h2>
+  <div class="row">
+    <div class="card">
+      <strong>Rosters</strong>
+      <div class="muted" style="margin-top:6px;">Create rosters, manage caps, and track openings.</div>
+    </div>
+    <div class="card">
+      <strong>Recruiting</strong>
+      <div class="muted" style="margin-top:6px;">Streamline recruiting workflows and listing channels.</div>
+    </div>
+    <div class="card">
+      <strong>Clubs</strong>
+      <div class="muted" style="margin-top:6px;">Organize clubs and staff operations across the server.</div>
+    </div>
+    <div class="card">
+      <strong>Tournaments</strong>
+      <div class="muted" style="margin-top:6px;">Tournament automation tooling for staff (Pro).</div>
+    </div>
+    <div class="card">
+      <strong>Analytics</strong>
+      <div class="muted" style="margin-top:6px;">See what your server produces, by collection and record type.</div>
+    </div>
+  </div>
+
+  <h2>FAQ</h2>
+  <div class="card">
+    <p><strong>What permissions are needed?</strong></p>
+    <p class="muted">Offside needs permissions to create/manage roles and channels during setup, and to post embeds.</p>
+    <p style="margin-top:14px;"><strong>How does pricing work?</strong></p>
+    <p class="muted">Start on Free. Upgrade to Pro for premium features and advanced modules.</p>
+    <p style="margin-top:14px;"><strong>Where is data stored?</strong></p>
+    <p class="muted">Data is stored per-server in MongoDB (configurable) and is isolated by guild.</p>
+    <p style="margin-top:14px;"><strong>How do I get support?</strong></p>
+    <p class="muted">Use the documentation and support links in the repo; a support page is coming soon.</p>
+  </div>
+
+  <div class="card">
+    <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
+      <div>
+        <div><strong>Ready to get started?</strong></div>
+        <div class="muted" style="margin-top:6px;">Invite the bot, then log in to run setup and manage your server.</div>
+      </div>
+      <div style="display:flex; gap:10px; flex-wrap:wrap;">
+        {{ button("Add to Discord", "/install", "blue") }}
+        {{ button("Login", "/login", "") }}
+      </div>
+    </div>
+    <p class="muted" style="margin-top:14px;">By inviting the bot you agree to the <a href="/terms">Terms</a> and <a href="/privacy">Privacy Policy</a>.</p>
+  </div>
+{% endblock %}

@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.36] - 2025-12-30
+
+### Added
+- Web: landing page sections (hero, how-it-works, modules, FAQ) for logged-out visitors.
+- Web: public support page (`/support`) and footer link.
+
 ## [0.2.35] - 2025-12-30
 
 ### Added
