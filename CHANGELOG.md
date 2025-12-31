@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.49] - 2025-12-31
+
+### Added
+- Ops: dashboard workflow to schedule/cancel irreversible guild data deletion (per-guild DB mode) and worker support to execute it.
+- Docs/Scripts: data lifecycle runbook (`docs/data-lifecycle.md`) + guild export script (`python -m scripts.export_guild_data`).
+
+### Changed
+- Ops: ops tasks support scheduled execution (`run_after`) and cancellation.
+- Data: retention via TTL (`expires_at`) for audit collections; ops task history cleanup is configurable.
+
 ## [0.2.48] - 2025-12-31
 
 ### Added

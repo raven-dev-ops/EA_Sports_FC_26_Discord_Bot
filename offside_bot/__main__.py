@@ -494,6 +494,7 @@ class OffsideBot(commands.AutoShardedBot):
 
         from services.audit_log_service import record_audit_event
         from services.ops_tasks_service import (
+            OPS_TASK_ACTION_DELETE_GUILD_DATA,
             OPS_TASK_ACTION_REPOST_PORTALS,
             OPS_TASK_ACTION_RUN_SETUP,
             claim_next_ops_task,
@@ -513,61 +514,72 @@ class OffsideBot(commands.AutoShardedBot):
         if not task_id or not guild_id:
             return
 
-        try:
-            audit_col = get_collection(settings, record_type="audit_event", guild_id=guild_id)
-            record_audit_event(
-                guild_id=guild_id,
-                category="ops",
-                action="ops_task.started",
-                source="worker",
-                details={"task_id": task_id, "task_action": action},
-                collection=audit_col,
-            )
-        except Exception:
-            pass
+        write_guild_audit = action != OPS_TASK_ACTION_DELETE_GUILD_DATA
+
+        if write_guild_audit:
+            try:
+                audit_col = get_collection(settings, record_type="audit_event", guild_id=guild_id)
+                record_audit_event(
+                    guild_id=guild_id,
+                    category="ops",
+                    action="ops_task.started",
+                    source="worker",
+                    details={"task_id": task_id, "task_action": action},
+                    collection=audit_col,
+                )
+            except Exception:
+                pass
 
         try:
-            guild = self.get_guild(guild_id)
-            if guild is None:
-                raise RuntimeError("Bot is not in this guild.")
-
             if action == OPS_TASK_ACTION_RUN_SETUP:
+                guild = self.get_guild(guild_id)
+                if guild is None:
+                    raise RuntimeError("Bot is not in this guild.")
                 async with self._auto_setup_lock:
                     await self._auto_setup_guild(guild)
                 result = {"message": "Auto-setup complete."}
             elif action == OPS_TASK_ACTION_REPOST_PORTALS:
+                guild = self.get_guild(guild_id)
+                if guild is None:
+                    raise RuntimeError("Bot is not in this guild.")
                 await self.post_portals(guilds=[guild])
                 result = {"message": "Portals reposted."}
+            elif action == OPS_TASK_ACTION_DELETE_GUILD_DATA:
+                from services.guild_data_service import delete_guild_data
+
+                result = delete_guild_data(settings, guild_id=guild_id)
             else:
                 raise RuntimeError(f"Unknown ops action: {action}")
 
             mark_ops_task_succeeded(settings, task_id=task_id, result=result)
-            try:
-                audit_col = get_collection(settings, record_type="audit_event", guild_id=guild_id)
-                record_audit_event(
-                    guild_id=guild_id,
-                    category="ops",
-                    action="ops_task.completed",
-                    source="worker",
-                    details={"task_id": task_id, "task_action": action, "result": result},
-                    collection=audit_col,
-                )
-            except Exception:
-                pass
+            if write_guild_audit:
+                try:
+                    audit_col = get_collection(settings, record_type="audit_event", guild_id=guild_id)
+                    record_audit_event(
+                        guild_id=guild_id,
+                        category="ops",
+                        action="ops_task.completed",
+                        source="worker",
+                        details={"task_id": task_id, "task_action": action, "result": result},
+                        collection=audit_col,
+                    )
+                except Exception:
+                    pass
         except Exception as exc:
             mark_ops_task_failed(settings, task_id=task_id, error=str(exc))
-            try:
-                audit_col = get_collection(settings, record_type="audit_event", guild_id=guild_id)
-                record_audit_event(
-                    guild_id=guild_id,
-                    category="ops",
-                    action="ops_task.failed",
-                    source="worker",
-                    details={"task_id": task_id, "task_action": action, "error": str(exc)},
-                    collection=audit_col,
-                )
-            except Exception:
-                pass
+            if write_guild_audit:
+                try:
+                    audit_col = get_collection(settings, record_type="audit_event", guild_id=guild_id)
+                    record_audit_event(
+                        guild_id=guild_id,
+                        category="ops",
+                        action="ops_task.failed",
+                        source="worker",
+                        details={"task_id": task_id, "task_action": action, "error": str(exc)},
+                        collection=audit_col,
+                    )
+                except Exception:
+                    pass
 
     async def _fc25_refresh_job(self) -> None:
         from datetime import datetime, timezone

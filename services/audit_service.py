@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from pymongo.collection import Collection
 
 from database import get_collection
-from services.audit_log_service import record_audit_event
+from services.audit_log_service import AUDIT_LOG_RETENTION_DAYS, record_audit_event
 
 RECORD_TYPE = "roster_audit"
 
@@ -42,6 +42,8 @@ def record_staff_action(
         "staff_username": staff_username,
         "created_at": now,
     }
+    if AUDIT_LOG_RETENTION_DAYS > 0:
+        doc["expires_at"] = now + timedelta(days=AUDIT_LOG_RETENTION_DAYS)
     if details:
         doc["details"] = details
     result = collection.insert_one(doc)

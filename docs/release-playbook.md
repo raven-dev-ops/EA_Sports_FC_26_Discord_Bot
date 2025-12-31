@@ -5,6 +5,7 @@ This doc is the repeatable checklist for deploying and rolling back Offside.
 See also:
 - `docs/qa-checklist.md`
 - `docs/billing.md`
+- `docs/data-lifecycle.md`
 - `.env.example`
 
 ## Release checklist

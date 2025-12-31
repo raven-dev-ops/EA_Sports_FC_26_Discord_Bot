@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from pymongo.collection import Collection
 
 from database import get_collection
-from services.audit_log_service import record_audit_event
+from services.audit_log_service import AUDIT_LOG_RETENTION_DAYS, record_audit_event
 
 RECORD_TYPE = "club_ad_audit"
 
@@ -38,6 +38,8 @@ def record_club_ad_action(
         "reason": reason,
         "created_at": now,
     }
+    if AUDIT_LOG_RETENTION_DAYS > 0:
+        doc["expires_at"] = now + timedelta(days=AUDIT_LOG_RETENTION_DAYS)
     result = collection.insert_one(doc)
     doc["_id"] = result.inserted_id
 

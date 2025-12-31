@@ -191,6 +191,7 @@ def ensure_indexes(collection: Collection) -> list[str]:
     indexes: list[str] = []
 
     indexes.append(collection.create_index([("record_type", 1)]))
+    indexes.append(collection.create_index("expires_at", expireAfterSeconds=0, name="ttl_expires_at"))
     indexes.append(
         collection.create_index(
             [("record_type", 1), ("guild_id", 1), ("created_at", -1)],
@@ -433,6 +434,7 @@ def ensure_offside_indexes(db: Database) -> list[str]:
             name="idx_roster_audit",
         )
     )
+    indexes.append(roster_audits.create_index("expires_at", expireAfterSeconds=0, name="ttl_expires_at"))
 
     audit_events = db[COLLECTION_BY_RECORD_TYPE["audit_event"]]
     indexes.append(
@@ -447,6 +449,7 @@ def ensure_offside_indexes(db: Database) -> list[str]:
             name="idx_audit_events_category",
         )
     )
+    indexes.append(audit_events.create_index("expires_at", expireAfterSeconds=0, name="ttl_expires_at"))
 
     recruit_profiles = db[COLLECTION_BY_RECORD_TYPE["recruit_profile"]]
     indexes.append(
@@ -485,6 +488,7 @@ def ensure_offside_indexes(db: Database) -> list[str]:
             name="idx_club_ad_audit",
         )
     )
+    indexes.append(club_ad_audits.create_index("expires_at", expireAfterSeconds=0, name="ttl_expires_at"))
 
     fc25_links = db[COLLECTION_BY_RECORD_TYPE["fc25_stats_link"]]
     indexes.append(

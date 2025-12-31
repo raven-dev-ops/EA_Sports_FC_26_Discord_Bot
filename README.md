@@ -237,3 +237,5 @@ staff monitor channel (`channel_staff_monitor_id`) only.
 - Security policy: `SECURITY.md`
 - License: `LICENSING.md`
 - Changelog: `CHANGELOG.md`
+- Release playbook: `docs/release-playbook.md`
+- Data lifecycle (backups/retention/deletion): `docs/data-lifecycle.md`

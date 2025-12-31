@@ -33,10 +33,13 @@ from services.guild_settings_schema import (
 )
 from services.heartbeat_service import get_worker_heartbeat
 from services.ops_tasks_service import (
+    OPS_TASK_ACTION_DELETE_GUILD_DATA,
     OPS_TASK_ACTION_REPOST_PORTALS,
     OPS_TASK_ACTION_RUN_SETUP,
+    cancel_ops_task,
     enqueue_ops_task,
     ensure_ops_task_indexes,
+    get_active_ops_task,
     list_ops_tasks,
 )
 from services.stripe_webhook_service import ensure_stripe_webhook_indexes, handle_stripe_webhook
@@ -59,6 +62,9 @@ RATE_LIMIT_WINDOW_SECONDS = int(os.environ.get("DASHBOARD_RATE_LIMIT_WINDOW_SECO
 RATE_LIMIT_PUBLIC_MAX = int(os.environ.get("DASHBOARD_RATE_LIMIT_PUBLIC_MAX", "20").strip() or "20")
 RATE_LIMIT_WEBHOOK_MAX = int(os.environ.get("DASHBOARD_RATE_LIMIT_WEBHOOK_MAX", "120").strip() or "120")
 RATE_LIMIT_DEFAULT_MAX = int(os.environ.get("DASHBOARD_RATE_LIMIT_DEFAULT_MAX", "300").strip() or "300")
+GUILD_DATA_DELETE_GRACE_HOURS = int(
+    os.environ.get("GUILD_DATA_DELETE_GRACE_HOURS", "24").strip() or "24"
+)
 
 # Minimal permissions needed for auto-setup and dashboard posting:
 # - Manage Channels, Manage Roles, View Channel, Send Messages, Embed Links, Read Message History
@@ -3339,6 +3345,70 @@ async def guild_ops_page(request: web.Request) -> web.Response:
         else "<tr><td colspan='7' class='muted'>No ops tasks yet.</td></tr>"
     )
 
+    grace_hours = max(0, int(GUILD_DATA_DELETE_GRACE_HOURS))
+    deletion_task: dict[str, Any] | None = None
+    deletion_task_error: str | None = None
+    try:
+        deletion_task = get_active_ops_task(
+            settings, guild_id=guild_id, action=OPS_TASK_ACTION_DELETE_GUILD_DATA
+        )
+    except Exception as exc:
+        deletion_task_error = str(exc)
+        deletion_task = None
+
+    deletion_note = ""
+    if deletion_task_error:
+        deletion_note = (
+            f"<p class='muted' style='margin-top:8px;'>"
+            f"Deletion status unavailable: <code>{_escape_html(deletion_task_error)}</code>"
+            "</p>"
+        )
+
+    delete_card_body = ""
+    if not settings.mongodb_per_guild_db:
+        delete_card_body = (
+            "<p class='muted' style='margin-top:8px;'>"
+            "<strong>Unavailable:</strong> Data deletion requires per-guild databases "
+            "(set <code>MONGODB_PER_GUILD_DB=true</code>).</p>"
+        )
+    elif deletion_task is not None:
+        status = str(deletion_task.get("status") or "").strip().lower()
+        run_after = deletion_task.get("run_after")
+        run_after_text = run_after.isoformat() if isinstance(run_after, datetime) else str(run_after or "")
+        if status == "queued":
+            when = f"<code>{_escape_html(run_after_text)}</code>" if run_after_text else "soon"
+            delete_card_body = (
+                "<p class='muted' style='margin-top:8px;'>"
+                f"<strong>Deletion scheduled.</strong> This guild's stored data will be deleted {when}."
+                "</p>"
+                f"<form method='post' action='/api/guild/{guild_id}/ops/cancel_delete_data' style='margin-top:10px;'>"
+                f"<input type='hidden' name='csrf' value='{_escape_html(session.csrf_token)}' />"
+                "<button class='btn secondary' type='submit'>Cancel deletion</button>"
+                "</form>"
+            )
+        else:
+            delete_card_body = (
+                "<p class='muted' style='margin-top:8px;'>"
+                f"<strong>Deletion task active.</strong> Status: <code>{_escape_html(status)}</code>."
+                "</p>"
+            )
+    else:
+        run_after = datetime.now(timezone.utc) + timedelta(hours=grace_hours)
+        confirm_phrase = f"DELETE {guild_id}"
+        delete_card_body = (
+            "<p class='muted' style='margin-top:8px;'>"
+            "<strong>Danger:</strong> Schedule an irreversible delete of this guild's stored data. "
+            f"Deletion runs after a {grace_hours}h grace period "
+            f"(scheduled for <code>{_escape_html(run_after.isoformat())}</code>)."
+            "</p>"
+            f"<form method='post' action='/api/guild/{guild_id}/ops/schedule_delete_data' style='margin-top:10px;'>"
+            f"<input type='hidden' name='csrf' value='{_escape_html(session.csrf_token)}' />"
+            f"<label class='muted' for='confirm_delete_{guild_id}'>Type <code>{_escape_html(confirm_phrase)}</code> to confirm</label>"
+            f"<input id='confirm_delete_{guild_id}' name='confirm' type='text' placeholder='{_escape_html(confirm_phrase)}' style='width:100%; margin-top:6px;' />"
+            "<button class='btn red' type='submit' style='margin-top:10px;'>Schedule deletion</button>"
+            "</form>"
+        )
+
     disabled_attr = "disabled" if installed is False else ""
     install_note = (
         f"<div class='card'><p class='muted'>{_escape_html(install_error or '')}</p></div>"
@@ -3370,6 +3440,11 @@ async def guild_ops_page(request: web.Request) -> web.Response:
               <button class="btn secondary" type="submit" {disabled_attr}>Repost portals</button>
             </form>
           </div>
+        </div>
+        <div class="card">
+          <div><strong>Data deletion</strong></div>
+          {delete_card_body}
+          {deletion_note}
         </div>
       </div>
       <div class="card">
@@ -3513,6 +3588,103 @@ async def guild_ops_run_full_setup(request: web.Request) -> web.Response:
 
 async def guild_ops_repost_portals(request: web.Request) -> web.Response:
     return await _enqueue_ops_from_dashboard(request, action=OPS_TASK_ACTION_REPOST_PORTALS)
+
+
+async def guild_ops_schedule_delete_data(request: web.Request) -> web.Response:
+    session = _require_session(request)
+    settings: Settings = request.app["settings"]
+    if not settings.mongodb_uri:
+        raise web.HTTPInternalServerError(text="MongoDB is not configured.")
+
+    if not settings.mongodb_per_guild_db:
+        raise web.HTTPBadRequest(text="Data deletion requires MONGODB_PER_GUILD_DB=true.")
+
+    guild_id_str = request.match_info["guild_id"]
+    guild_id = _require_owned_guild(session, guild_id=guild_id_str)
+
+    data = await request.post()
+    if str(data.get("csrf", "")) != session.csrf_token:
+        raise web.HTTPBadRequest(text="Invalid CSRF token.")
+
+    expected = f"DELETE {guild_id}"
+    confirm = str(data.get("confirm") or "").strip()
+    if confirm != expected:
+        raise web.HTTPBadRequest(text=f"Confirmation mismatch. Type: {expected}")
+
+    actor_id = _parse_int(session.user.get("id"))
+    actor_username = f"{session.user.get('username','')}#{session.user.get('discriminator','')}".strip("#")
+
+    grace_hours = max(0, int(GUILD_DATA_DELETE_GRACE_HOURS))
+    run_after = datetime.now(timezone.utc) + timedelta(hours=grace_hours)
+
+    task = enqueue_ops_task(
+        settings,
+        guild_id=guild_id,
+        action=OPS_TASK_ACTION_DELETE_GUILD_DATA,
+        requested_by_discord_id=actor_id,
+        requested_by_username=actor_username or None,
+        source="dashboard",
+        run_after=run_after,
+    )
+
+    try:
+        audit_col = get_collection(settings, record_type="audit_event", guild_id=guild_id)
+        record_audit_event(
+            guild_id=guild_id,
+            category="ops",
+            action="guild_data_deletion.scheduled",
+            source="dashboard",
+            actor_discord_id=actor_id,
+            actor_display_name=str(session.user.get("username") or "") or None,
+            actor_username=actor_username or None,
+            details={
+                "task_id": str(task.get("_id") or ""),
+                "run_after": run_after.isoformat(),
+                "grace_hours": grace_hours,
+            },
+            collection=audit_col,
+        )
+    except Exception:
+        pass
+
+    raise web.HTTPFound(f"/guild/{guild_id}/ops")
+
+
+async def guild_ops_cancel_delete_data(request: web.Request) -> web.Response:
+    session = _require_session(request)
+    settings: Settings = request.app["settings"]
+    if not settings.mongodb_uri:
+        raise web.HTTPInternalServerError(text="MongoDB is not configured.")
+
+    guild_id_str = request.match_info["guild_id"]
+    guild_id = _require_owned_guild(session, guild_id=guild_id_str)
+
+    data = await request.post()
+    if str(data.get("csrf", "")) != session.csrf_token:
+        raise web.HTTPBadRequest(text="Invalid CSRF token.")
+
+    canceled = cancel_ops_task(settings, guild_id=guild_id, action=OPS_TASK_ACTION_DELETE_GUILD_DATA)
+
+    actor_id = _parse_int(session.user.get("id"))
+    actor_username = f"{session.user.get('username','')}#{session.user.get('discriminator','')}".strip("#")
+
+    try:
+        audit_col = get_collection(settings, record_type="audit_event", guild_id=guild_id)
+        record_audit_event(
+            guild_id=guild_id,
+            category="ops",
+            action="guild_data_deletion.canceled",
+            source="dashboard",
+            actor_discord_id=actor_id,
+            actor_display_name=str(session.user.get("username") or "") or None,
+            actor_username=actor_username or None,
+            details={"canceled": canceled},
+            collection=audit_col,
+        )
+    except Exception:
+        pass
+
+    raise web.HTTPFound(f"/guild/{guild_id}/ops")
 
 
 async def guild_analytics_json(request: web.Request) -> web.Response:
@@ -3978,6 +4150,14 @@ def create_app(*, settings: Settings | None = None) -> web.Application:
     app.router.add_post("/api/guild/{guild_id}/ops/run_setup", guild_ops_run_setup)
     app.router.add_post("/api/guild/{guild_id}/ops/run_full_setup", guild_ops_run_full_setup)
     app.router.add_post("/api/guild/{guild_id}/ops/repost_portals", guild_ops_repost_portals)
+    app.router.add_post(
+        "/api/guild/{guild_id}/ops/schedule_delete_data",
+        guild_ops_schedule_delete_data,
+    )
+    app.router.add_post(
+        "/api/guild/{guild_id}/ops/cancel_delete_data",
+        guild_ops_cancel_delete_data,
+    )
     app.router.add_post("/api/billing/webhook", billing_webhook)
     return app
 

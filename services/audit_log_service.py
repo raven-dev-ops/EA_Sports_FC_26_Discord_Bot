@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+import os
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from pymongo.collection import Collection
@@ -8,6 +9,7 @@ from pymongo.collection import Collection
 from database import get_collection
 
 RECORD_TYPE = "audit_event"
+AUDIT_LOG_RETENTION_DAYS = int(os.environ.get("AUDIT_LOG_RETENTION_DAYS", "180").strip() or "180")
 
 
 def _utc_now() -> datetime:
@@ -37,6 +39,8 @@ def record_audit_event(
         "source": str(source or "").strip() or "unknown",
         "created_at": _utc_now(),
     }
+    if AUDIT_LOG_RETENTION_DAYS > 0:
+        doc["expires_at"] = doc["created_at"] + timedelta(days=AUDIT_LOG_RETENTION_DAYS)
     if actor_discord_id is not None:
         doc["actor_discord_id"] = actor_discord_id
     if actor_display_name:
@@ -67,4 +71,3 @@ def list_audit_events(
         .limit(safe_limit)
     )
     return [doc for doc in cursor if isinstance(doc, dict)]
-
