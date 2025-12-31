@@ -210,12 +210,15 @@ async def _set_coach_tier(
     desired_cap = _tier_to_cap(tier)
     if desired_cap is None:
         return False, "Tier must be one of: Coach, Premium, Premium+."
-    if desired_cap > 16 and not entitlements_service.is_feature_enabled(
-        settings,
-        guild_id=guild.id,
-        feature_key=entitlements_service.FEATURE_PREMIUM_COACH_TIERS,
-    ):
-        return False, "Premium coach tiers are a Pro feature for this server."
+    if desired_cap > 16:
+        try:
+            entitlements_service.require_feature(
+                settings,
+                guild_id=guild.id,
+                feature_key=entitlements_service.FEATURE_PREMIUM_COACH_TIERS,
+            )
+        except PermissionError:
+            return False, "Premium coach tiers are a Pro feature for this server."
 
     tier_role_id: int
     if desired_cap == 16:
@@ -608,11 +611,13 @@ class ManagerPortalView(SafeView):
                 ephemeral=True,
             )
             return
-        if not entitlements_service.is_feature_enabled(
-            settings,
-            guild_id=guild.id,
-            feature_key=entitlements_service.FEATURE_PREMIUM_COACHES_REPORT,
-        ):
+        try:
+            entitlements_service.require_feature(
+                settings,
+                guild_id=guild.id,
+                feature_key=entitlements_service.FEATURE_PREMIUM_COACHES_REPORT,
+            )
+        except PermissionError:
             await interaction.response.send_message(
                 embed=make_embed(
                     title="Premium Coaches is Pro-only",
@@ -656,11 +661,13 @@ class ManagerPortalView(SafeView):
                 ephemeral=True,
             )
             return
-        if not entitlements_service.is_feature_enabled(
-            settings,
-            guild_id=guild.id,
-            feature_key=entitlements_service.FEATURE_PREMIUM_COACHES_REPORT,
-        ):
+        try:
+            entitlements_service.require_feature(
+                settings,
+                guild_id=guild.id,
+                feature_key=entitlements_service.FEATURE_PREMIUM_COACHES_REPORT,
+            )
+        except PermissionError:
             await interaction.response.send_message(
                 embed=make_embed(
                     title="Premium Coaches is Pro-only",
@@ -729,11 +736,13 @@ class ManagerPortalView(SafeView):
                 ephemeral=True,
             )
             return
-        if not entitlements_service.is_feature_enabled(
-            settings,
-            guild_id=guild.id,
-            feature_key=entitlements_service.FEATURE_PREMIUM_COACHES_REPORT,
-        ):
+        try:
+            entitlements_service.require_feature(
+                settings,
+                guild_id=guild.id,
+                feature_key=entitlements_service.FEATURE_PREMIUM_COACHES_REPORT,
+            )
+        except PermissionError:
             await interaction.response.send_message(
                 embed=make_embed(
                     title="Premium Coaches is Pro-only",
@@ -781,11 +790,23 @@ class ManagerPortalView(SafeView):
 
         await interaction.response.defer(ephemeral=True)
 
-        premium_tiers_enabled = entitlements_service.is_feature_enabled(
-            settings,
-            guild_id=guild.id,
-            feature_key=entitlements_service.FEATURE_PREMIUM_COACH_TIERS,
-        )
+        try:
+            entitlements_service.require_feature(
+                settings,
+                guild_id=guild.id,
+                feature_key=entitlements_service.FEATURE_PREMIUM_COACH_TIERS,
+            )
+        except PermissionError:
+            await interaction.followup.send(
+                embed=make_embed(
+                    title="Sync failed",
+                    description="Premium coach tiers are a Pro feature for this server.",
+                    color=ERROR_COLOR,
+                ),
+                ephemeral=True,
+            )
+            return
+        premium_tiers_enabled = True
         coach_role_id = resolve_role_id(settings, guild_id=guild.id, field="role_coach_id")
         premium_role_id = resolve_role_id(settings, guild_id=guild.id, field="role_coach_premium_id")
         premium_plus_role_id = resolve_role_id(

@@ -197,14 +197,17 @@ class AddPlayerModal(SafeModal, title="Add Player"):
             return
 
         guild_id = getattr(interaction, "guild_id", None)
-        ban_checks_enabled = (
-            isinstance(guild_id, int)
-            and entitlements_service.is_feature_enabled(
-                settings,
-                guild_id=guild_id,
-                feature_key=entitlements_service.FEATURE_BANLIST,
-            )
-        )
+        ban_checks_enabled = False
+        if isinstance(guild_id, int):
+            try:
+                entitlements_service.require_feature(
+                    settings,
+                    guild_id=guild_id,
+                    feature_key=entitlements_service.FEATURE_BANLIST,
+                )
+                ban_checks_enabled = True
+            except PermissionError:
+                ban_checks_enabled = False
         if ban_checks_enabled:
             try:
                 ban_reason = get_ban_reason(settings, player_id)
@@ -231,12 +234,15 @@ class AddPlayerModal(SafeModal, title="Add Player"):
             cap = int(cap_value) if isinstance(cap_value, int) else 0
             if cap <= 0:
                 cap = 16
-            if isinstance(guild_id, int) and not entitlements_service.is_feature_enabled(
-                settings,
-                guild_id=guild_id,
-                feature_key=entitlements_service.FEATURE_PREMIUM_COACH_TIERS,
-            ):
-                cap = min(cap, 16)
+            if isinstance(guild_id, int):
+                try:
+                    entitlements_service.require_feature(
+                        settings,
+                        guild_id=guild_id,
+                        feature_key=entitlements_service.FEATURE_PREMIUM_COACH_TIERS,
+                    )
+                except PermissionError:
+                    cap = min(cap, 16)
             add_player(
                 roster_id=self.roster_id,
                 player_discord_id=player_id,

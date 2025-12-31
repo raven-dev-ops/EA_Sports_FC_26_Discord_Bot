@@ -206,11 +206,13 @@ async def force_rebuild_premium_coaches_report(
     test_mode: bool,
     cleanup_limit: int = 50,
 ) -> int:
-    if not entitlements_service.is_feature_enabled(
-        settings,
-        guild_id=guild_id,
-        feature_key=entitlements_service.FEATURE_PREMIUM_COACHES_REPORT,
-    ):
+    try:
+        entitlements_service.require_feature(
+            settings,
+            guild_id=guild_id,
+            feature_key=entitlements_service.FEATURE_PREMIUM_COACHES_REPORT,
+        )
+    except PermissionError:
         return 0
     channel_id = resolve_channel_id(
         settings,
@@ -272,11 +274,13 @@ async def upsert_premium_coaches_report(
     guild_id: int,
     test_mode: bool,
 ) -> None:
-    if not entitlements_service.is_feature_enabled(
-        settings,
-        guild_id=guild_id,
-        feature_key=entitlements_service.FEATURE_PREMIUM_COACHES_REPORT,
-    ):
+    try:
+        entitlements_service.require_feature(
+            settings,
+            guild_id=guild_id,
+            feature_key=entitlements_service.FEATURE_PREMIUM_COACHES_REPORT,
+        )
+    except PermissionError:
         return
     channel_id = resolve_channel_id(
         settings,

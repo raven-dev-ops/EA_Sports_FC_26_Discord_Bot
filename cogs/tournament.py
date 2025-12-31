@@ -31,11 +31,13 @@ class TournamentCog(commands.Cog):
                     "This command must be used in a server.", ephemeral=True
                 )
                 return False
-            if not entitlements_service.is_feature_enabled(
-                self.settings,
-                guild_id=guild_id,
-                feature_key=entitlements_service.FEATURE_TOURNAMENT_AUTOMATION,
-            ):
+            try:
+                entitlements_service.require_feature(
+                    self.settings,
+                    guild_id=guild_id,
+                    feature_key=entitlements_service.FEATURE_TOURNAMENT_AUTOMATION,
+                )
+            except PermissionError:
                 await interaction.response.send_message(
                     "Tournament automation is Pro-only for this server.",
                     ephemeral=True,

@@ -84,6 +84,11 @@ a:hover {
   color: #ffe2a6;
 }
 
+.badge.inline {
+  margin-left: 6px;
+  vertical-align: middle;
+}
+
 .alert {
   border: 1px solid var(--border);
   border-radius: 14px;
@@ -182,6 +187,12 @@ code {
   color: white;
 }
 
+.btn-group {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .icon-btn {
   display: none;
   align-items: center;
@@ -244,6 +255,20 @@ code {
   margin: 0;
   flex: 1 1 auto;
   min-width: 320px;
+}
+
+.callout {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.callout .title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .sidebar {

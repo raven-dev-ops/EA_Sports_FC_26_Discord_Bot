@@ -1845,7 +1845,7 @@ async def guild_settings_page(request: web.Request) -> web.Response:
         else ""
     )
     premium_badge_class = "pro" if premium_tiers_enabled else "warn"
-    premium_badge_html = f"<span class='badge {premium_badge_class}' style='margin-left:6px;'>PRO</span>"
+    premium_badge_html = f"<span class='badge {premium_badge_class} inline'>PRO</span>"
 
     if roles:
         valid_role_ids = {_parse_int(r.get("id")) for r in roles}
@@ -1964,7 +1964,7 @@ async def guild_settings_page(request: web.Request) -> web.Response:
         else ""
     )
     premium_report_badge_class = "pro" if premium_report_enabled else "warn"
-    premium_report_badge_html = f"<span class='badge {premium_report_badge_class}' style='margin-left:6px;'>PRO</span>"
+    premium_report_badge_html = f"<span class='badge {premium_report_badge_class} inline'>PRO</span>"
     premium_pin_control_html = f"""
             <h3 style="margin:14px 0 6px;">Premium Coaches {premium_report_badge_html}</h3>
             <label><input type="checkbox" name="{PREMIUM_COACHES_PIN_ENABLED_KEY}" value="1" {premium_pin_checked} {premium_report_disabled_attr} /> Pin listing message</label>
@@ -1990,24 +1990,22 @@ async def guild_settings_page(request: web.Request) -> web.Response:
         else ""
     )
     fc25_badge_class = "pro" if fc25_stats_enabled else "warn"
-    fc25_badge_html = f"<span class='badge {fc25_badge_class}' style='margin-left:6px;'>PRO</span>"
+    fc25_badge_html = f"<span class='badge {fc25_badge_class} inline'>PRO</span>"
 
     pro_callout_html = ""
     if not is_pro:
         pro_callout_html = f"""
-      <div class="card">
-        <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
-          <div>
-            <div style="display:flex; align-items:center; gap:8px;">
-              <span class="badge warn">PRO</span>
-              <strong>Premium features locked</strong>
-            </div>
-            <p class="muted" style="margin:6px 0 0;">Premium coach tiers, Premium Coaches report, and FC25 stats are available on the Pro plan.</p>
+      <div class="card callout">
+        <div>
+          <div class="title-row">
+            <span class="badge warn">PRO</span>
+            <strong>Premium features locked</strong>
           </div>
-          <div style="display:flex; gap:8px; flex-wrap:wrap;">
-            <a class="btn blue" href="{_escape_html(upgrade_href)}">Upgrade</a>
-            <a class="btn secondary" href="/app/billing?guild_id={guild_id}">Billing</a>
-          </div>
+          <p class="muted" style="margin:6px 0 0;">Premium coach tiers, Premium Coaches report, and FC25 stats are available on the Pro plan.</p>
+        </div>
+        <div class="btn-group">
+          <a class="btn blue" href="{_escape_html(upgrade_href)}">Upgrade</a>
+          <a class="btn secondary" href="/app/billing?guild_id={guild_id}">Billing</a>
         </div>
       </div>
     """
