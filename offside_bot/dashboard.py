@@ -1056,6 +1056,13 @@ async def commands_page(_request: web.Request) -> web.Response:
     return web.Response(text=page, content_type="text/html")
 
 
+async def features_page(_request: web.Request) -> web.Response:
+    from offside_bot.web_templates import render
+
+    page = render("pages/features.html", title="Features")
+    return web.Response(text=page, content_type="text/html")
+
+
 async def support_page(_request: web.Request) -> web.Response:
     support_discord = os.environ.get("SUPPORT_DISCORD_INVITE_URL", "").strip()
     support_email = os.environ.get("SUPPORT_EMAIL", "").strip()
@@ -3920,6 +3927,7 @@ def create_app(*, settings: Settings | None = None) -> web.Application:
     app.router.add_get("/health", health)
     app.router.add_get("/ready", ready)
     app.router.add_get("/", index)
+    app.router.add_get("/features", features_page)
     app.router.add_get("/pricing", pricing_page)
     app.router.add_get("/terms", terms_page)
     app.router.add_get("/privacy", privacy_page)

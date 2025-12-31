@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.43] - 2025-12-31
+
+### Added
+- Web: `/features` page with module breakdowns and a “Compare plans” CTA.
+
 ## [0.2.42] - 2025-12-31
 
 ### Added
