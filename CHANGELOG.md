@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.46] - 2025-12-31
+
+### Added
+- Web: minimum branding pack (logo/favicon/OG image) under `offside_bot/static/brand/` and wired into templates.
+
 ## [0.2.45] - 2025-12-31
 
 ### Added

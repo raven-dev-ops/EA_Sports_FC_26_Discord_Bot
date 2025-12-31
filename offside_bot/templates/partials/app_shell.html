@@ -10,7 +10,10 @@
     >
       &#9776;
     </button>
-    <a class="brand" href="/">Offside</a>
+    <a class="brand" href="/">
+      <img class="brand-logo" src="{{ static_url('brand/logo.svg') }}" alt="Offside" width="24" height="24" />
+      <span>Offside</span>
+    </a>
   </div>
   <div style="display:flex; gap:10px; align-items:center;">
     {% if guild_selector %}

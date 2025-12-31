@@ -213,9 +213,18 @@ code {
 }
 
 .topbar .brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
   font-weight: 800;
   font-size: 18px;
   color: var(--text);
+}
+
+.brand-logo {
+  width: 24px;
+  height: 24px;
+  border-radius: 10px;
 }
 
 .content {

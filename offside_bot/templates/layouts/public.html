@@ -3,7 +3,18 @@
 
 {% block body %}
   <div class="topbar">
-    <div><a class="brand" href="/">{{ brand|default("Offside") }}</a></div>
+    <div>
+      <a class="brand" href="/">
+        <img
+          class="brand-logo"
+          src="{{ static_url('brand/logo.svg') }}"
+          alt="{{ brand|default('Offside') }}"
+          width="24"
+          height="24"
+        />
+        <span>{{ brand|default("Offside") }}</span>
+      </a>
+    </div>
     <div style="display:flex; gap:10px; align-items:center;">
       {% if right_cta %}
         {{ right_cta|safe }}
@@ -15,4 +26,3 @@
     {% block content %}{% endblock %}
   </main>
 {% endblock %}
-
