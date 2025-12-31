@@ -61,4 +61,4 @@ We may update these Terms from time to time. The effective date will reflect the
 
 ## Contact
 
-For questions about these Terms, contact the server administrators or the Bot maintainer: [CONTACT_EMAIL_OR_HANDLE].
+For questions about these Terms, contact the server administrators or use the Support page at `/support` to reach the Bot maintainer.

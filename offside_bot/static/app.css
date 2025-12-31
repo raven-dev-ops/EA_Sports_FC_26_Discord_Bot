@@ -572,6 +572,12 @@ select:focus {
   color: var(--muted);
 }
 
+.footer-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
 .footer a {
   color: var(--muted);
 }

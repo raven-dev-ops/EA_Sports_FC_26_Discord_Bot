@@ -3,16 +3,28 @@
 
 {% block content %}
   <h1>Pricing</h1>
-  <p class="muted">Start free. Upgrade when you need premium features.</p>
+  <p class="muted">Pricing is per server. Start free and upgrade when you need premium workflows.</p>
 
   <div class="card flex justify-between items-center gap-12 flex-wrap">
     <div>
-      <strong>Billing</strong>
+      <strong>Billing cadence</strong>
       <div class="muted mt-6">Yearly pricing is coming soon.</div>
     </div>
     <div class="flex gap-10 flex-wrap">
       <a class="btn secondary" href="{{ toggle_monthly_href }}">{{ "Monthly" if billing != "monthly" else "Monthly ✓" }}</a>
       <a class="btn secondary" href="{{ toggle_yearly_href }}">{{ "Yearly (soon)" if billing != "yearly" else "Yearly ✓ (soon)" }}</a>
+    </div>
+  </div>
+
+  <div class="card flex justify-between items-center gap-12 flex-wrap">
+    <div>
+      <strong>Trust & billing</strong>
+      <div class="muted mt-6">Cancel anytime. Free tier never asks for a card.</div>
+    </div>
+    <div class="flex gap-10 flex-wrap">
+      <span class="badge ok">Stripe</span>
+      <span class="badge">Per server</span>
+      <span class="badge">No long-term lock-in</span>
     </div>
   </div>
 
@@ -36,8 +48,11 @@
 
     <div class="card">
       <div class="flex justify-between items-center gap-10">
-        <strong>Pro</strong>
-        {{ badge("PRO", "pro") }}
+        <div class="flex gap-10 items-center">
+          <strong>Pro</strong>
+          {{ badge("PRO", "pro") }}
+          <span class="badge ok">MOST POPULAR</span>
+        </div>
       </div>
       <div class="text-xl font-800 mt-8">
         {% if billing == "yearly" %}
@@ -101,6 +116,16 @@
       {% endfor %}
     </tbody>
   </table>
+
+  <h2>FAQ</h2>
+  <div class="card">
+    <p><strong>Is pricing per server?</strong></p>
+    <p class="muted">Yes. Each Discord server can stay Free or upgrade to Pro independently.</p>
+    <p class="mt-14"><strong>Can I cancel anytime?</strong></p>
+    <p class="muted">Yes. Manage upgrades and cancellations in the billing portal.</p>
+    <p class="mt-14"><strong>Do you offer invoices or PO?</strong></p>
+    <p class="muted">Enterprise plans support invoicing and custom onboarding.</p>
+  </div>
 
   <div class="card">
     <div class="flex justify-between items-center gap-12 flex-wrap">

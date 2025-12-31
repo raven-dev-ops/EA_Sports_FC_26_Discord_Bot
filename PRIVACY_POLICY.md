@@ -65,4 +65,4 @@ This Privacy Policy describes how the Offside Discord Bot ("the Bot") collects, 
 
 ## Contact
 
-For questions or requests, contact the server administrators or the Bot maintainer: [CONTACT_EMAIL_OR_HANDLE].
+For questions or requests, contact the server administrators or use the Support page at `/support` to reach the Bot maintainer.
