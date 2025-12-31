@@ -48,6 +48,64 @@ def _settings() -> Settings:
 
 
 @pytest.mark.asyncio
+async def test_protected_routes_redirect_to_login_with_next(monkeypatch) -> None:
+    from urllib.parse import parse_qs, urlparse
+
+    from aiohttp.test_utils import TestClient, TestServer
+
+    monkeypatch.setattr(database, "MongoClient", mongomock.MongoClient)
+    monkeypatch.setattr(database, "_CLIENT", None)
+
+    app = dashboard.create_app(settings=_settings())
+    client = TestClient(TestServer(app))
+    await client.start_server()
+    try:
+        resp = await client.get("/app/billing?guild_id=123", allow_redirects=False)
+        assert resp.status == 302
+        location = resp.headers.get("Location")
+        assert location is not None
+        parsed = urlparse(location)
+        assert parsed.path == "/login"
+        assert parse_qs(parsed.query).get("next") == ["/app/billing?guild_id=123"]
+    finally:
+        await client.close()
+
+
+@pytest.mark.asyncio
+async def test_oauth_callback_access_denied_renders_friendly_page(monkeypatch) -> None:
+    from aiohttp.test_utils import TestClient, TestServer
+
+    monkeypatch.setattr(database, "MongoClient", mongomock.MongoClient)
+    monkeypatch.setattr(database, "_CLIENT", None)
+    monkeypatch.setenv("DISCORD_CLIENT_SECRET", "secret")
+    monkeypatch.setenv("DASHBOARD_REDIRECT_URI", "http://localhost:8080/oauth/callback")
+
+    app = dashboard.create_app(settings=_settings())
+    states = app["state_collection"]
+    states.insert_one(
+        {
+            "_id": "state1",
+            "issued_at": time.time(),
+            "next": "/guild/123/overview",
+            "expires_at": datetime.now(timezone.utc) + timedelta(seconds=600),
+        }
+    )
+
+    client = TestClient(TestServer(app))
+    await client.start_server()
+    try:
+        resp = await client.get("/oauth/callback?error=access_denied&state=state1", allow_redirects=False)
+        assert resp.status == 200
+        html = await resp.text()
+        assert "Login cancelled" in html
+        assert "Try again" in html
+        assert "/login?next=" in html
+        assert "guild%2F123%2Foverview" in html
+    finally:
+        await client.close()
+
+
+@pytest.mark.asyncio
 async def test_oauth_callback_records_manage_guild_as_eligible(monkeypatch) -> None:
     from aiohttp.test_utils import TestClient, TestServer
 

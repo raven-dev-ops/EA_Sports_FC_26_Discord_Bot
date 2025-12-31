@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.40] - 2025-12-30
+
+### Added
+- Dashboard: protected pages now redirect to `/login?next=...` so you return to the page you originally requested after Discord auth.
+- Dashboard: friendly OAuth callback errors (cancelled login, expired state, token/API failures) with a retry link.
+
 ## [0.2.39] - 2025-12-30
 
 ### Added

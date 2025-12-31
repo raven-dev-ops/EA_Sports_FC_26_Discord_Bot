@@ -641,7 +641,9 @@ async def session_middleware(request: web.Request, handler):
 def _require_session(request: web.Request) -> SessionData:
     session = request.get("session")
     if session is None:
-        raise web.HTTPFound("/login")
+        next_path = _sanitize_next_path(request.path_qs)
+        query = urllib.parse.urlencode({"next": next_path})
+        raise web.HTTPFound(f"/login?{query}")
     return session
 
 
@@ -1185,41 +1187,141 @@ async def install(request: web.Request) -> web.Response:
     )
 
 
+def _oauth_error_response(
+    *,
+    title: str,
+    message: str,
+    next_path: str,
+    status: int = 400,
+) -> web.Response:
+    from offside_bot.web_templates import render, safe_html
+
+    next_path = _sanitize_next_path(next_path)
+    login_href = f"/login?{urllib.parse.urlencode({'next': next_path})}"
+    content = f"""
+      <p><a href="/">&larr; Back</a></p>
+      <h1>{_escape_html(title)}</h1>
+      <div class="card">
+        <p class="muted">{_escape_html(message)}</p>
+        <div style="margin-top:12px; display:flex; gap:10px; flex-wrap:wrap;">
+          <a class="btn blue" href="{_escape_html(login_href)}">Try again</a>
+          <a class="btn secondary" href="/support">Support</a>
+        </div>
+      </div>
+    """
+    page = render("pages/markdown_page.html", title=title, content=safe_html(content))
+    return web.Response(text=page, status=status, content_type="text/html")
+
+
 async def oauth_callback(request: web.Request) -> web.Response:
     settings: Settings = request.app["settings"]
     client_id, client_secret, redirect_uri = _oauth_config(settings)
     http: ClientSession = request.app["http"]
 
-    code = request.query.get("code", "").strip()
-    state = request.query.get("state", "").strip()
-    if not code or not state:
-        raise web.HTTPBadRequest(text="Missing code/state.")
+    code = str(request.query.get("code") or "").strip()
+    state = str(request.query.get("state") or "").strip()
+    error = str(request.query.get("error") or "").strip()
+    error_description = str(request.query.get("error_description") or "").strip()
 
-    states: Collection = request.app["state_collection"]
-    pending_state = states.find_one_and_delete({"_id": state})
-    issued_at_value = pending_state.get("issued_at") if pending_state else None
-    try:
-        issued_at = float(issued_at_value) if issued_at_value is not None else None
-    except (TypeError, ValueError):
-        issued_at = None
-    next_path = str(pending_state.get("next") or "/") if pending_state else "/"
-    next_path = _sanitize_next_path(next_path)
+    next_path = "/"
+    issued_at: float | None = None
+    pending_state: dict[str, Any] | None = None
+    if state:
+        states: Collection = request.app["state_collection"]
+        raw_state = states.find_one_and_delete({"_id": state})
+        pending_state = raw_state if isinstance(raw_state, dict) else None
+        issued_at_value = pending_state.get("issued_at") if pending_state else None
+        try:
+            issued_at = float(issued_at_value) if issued_at_value is not None else None
+        except (TypeError, ValueError):
+            issued_at = None
+        next_path = str(pending_state.get("next") or "/") if pending_state else "/"
+        next_path = _sanitize_next_path(next_path)
+
+    if error:
+        if error == "access_denied":
+            return _oauth_error_response(
+                title="Login cancelled",
+                message="Discord authorization was cancelled. You can try again when you're ready.",
+                next_path=next_path,
+                status=200,
+            )
+        detail = f" ({error_description})" if error_description else ""
+        return _oauth_error_response(
+            title="Login failed",
+            message=f"Discord returned an OAuth error: {error}{detail}",
+            next_path=next_path,
+            status=400,
+        )
+
+    if not state or not code:
+        return _oauth_error_response(
+            title="Login failed",
+            message="Missing code/state. Please try logging in again.",
+            next_path=next_path,
+            status=400,
+        )
+
     if issued_at is None or time.time() - issued_at > STATE_TTL_SECONDS:
-        raise web.HTTPBadRequest(text="Invalid or expired state.")
+        return _oauth_error_response(
+            title="Login expired",
+            message="Your login attempt expired. Please try logging in again.",
+            next_path=next_path,
+            status=400,
+        )
 
-    token = await _exchange_code(
-        http,
-        client_id=client_id,
-        client_secret=client_secret,
-        redirect_uri=redirect_uri,
-        code=code,
-    )
+    try:
+        token = await _exchange_code(
+            http,
+            client_id=client_id,
+            client_secret=client_secret,
+            redirect_uri=redirect_uri,
+            code=code,
+        )
+    except web.HTTPException as exc:
+        logging.warning("event=oauth_exchange_failed status=%s detail=%s", exc.status, exc.text)
+        return _oauth_error_response(
+            title="Login failed",
+            message="Discord token exchange failed. Please try again.",
+            next_path=next_path,
+            status=502,
+        )
+    except Exception:
+        logging.exception("event=oauth_exchange_failed_unhandled")
+        return _oauth_error_response(
+            title="Login failed",
+            message="Discord token exchange failed. Please try again.",
+            next_path=next_path,
+            status=502,
+        )
     access_token = str(token.get("access_token") or "")
     if not access_token:
-        raise web.HTTPBadRequest(text="OAuth did not return an access_token.")
+        return _oauth_error_response(
+            title="Login failed",
+            message="Discord did not return an access token. Please try again.",
+            next_path=next_path,
+            status=502,
+        )
 
-    user = await _discord_get_json(http, url=ME_URL, access_token=access_token)
-    guilds = await _discord_get_json(http, url=MY_GUILDS_URL, access_token=access_token)
+    try:
+        user = await _discord_get_json(http, url=ME_URL, access_token=access_token)
+        guilds = await _discord_get_json(http, url=MY_GUILDS_URL, access_token=access_token)
+    except web.HTTPException as exc:
+        logging.warning("event=oauth_discord_api_failed status=%s detail=%s", exc.status, exc.text)
+        return _oauth_error_response(
+            title="Login failed",
+            message="Discord API request failed. Please try again.",
+            next_path=next_path,
+            status=502,
+        )
+    except Exception:
+        logging.exception("event=oauth_discord_api_failed_unhandled")
+        return _oauth_error_response(
+            title="Login failed",
+            message="Discord API request failed. Please try again.",
+            next_path=next_path,
+            status=502,
+        )
     all_guilds = [g for g in guilds if isinstance(g, dict)]
     owner_guilds = [g for g in all_guilds if _guild_is_eligible(g)]
 
