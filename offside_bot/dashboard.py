@@ -784,13 +784,12 @@ async def security_headers_middleware(request: web.Request, handler):
     response.headers.setdefault("Referrer-Policy", "no-referrer")
     response.headers.setdefault("Permissions-Policy", "interest-cohort=()")
 
-    # Inline CSS is used in _html_page, so allow 'unsafe-inline' for styles.
     csp_parts = [
         "default-src 'self'",
         "base-uri 'self'",
         "frame-ancestors 'none'",
         "img-src 'self' data: https://cdn.discordapp.com https://cdn.discordapp.net",
-        "style-src 'self' 'unsafe-inline'",
+        "style-src 'self'",
         "script-src 'self'",
         "connect-src 'self' https://discord.com https://discordapp.com",
         "font-src 'self'",
@@ -1038,7 +1037,7 @@ async def app_index(request: web.Request) -> web.Response:
     )
 
     content = f"""
-      <h1 style="margin-top:0;">Your servers</h1>
+      <h1 class="mt-0">Your servers</h1>
       {search_box}
       {cards_html}
       <h2>Invite link</h2>
@@ -1732,7 +1731,7 @@ async def guild_settings_page(request: web.Request) -> web.Response:
           <p><a href="/app">&larr; Back</a></p>
           <h1>Settings</h1>
           <div class="card">
-            <h2 style="margin-top:0;">Invite bot to this server</h2>
+            <h2 class="mt-0">Invite bot to this server</h2>
             <p class="muted">This server is in your Discord list, but the bot is not installed yet.</p>
             <p><a class="btn blue" href="/install?guild_id={guild_id}">Invite bot to server</a></p>
             <p class="muted">Direct invite URL:</p>
@@ -1805,7 +1804,7 @@ async def guild_settings_page(request: web.Request) -> web.Response:
         options_html = "\n".join(role_options) or "<option disabled>(no roles found)</option>"
         staff_roles_control_html = f"""
             <label>Staff roles</label><br/>
-            <select multiple name="staff_role_ids" size="10" style="width:100%; padding:10px; margin-top:6px;">
+            <select multiple name="staff_role_ids" size="10" class="w-full mt-6">
               {options_html}
             </select>
             <p class="muted">Select one or more roles. Leave empty to require Manage Server (or env <code>STAFF_ROLE_IDS</code>).</p>
@@ -1819,7 +1818,7 @@ async def guild_settings_page(request: web.Request) -> web.Response:
         staff_roles_control_html = f"""
             {warning}
             <label>Staff role IDs (comma-separated)</label><br/>
-            <input name="staff_role_ids_csv" style="width:100%; padding:10px; margin-top:6px;" value="{_escape_html(staff_role_ids_value)}" />
+            <input name="staff_role_ids_csv" class="w-full mt-6" value="{_escape_html(staff_role_ids_value)}" />
             <p class="muted">Leave blank to require Manage Server (or env <code>STAFF_ROLE_IDS</code>).</p>
         """
 
@@ -1862,30 +1861,30 @@ async def guild_settings_page(request: web.Request) -> web.Response:
             return "\n".join(option_lines)
 
         coach_roles_control_html = f"""
-            <h3 style="margin:14px 0 6px;">Coach tiers</h3>
+            <h3 class="mt-14">Coach tiers</h3>
             <label>Coach role</label><br/>
-            <select name="role_coach_id" style="width:100%; padding:10px; margin-top:6px;">
+            <select name="role_coach_id" class="w-full mt-6">
               {_role_options(coach_role_id)}
             </select>
-            <label style="display:block; margin-top:10px;">Coach Premium role {premium_badge_html}</label>
-            <select name="role_coach_premium_id" {premium_tiers_disabled_attr} style="width:100%; padding:10px; margin-top:6px;">
+            <label class="mt-10 block">Coach Premium role {premium_badge_html}</label>
+            <select name="role_coach_premium_id" {premium_tiers_disabled_attr} class="w-full mt-6">
               {_role_options(premium_role_id)}
             </select>
-            <label style="display:block; margin-top:10px;">Coach Premium+ role {premium_badge_html}</label>
-            <select name="role_coach_premium_plus_id" {premium_tiers_disabled_attr} style="width:100%; padding:10px; margin-top:6px;">
+            <label class="mt-10 block">Coach Premium+ role {premium_badge_html}</label>
+            <select name="role_coach_premium_plus_id" {premium_tiers_disabled_attr} class="w-full mt-6">
               {_role_options(premium_plus_role_id)}
             </select>
             {premium_tiers_note}
         """
     else:
         coach_roles_control_html = f"""
-            <h3 style="margin:14px 0 6px;">Coach tiers</h3>
+            <h3 class="mt-14">Coach tiers</h3>
             <label>Coach role ID</label><br/>
-            <input name="role_coach_id" style="width:100%; padding:10px; margin-top:6px;" value="{_escape_html(coach_role_id or '')}" />
-            <label style="display:block; margin-top:10px;">Coach Premium role ID {premium_badge_html}</label>
-            <input name="role_coach_premium_id" {premium_tiers_disabled_attr} style="width:100%; padding:10px; margin-top:6px;" value="{_escape_html(premium_role_id or '')}" />
-            <label style="display:block; margin-top:10px;">Coach Premium+ role ID {premium_badge_html}</label>
-            <input name="role_coach_premium_plus_id" {premium_tiers_disabled_attr} style="width:100%; padding:10px; margin-top:6px;" value="{_escape_html(premium_plus_role_id or '')}" />
+            <input name="role_coach_id" class="w-full mt-6" value="{_escape_html(coach_role_id or '')}" />
+            <label class="mt-10 block">Coach Premium role ID {premium_badge_html}</label>
+            <input name="role_coach_premium_id" {premium_tiers_disabled_attr} class="w-full mt-6" value="{_escape_html(premium_role_id or '')}" />
+            <label class="mt-10 block">Coach Premium+ role ID {premium_badge_html}</label>
+            <input name="role_coach_premium_plus_id" {premium_tiers_disabled_attr} class="w-full mt-6" value="{_escape_html(premium_plus_role_id or '')}" />
             {premium_tiers_note}
         """
 
@@ -1931,21 +1930,21 @@ async def guild_settings_page(request: web.Request) -> web.Response:
                 )
             return "\n".join(option_lines)
 
-        channel_controls: list[str] = ['<h3 style="margin:14px 0 6px;">Channels</h3>']
+        channel_controls: list[str] = ['<h3 class="mt-14">Channels</h3>']
         for field, label in GUILD_CHANNEL_FIELDS:
             selected_id = selected_channels.get(field)
             channel_controls.append(f"<label>{_escape_html(label)}</label><br/>")
             channel_controls.append(
-                f"<select name=\"{field}\" style=\"width:100%; padding:10px; margin-top:6px;\">{_channel_options(selected_id)}</select>"
+                f"<select name=\"{field}\" class=\"w-full mt-6\">{_channel_options(selected_id)}</select>"
             )
         channels_control_html = "\n".join(channel_controls)
     else:
-        channel_controls = ['<h3 style="margin:14px 0 6px;">Channels</h3>']
+        channel_controls = ['<h3 class="mt-14">Channels</h3>']
         for field, label in GUILD_CHANNEL_FIELDS:
             selected_id = selected_channels.get(field)
             channel_controls.append(f"<label>{_escape_html(label)} ID</label><br/>")
             channel_controls.append(
-                f"<input name=\"{field}\" style=\"width:100%; padding:10px; margin-top:6px;\" value=\"{_escape_html(selected_id or '')}\" />"
+                f"<input name=\"{field}\" class=\"w-full mt-6\" value=\"{_escape_html(selected_id or '')}\" />"
             )
         channels_control_html = "\n".join(channel_controls)
 
@@ -1960,7 +1959,7 @@ async def guild_settings_page(request: web.Request) -> web.Response:
     premium_report_badge_class = "pro" if premium_report_enabled else "warn"
     premium_report_badge_html = f"<span class='badge {premium_report_badge_class} inline'>PRO</span>"
     premium_pin_control_html = f"""
-            <h3 style="margin:14px 0 6px;">Premium Coaches {premium_report_badge_html}</h3>
+            <h3 class="mt-14">Premium Coaches {premium_report_badge_html}</h3>
             <label><input type="checkbox" name="{PREMIUM_COACHES_PIN_ENABLED_KEY}" value="1" {premium_pin_checked} {premium_report_disabled_attr} /> Pin listing message</label>
             <p class="muted">Pins the bot's Premium Coaches listing message in the Premium Coaches channel (requires Manage Messages).</p>
             {premium_report_note}
@@ -2020,7 +2019,7 @@ async def guild_settings_page(request: web.Request) -> web.Response:
         <div class="card">
           <div><strong>Guild</strong></div>
           <div class="muted">ID: <code>{guild_id}</code></div>
-          <div style="margin-top:10px;">
+          <div class="mt-10">
             <a class="btn blue" href="{invite_href}">Invite bot to this server</a>
           </div>
         </div>
@@ -2029,7 +2028,7 @@ async def guild_settings_page(request: web.Request) -> web.Response:
       {pro_callout_html}
       <div class="row">
          <div class="card">
-           <h2 style="margin-top:0;">Access</h2>
+        <h2 class="mt-0">Access</h2>
            <form method="post" action="/guild/{guild_id}/settings">
              <input type="hidden" name="csrf" value="{session.csrf_token}" />
              {metadata_warning_html}
@@ -2038,19 +2037,19 @@ async def guild_settings_page(request: web.Request) -> web.Response:
                {channels_control_html}
                {premium_pin_control_html}
                <label>FC25 stats override {fc25_badge_html}</label><br/>
-               <select name="fc25_stats_enabled" {fc25_disabled_attr} style="width:100%; padding:10px; margin-top:6px;">
+               <select name="fc25_stats_enabled" {fc25_disabled_attr} class="w-full mt-6">
                  <option value="default" {selected_default}>Default</option>
                  <option value="true" {selected_true}>Enabled</option>
                 <option value="false" {selected_false}>Disabled</option>
              </select>
              {fc25_note}
-             <div style="margin-top:12px;">
+              <div class="mt-12">
                <button class="btn" type="submit">Save</button>
              </div>
            </form>
         </div>
         <div class="card">
-          <h2 style="margin-top:0;">Current Config</h2>
+          <h2 class="mt-0">Current Config</h2>
           <table><thead><tr><th>key</th><th>value</th></tr></thead><tbody>{rows}</tbody></table>
         </div>
       </div>
@@ -2247,19 +2246,19 @@ async def guild_page(request: web.Request) -> web.Response:
           <div class="muted">ID: <code>{guild_id}</code> &bull; Plan: {plan_badge}</div>
           <div class="muted">MongoDB DB: <code>{analytics.db_name}</code></div>
           <div class="muted">Generated: {analytics.generated_at.isoformat()}</div>
-          <div style="margin-top:10px;"><a href="/api/guild/{guild_id}/analytics.json">Download JSON</a></div>
-          <div style="margin-top:10px;"><a class="btn secondary" href="/guild/{guild_id}/settings">Settings</a></div>
-          <div style="margin-top:10px;"><a class="btn secondary" href="/guild/{guild_id}/permissions">Permissions</a></div>
-          <div style="margin-top:10px;"><a class="btn secondary" href="/guild/{guild_id}/audit">Audit Log</a></div>
+          <div class="mt-10"><a href="/api/guild/{guild_id}/analytics.json">Download JSON</a></div>
+          <div class="mt-10"><a class="btn secondary" href="/guild/{guild_id}/settings">Settings</a></div>
+          <div class="mt-10"><a class="btn secondary" href="/guild/{guild_id}/permissions">Permissions</a></div>
+          <div class="mt-10"><a class="btn secondary" href="/guild/{guild_id}/audit">Audit Log</a></div>
         </div>
       </div>
       <div class="row">
         <div class="card">
-          <h2 style="margin-top:0;">Record Types</h2>
+          <h2 class="mt-0">Record Types</h2>
           <table><thead><tr><th>record_type</th><th>count</th></tr></thead><tbody>{count_rows}</tbody></table>
         </div>
         <div class="card">
-          <h2 style="margin-top:0;">Collections</h2>
+          <h2 class="mt-0">Collections</h2>
           <table><thead><tr><th>collection</th><th>count</th></tr></thead><tbody>{collection_rows}</tbody></table>
         </div>
       </div>
@@ -2558,8 +2557,8 @@ async def guild_overview_page(request: web.Request) -> web.Response:
         actions_block = f"""
           <div class="card">
             <div><strong>Quick actions</strong></div>
-            <div class="muted" style="margin-top:8px;">Run setup and repost portals from the bot worker.</div>
-            <div style="margin-top:10px; display:flex; gap:10px; flex-wrap:wrap;">
+            <div class="muted mt-8">Run setup and repost portals from the bot worker.</div>
+            <div class="flex gap-10 flex-wrap mt-10">
               <form method="post" action="/api/guild/{guild_id}/ops/run_setup">
                 <input type="hidden" name="csrf" value="{_escape_html(session.csrf_token)}" />
                 <button class="btn" type="submit" {disabled_attr}>Run setup now</button>
@@ -2574,7 +2573,7 @@ async def guild_overview_page(request: web.Request) -> web.Response:
         """
 
     body = f"""
-      <h1 style="margin-top:0;">Overview</h1>
+      <h1 class="mt-0">Overview</h1>
       <div class="row">
         <div class="card">
           <div><strong>Guild</strong></div>
@@ -2585,7 +2584,7 @@ async def guild_overview_page(request: web.Request) -> web.Response:
         {actions_block}
       </div>
       <div class="card">
-        <h2 style="margin-top:0;">Setup checklist</h2>
+        <h2 class="mt-0">Setup checklist</h2>
         <table>
           <thead><tr><th>item</th><th>status</th><th>details</th><th></th></tr></thead>
           <tbody>{checks}</tbody>
@@ -2594,15 +2593,15 @@ async def guild_overview_page(request: web.Request) -> web.Response:
       <div class="row">
         <div class="card">
           <div class="muted">Roster submissions</div>
-          <div style="font-size:32px; font-weight:800;">{_escape_html(submissions_display)}</div>
+          <div class="text-xxl font-800">{_escape_html(submissions_display)}</div>
         </div>
         <div class="card">
           <div class="muted">Approvals</div>
-          <div style="font-size:32px; font-weight:800;">{_escape_html(approvals_display)}</div>
+          <div class="text-xxl font-800">{_escape_html(approvals_display)}</div>
         </div>
         <div class="card">
           <div class="muted">Tournaments created</div>
-          <div style="font-size:32px; font-weight:800;">{_escape_html(tournaments_display)}</div>
+          <div class="text-xxl font-800">{_escape_html(tournaments_display)}</div>
         </div>
       </div>
       <p class="muted">Need help? Use the Permissions and Ops pages to troubleshoot setup.</p>
@@ -2951,19 +2950,19 @@ async def guild_setup_wizard_page(request: web.Request) -> web.Response:
     queued_msg = "<div class='card'><strong>Setup queued.</strong> Refresh this page in a few seconds.</div>" if queued else ""
 
     body = f"""
-      <h1 style="margin-top:0;">Setup Wizard</h1>
+      <h1 class="mt-0">Setup Wizard</h1>
       {queued_msg}
       <div class="row">
         <div class="card">
           <div><strong>Status</strong></div>
-          <div style="margin-top:6px;">{ready_badge}</div>
-          <p class="muted" style="margin-top:10px;">{_escape_html(ready_details)}</p>
+          <div class="mt-6">{ready_badge}</div>
+          <p class="muted mt-10">{_escape_html(ready_details)}</p>
           <p class="muted">Plan: <span class="badge {plan}">{_escape_html(plan.upper())}</span></p>
         </div>
         <div class="card">
           <div><strong>One-click setup</strong></div>
-          <p class="muted" style="margin-top:8px;">Queues <code>run_setup</code> then <code>repost_portals</code> on the bot worker.</p>
-          <div style="margin-top:10px; display:flex; gap:10px; flex-wrap:wrap;">
+          <p class="muted mt-8">Queues <code>run_setup</code> then <code>repost_portals</code> on the bot worker.</p>
+          <div class="flex gap-10 flex-wrap mt-10">
             <form method="post" action="/api/guild/{guild_id}/ops/run_full_setup">
               <input type="hidden" name="csrf" value="{_escape_html(session.csrf_token)}" />
               <button class="btn blue" type="submit" {disabled_attr}>Run full setup</button>
@@ -2977,24 +2976,24 @@ async def guild_setup_wizard_page(request: web.Request) -> web.Response:
               <button class="btn secondary" type="submit" {disabled_attr}>Repost portals</button>
             </form>
           </div>
-          <p class="muted" style="margin-top:10px;">If tasks don't run, check worker heartbeat on the Ops page.</p>
+          <p class="muted mt-10">If tasks don't run, check worker heartbeat on the Ops page.</p>
         </div>
       </div>
       <div class="card">
-        <h2 style="margin-top:0;">Steps</h2>
+        <h2 class="mt-0">Steps</h2>
         <table>
           <thead><tr><th>step</th><th>status</th><th>details</th><th></th></tr></thead>
           <tbody>{steps_table}</tbody>
         </table>
       </div>
       <div class="card">
-        <h2 style="margin-top:0;">Recent ops tasks</h2>
+        <h2 class="mt-0">Recent ops tasks</h2>
         {tasks_note}
         <table>
           <thead><tr><th>created</th><th>action</th><th>status</th></tr></thead>
           <tbody>{tasks_table}</tbody>
         </table>
-        <p class="muted" style="margin-top:10px;"><a href="/guild/{guild_id}/ops">Open Ops</a></p>
+        <p class="muted mt-10"><a href="/guild/{guild_id}/ops">Open Ops</a></p>
       </div>
     """
     return web.Response(
@@ -3028,7 +3027,7 @@ async def guild_permissions_page(request: web.Request) -> web.Response:
           <h1>Permissions Check</h1>
           <div class="card">
             <p class="muted">{_escape_html(install_error or 'Bot is not installed in this server yet.')}</p>
-            <div style="margin-top:10px;">
+            <div class="mt-10">
               <a class="btn blue" href="{invite_href}">Invite bot to this server</a>
             </div>
           </div>
@@ -3077,7 +3076,7 @@ async def guild_permissions_page(request: web.Request) -> web.Response:
           <h1>Permissions Check</h1>
           <div class="card">
             <p class="muted">{_escape_html(message)}</p>
-            <div style="margin-top:10px;">
+            <div class="mt-10">
               <a class="btn blue" href="{invite_href}">Invite bot to this server</a>
             </div>
           </div>
@@ -3259,34 +3258,34 @@ async def guild_permissions_page(request: web.Request) -> web.Response:
           <div><strong>Guild</strong></div>
           <div class="muted">ID: <code>{guild_id}</code></div>
           <div class="muted">Bot top role: <code>{_escape_html(top_role_name or 'unknown')}</code> (pos {top_role_pos})</div>
-          <div style="margin-top:10px;">
+          <div class="mt-10">
             <a class="btn secondary" href="/guild/{guild_id}/settings">Open settings</a>
           </div>
         </div>
         <div class="card">
           <div><strong>Fix steps</strong></div>
-          <div class="muted" style="margin-top:8px;">
+          <div class="muted mt-8">
             1) Server Settings &rarr; Roles: ensure the bot role has Manage Channels/Roles/Messages.<br/>
             2) Drag the bot role above Coach roles (role hierarchy).<br/>
             3) Channel settings: ensure the bot can View/Send/Embed/Read in Offside channels.
           </div>
-          <div style="margin-top:10px;">
+          <div class="mt-10">
             <a class="btn blue" href="{invite_href}">Re-invite with permissions</a>
           </div>
         </div>
       </div>
       <div class="card">
-        <h2 style="margin-top:0;">Guild-level permissions</h2>
+        <h2 class="mt-0">Guild-level permissions</h2>
         <table><thead><tr><th>permission</th><th>status</th><th>why</th></tr></thead><tbody>{guild_table}</tbody></table>
       </div>
       <div class="card">
-        <h2 style="margin-top:0;">Role hierarchy</h2>
+        <h2 class="mt-0">Role hierarchy</h2>
         <table><thead><tr><th>role</th><th>status</th><th>details</th></tr></thead><tbody>{hierarchy_table}</tbody></table>
       </div>
       <div class="card">
-        <h2 style="margin-top:0;">Configured channels access</h2>
+        <h2 class="mt-0">Configured channels access</h2>
         <table><thead><tr><th>channel</th><th>status</th><th>details</th></tr></thead><tbody>{channel_table}</tbody></table>
-        <p class="muted" style="margin-top:10px;">Only checks channels currently saved in guild settings.</p>
+        <p class="muted mt-10">Only checks channels currently saved in guild settings.</p>
       </div>
     """
     return web.Response(
@@ -3378,7 +3377,7 @@ async def guild_audit_page(request: web.Request) -> web.Response:
           <div><strong>Guild</strong></div>
           <div class="muted">ID: <code>{guild_id}</code></div>
           <div class="muted">Showing latest: <code>{limit}</code></div>
-          <div style="margin-top:10px;"><a href="/guild/{guild_id}/audit.csv?limit={limit}">Download CSV</a></div>
+          <div class="mt-10"><a href="/guild/{guild_id}/audit.csv?limit={limit}">Download CSV</a></div>
         </div>
       </div>
       <div class="card">
@@ -3510,7 +3509,7 @@ async def guild_ops_page(request: web.Request) -> web.Response:
     installed, install_error = await _detect_bot_installed(request, guild_id=guild_id)
     if not settings.mongodb_uri:
         body = """
-          <h1 style="margin-top:0;">Ops</h1>
+          <h1 class="mt-0">Ops</h1>
           <div class="card"><p class="muted">MongoDB is not configured; ops tasks cannot be queued.</p></div>
         """
         return web.Response(
@@ -3648,18 +3647,18 @@ async def guild_ops_page(request: web.Request) -> web.Response:
         install_note += f"<div class='card'><p class='muted'>Tasks unavailable: <code>{_escape_html(tasks_error)}</code></p></div>"
 
     body = f"""
-      <h1 style="margin-top:0;">Ops</h1>
+      <h1 class="mt-0">Ops</h1>
       {install_note}
       <div class="row">
         <div class="card">
           <div><strong>Worker heartbeat</strong></div>
           <div class="muted">{_escape_html(heartbeat_text)}</div>
-          <p class="muted" style="margin-top:10px;">If the worker is missing/stale, queued tasks will not run.</p>
+          <p class="muted mt-10">If the worker is missing/stale, queued tasks will not run.</p>
         </div>
         <div class="card">
           <div><strong>Actions</strong></div>
-          <div class="muted" style="margin-top:8px;">These actions run on the bot worker dyno.</div>
-          <div style="margin-top:10px; display:flex; gap:10px; flex-wrap:wrap;">
+          <div class="muted mt-8">These actions run on the bot worker dyno.</div>
+          <div class="mt-10 flex gap-10 flex-wrap">
             <form method="post" action="/api/guild/{guild_id}/ops/run_setup">
               <input type="hidden" name="csrf" value="{_escape_html(session.csrf_token)}" />
               <button class="btn" type="submit" {disabled_attr}>Run setup now</button>
@@ -3677,12 +3676,12 @@ async def guild_ops_page(request: web.Request) -> web.Response:
         </div>
       </div>
       <div class="card">
-        <h2 style="margin-top:0;">Recent tasks</h2>
+        <h2 class="mt-0">Recent tasks</h2>
         <table>
           <thead><tr><th>created</th><th>action</th><th>status</th><th>requested by</th><th>started</th><th>finished</th><th>error</th></tr></thead>
           <tbody>{tasks_table}</tbody>
         </table>
-        <p class="muted" style="margin-top:10px;">All actions are also recorded in the audit log.</p>
+        <p class="muted mt-10">All actions are also recorded in the audit log.</p>
       </div>
     """
     return web.Response(
@@ -4051,7 +4050,7 @@ async def billing_page(request: web.Request) -> web.Response:
     if customer_id:
         manage_card = f"""
           <div class="card">
-            <h2 style="margin-top:0;">Manage subscription</h2>
+            <h2 class="mt-0">Manage subscription</h2>
             <p class="muted">Update payment method, view invoices, or cancel your subscription.</p>
             <form method="post" action="/app/billing/portal">
               <input type="hidden" name="csrf" value="{_escape_html(session.csrf_token)}" />
@@ -4067,20 +4066,20 @@ async def billing_page(request: web.Request) -> web.Response:
       {status_msg}
       <div class="card">
         <div><strong>Current plan</strong></div>
-        <div style="margin-top:6px;"><span class="badge {current_plan}">{_escape_html(current_plan.upper())}</span></div>
+        <div class="mt-6"><span class="badge {current_plan}">{_escape_html(current_plan.upper())}</span></div>
       </div>
       {manage_card}
       <div class="card">
-        <h2 style="margin-top:0;">Upgrade this server</h2>
+        <h2 class="mt-0">Upgrade this server</h2>
         <form method="post" action="/app/billing/checkout">
           <input type="hidden" name="csrf" value="{_escape_html(session.csrf_token)}" />
           <label><strong>Guild</strong></label>
-          <select name="guild_id" style="width:100%; padding:10px; margin-top:6px;">{options}</select>
-          <label style="display:block; margin-top:12px;"><strong>Plan</strong></label>
-          <select name="plan" style="width:100%; padding:10px; margin-top:6px;">
+          <select name="guild_id" class="w-full mt-6">{options}</select>
+          <label class="block mt-12"><strong>Plan</strong></label>
+          <select name="plan" class="w-full mt-6">
             <option value="pro">Pro</option>
           </select>
-          <div style="margin-top:12px;">
+          <div class="mt-12">
             <button class="btn blue" type="submit" {upgrade_disabled}>{_escape_html(upgrade_text)}</button>
           </div>
         </form>
@@ -4293,8 +4292,8 @@ async def billing_success(request: web.Request) -> web.Response:
       <h1>Checkout Success</h1>
       <div class="card">
         <div><strong>{_escape_html(message)}</strong></div>
-        <div style="margin-top:8px;">Plan: <span class="badge {plan}">{_escape_html(plan.upper())}</span></div>
-        <div style="margin-top:10px; display:flex; gap:10px; flex-wrap:wrap;">
+        <div class="mt-8">Plan: <span class="badge {plan}">{_escape_html(plan.upper())}</span></div>
+        <div class="mt-10 flex gap-10 flex-wrap">
           <a class="btn secondary" href="/app/billing?guild_id={guild_id}">View billing</a>
           <a class="btn" href="/guild/{guild_id}">Analytics</a>
           <a class="btn secondary" href="/guild/{guild_id}/settings">Settings</a>
