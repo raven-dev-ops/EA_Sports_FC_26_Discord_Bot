@@ -2187,6 +2187,8 @@ async def guild_page(request: web.Request) -> web.Response:
 
     installed, _install_error = await _detect_bot_installed(request, guild_id=guild_id)
     analytics = get_guild_analytics(settings, guild_id=guild_id)
+    plan = entitlements_service.get_guild_plan(settings, guild_id=guild_id)
+    plan_badge = f"<span class='badge {plan}'>{_escape_html(plan.upper())}</span>"
 
     count_rows = "\n".join(
         f"<tr><td><code>{rt}</code></td><td>{count}</td></tr>"
@@ -2203,7 +2205,7 @@ async def guild_page(request: web.Request) -> web.Response:
       <div class="row">
         <div class="card">
           <div><strong>Guild</strong></div>
-          <div class="muted">ID: <code>{guild_id}</code></div>
+          <div class="muted">ID: <code>{guild_id}</code> &bull; Plan: {plan_badge}</div>
           <div class="muted">MongoDB DB: <code>{analytics.db_name}</code></div>
           <div class="muted">Generated: {analytics.generated_at.isoformat()}</div>
           <div style="margin-top:10px;"><a href="/api/guild/{guild_id}/analytics.json">Download JSON</a></div>
