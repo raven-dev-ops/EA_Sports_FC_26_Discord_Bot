@@ -208,6 +208,42 @@ code {
   flex-wrap: wrap;
 }
 
+.flex {
+  display: flex;
+}
+
+.items-center {
+  align-items: center;
+}
+
+.justify-between {
+  justify-content: space-between;
+}
+
+.flex-wrap {
+  flex-wrap: wrap;
+}
+
+.gap-8 {
+  gap: 8px;
+}
+
+.gap-10 {
+  gap: 10px;
+}
+
+.gap-12 {
+  gap: 12px;
+}
+
+.w-full {
+  width: 100%;
+}
+
+.mb-16 {
+  margin-bottom: 16px;
+}
+
 .icon-btn {
   display: none;
   align-items: center;
@@ -321,6 +357,30 @@ code {
 
 .mt-12 {
   margin-top: 12px;
+}
+
+.mt-14 {
+  margin-top: 14px;
+}
+
+.mt-16 {
+  margin-top: 16px;
+}
+
+.avatar-lg {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.card-plain {
+  border: 0;
+  padding: 0;
+}
+
+.font-600 {
+  font-weight: 600;
 }
 
 .sidebar {

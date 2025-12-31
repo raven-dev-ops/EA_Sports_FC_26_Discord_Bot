@@ -240,21 +240,21 @@ def _app_shell(
                     title = "Pro expired"
                     detail = "Pro features are disabled, but your server data is preserved."
                 suffix = f" (ended {expired_at})" if expired_at else ""
-                plan_notice = f"""
-                  <div class="card">
-                    <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
-                      <div>
-                        <div><span class="badge warn">{_escape_html(title.upper())}</span></div>
-                        <div style="margin-top:6px;"><strong>{_escape_html(title)}{_escape_html(suffix)}</strong></div>
-                        <div class="muted" style="margin-top:6px;">{_escape_html(detail)}</div>
-                      </div>
-                      <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-                        <a class="btn secondary" href="/app/billing?guild_id={selected_guild_id}">Billing</a>
-                        <a class="btn blue" href="/app/upgrade?guild_id={selected_guild_id}&from=notice&section={urllib.parse.quote(section)}">Upgrade</a>
-                      </div>
-                    </div>
-                  </div>
-                """
+        plan_notice = f"""
+          <div class="card">
+            <div class="flex-between gap-12">
+              <div>
+                <div><span class="badge warn">{_escape_html(title.upper())}</span></div>
+                <div class="mt-6"><strong>{_escape_html(title)}{_escape_html(suffix)}</strong></div>
+                <div class="muted mt-6">{_escape_html(detail)}</div>
+              </div>
+              <div class="btn-group">
+                <a class="btn secondary" href="/app/billing?guild_id={selected_guild_id}">Billing</a>
+                <a class="btn blue" href="/app/upgrade?guild_id={selected_guild_id}&from=notice&section={urllib.parse.quote(section)}">Upgrade</a>
+              </div>
+            </div>
+          </div>
+        """
 
     install_badge = ""
     invite_cta = ""
@@ -966,9 +966,9 @@ async def app_index(request: web.Request) -> web.Response:
 
     guild_cards = []
     search_box = """
-      <div class="card" style="margin-bottom:16px;">
+      <div class="card mb-16">
         <label for="guild-search" class="muted">Search servers</label>
-        <input id="guild-search" type="text" placeholder="Search by name..." style="width:100%; padding:8px; margin-top:6px;" />
+        <input id="guild-search" class="w-full mt-6" type="text" placeholder="Search by name..." />
       </div>
       <script>
         (function(){
@@ -997,8 +997,7 @@ async def app_index(request: web.Request) -> web.Response:
         icon_url = _guild_icon_url(g)
         if icon_url:
             icon_html = (
-                f"<img src='{_escape_html(icon_url)}' alt='' "
-                "style='width:48px; height:48px; border-radius:50%; object-fit:cover;' />"
+                f"<img src='{_escape_html(icon_url)}' alt='' class='avatar-lg' />"
             )
         else:
             fallback = _escape_html((name[:2] or "").upper())
@@ -1007,7 +1006,7 @@ async def app_index(request: web.Request) -> web.Response:
         actions = ""
         if eligible:
             actions = (
-                f"<div style='margin-top:10px; display:flex; gap:10px; flex-wrap:wrap;'>"
+                f"<div class='btn-group mt-10'>"
                 f"<a class='btn' href='/guild/{gid_str}/overview'>Overview</a>"
                 f"<a class='btn secondary' href='/guild/{gid_str}'>Analytics</a>"
                 f"<a class='btn secondary' href='/guild/{gid_str}/settings'>Settings</a>"
@@ -1017,7 +1016,7 @@ async def app_index(request: web.Request) -> web.Response:
             )
         else:
             actions = (
-                "<div class='card' style='border:0; padding:0; margin-top:10px;'>"
+                "<div class='card card-plain mt-10'>"
                 "<div class='muted'>Not eligible: requires <strong>Manage Server</strong> permission (or ownership).</div>"
                 "</div>"
             )
@@ -1026,12 +1025,12 @@ async def app_index(request: web.Request) -> web.Response:
             "".join(
                 [
                     f"<div class='card guild-card' data-name='{name}'>",
-                    "<div style='display:flex; gap:12px; align-items:center; justify-content:space-between; flex-wrap:wrap;'>",
-                    "<div style='display:flex; gap:12px; align-items:center;'>",
+                    "<div class='flex gap-12 items-center justify-between flex-wrap'>",
+                    "<div class='flex gap-12 items-center'>",
                     icon_html,
-                    f"<div><div style='font-weight:600;'>{name}</div><div class='muted'>Guild ID: <code>{gid}</code></div></div>",
+                    f\"<div><div class='font-600'>{name}</div><div class='muted'>Guild ID: <code>{gid}</code></div></div>\",
                     "</div>",
-                    f"<div style='display:flex; gap:8px; align-items:center;'>{plan_badge}</div>",
+                    f\"<div class='flex gap-8 items-center'>{plan_badge}</div>\",
                     "</div>",
                     actions,
                     "</div>",
@@ -1468,7 +1467,7 @@ def _oauth_error_response(
       <h1>{_escape_html(title)}</h1>
       <div class="card">
         <p class="muted">{_escape_html(message)}</p>
-        <div style="margin-top:12px; display:flex; gap:10px; flex-wrap:wrap;">
+        <div class="btn-group mt-12">
           <a class="btn blue" href="{_escape_html(login_href)}">Try again</a>
           <a class="btn secondary" href="/support">Support</a>
         </div>
