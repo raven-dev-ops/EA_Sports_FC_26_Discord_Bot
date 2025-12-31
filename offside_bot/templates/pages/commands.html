@@ -2,19 +2,19 @@
 
 {% block content %}
   <p><a href="/">&larr; Back</a></p>
-  <h1 style="margin-top:0;">Commands</h1>
+  <h1 class="mt-0">Commands</h1>
   <p class="muted">Generated from <code>docs/commands.md</code>.</p>
 
   <div class="card">
-    <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+    <div class="flex gap-10 flex-wrap items-center">
       <input
         id="commands-search"
         type="search"
         placeholder="Search commands..."
         aria-label="Search commands"
-        style="flex:1 1 260px;"
+        class="input-grow"
       />
-      <div style="display:flex; gap:10px; flex-wrap:wrap;">
+      <div class="flex gap-10 flex-wrap">
         <button class="btn secondary" type="button" data-commands-filter="all">All</button>
         <button class="btn secondary" type="button" data-commands-filter="coach">Coach</button>
         <button class="btn secondary" type="button" data-commands-filter="staff">Staff</button>
@@ -22,15 +22,15 @@
         <button class="btn secondary" type="button" data-commands-filter="ops">Ops</button>
       </div>
     </div>
-    <div class="muted" style="margin-top:10px;" id="commands-count"></div>
+    <div class="muted mt-10" id="commands-count"></div>
   </div>
 
-  <div id="commands-empty" class="muted" style="display:none;">
+  <div id="commands-empty" class="muted hidden">
     No commands match your search.
   </div>
 
   {% for category in categories %}
-    <section data-commands-section data-commands-group="{{ category.group }}" style="margin-top:18px;">
+    <section data-commands-section data-commands-group="{{ category.group }}" class="mt-18">
       <h2>{{ category.name }}</h2>
 
       {% for command in category.commands %}
@@ -40,21 +40,21 @@
           data-commands-group="{{ category.group }}"
           data-commands-search="{{ command.search_text }}"
         >
-          <div style="display:flex; gap:10px; justify-content:space-between; align-items:center; flex-wrap:wrap;">
+          <div class="flex gap-10 justify-between items-center flex-wrap">
             <div><code>{{ command.signature }}</code></div>
             <span class="badge">{{ category.group|upper }}</span>
           </div>
 
           {% if command.description %}
-            <div class="muted" style="margin-top:8px;">{{ command.description }}</div>
+            <div class="muted mt-8">{{ command.description }}</div>
           {% endif %}
 
-          <div style="margin-top:10px;">
+          <div class="mt-10">
             {% if command.permissions %}
               <div><span class="muted">Permissions:</span> {{ command.permissions }}</div>
             {% endif %}
             {% if command.example %}
-              <div style="margin-top:6px;"><span class="muted">Example:</span> <code>{{ command.example }}</code></div>
+              <div class="mt-6"><span class="muted">Example:</span> <code>{{ command.example }}</code></div>
             {% endif %}
           </div>
         </div>
@@ -62,4 +62,3 @@
     </section>
   {% endfor %}
 {% endblock %}
-

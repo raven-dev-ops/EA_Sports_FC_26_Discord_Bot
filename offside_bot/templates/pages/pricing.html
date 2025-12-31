@@ -5,12 +5,12 @@
   <h1>Pricing</h1>
   <p class="muted">Start free. Upgrade when you need premium features.</p>
 
-  <div class="card" style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
+  <div class="card flex justify-between items-center gap-12 flex-wrap">
     <div>
       <strong>Billing</strong>
-      <div class="muted" style="margin-top:6px;">Yearly pricing is coming soon.</div>
+      <div class="muted mt-6">Yearly pricing is coming soon.</div>
     </div>
-    <div style="display:flex; gap:10px; flex-wrap:wrap;">
+    <div class="flex gap-10 flex-wrap">
       <a class="btn secondary" href="{{ toggle_monthly_href }}">{{ "Monthly" if billing != "monthly" else "Monthly ✓" }}</a>
       <a class="btn secondary" href="{{ toggle_yearly_href }}">{{ "Yearly (soon)" if billing != "yearly" else "Yearly ✓ (soon)" }}</a>
     </div>
@@ -18,28 +18,28 @@
 
   <div class="row">
     <div class="card">
-      <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
+      <div class="flex justify-between items-center gap-10">
         <strong>Free</strong>
         {{ badge("FREE", "free") }}
       </div>
-      <div style="font-size:28px; font-weight:800; margin-top:8px;">$0</div>
+      <div class="text-xl font-800 mt-8">$0</div>
       <div class="muted">for every server</div>
-      <ul style="margin-top:12px;">
+      <ul class="mt-12">
         <li>Dashboards + setup wizard</li>
         <li>Roster + recruiting workflows</li>
         <li>Basic analytics</li>
       </ul>
-      <div style="margin-top:12px;">
+      <div class="mt-12">
         {{ button("Add to Discord", "/install", "blue") }}
       </div>
     </div>
 
     <div class="card">
-      <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
+      <div class="flex justify-between items-center gap-10">
         <strong>Pro</strong>
         {{ badge("PRO", "pro") }}
       </div>
-      <div style="font-size:28px; font-weight:800; margin-top:8px;">
+      <div class="text-xl font-800 mt-8">
         {% if billing == "yearly" %}
           Coming soon
         {% else %}
@@ -47,31 +47,31 @@
         {% endif %}
       </div>
       <div class="muted">{% if billing == "yearly" %}Yearly billing coming soon{% else %}per server / month{% endif %}</div>
-      <ul style="margin-top:12px;">
+      <ul class="mt-12">
         <li>Premium coach tiers</li>
         <li>Premium coaches report</li>
         <li>FC25 stats integration</li>
         <li>Banlist checks</li>
         <li>Tournament automation</li>
       </ul>
-      <div style="margin-top:12px;">
+      <div class="mt-12">
         {{ button("Upgrade", pro_cta_href, "blue") }}
       </div>
     </div>
 
     <div class="card">
-      <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
+      <div class="flex justify-between items-center gap-10">
         <strong>Enterprise</strong>
         {{ badge("CONTACT", "ok") }}
       </div>
-      <div style="font-size:28px; font-weight:800; margin-top:8px;">Custom</div>
+      <div class="text-xl font-800 mt-8">Custom</div>
       <div class="muted">for large communities</div>
-      <ul style="margin-top:12px;">
+      <ul class="mt-12">
         <li>Custom onboarding + support</li>
         <li>Multi-server admin workflows</li>
         <li>SLA / dedicated infra (optional)</li>
       </ul>
-      <div style="margin-top:12px;">
+      <div class="mt-12">
         {{ button("Contact", "https://github.com/raven-dev-ops/EA_Sports_FC_26_Discord_Bot/issues", "secondary") }}
       </div>
     </div>
@@ -103,16 +103,15 @@
   </table>
 
   <div class="card">
-    <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
+    <div class="flex justify-between items-center gap-12 flex-wrap">
       <div>
         <div><strong>Ready to upgrade?</strong></div>
-        <div class="muted" style="margin-top:6px;">Pro upgrades are managed in the dashboard billing page.</div>
+        <div class="muted mt-6">Pro upgrades are managed in the dashboard billing page.</div>
       </div>
-      <div style="display:flex; gap:10px; flex-wrap:wrap;">
+      <div class="flex gap-10 flex-wrap">
         {{ button("Billing", pro_cta_href, "secondary") }}
         {{ button("Login", "/login", "") }}
       </div>
     </div>
   </div>
 {% endblock %}
-

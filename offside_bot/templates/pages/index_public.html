@@ -2,17 +2,17 @@
 {% from "macros/ui.html" import button, card %}
 
 {% block content %}
-  <div class="card" style="margin-top:0;">
-    <h1 style="margin-top:0;">Offside</h1>
-    <p class="muted" style="font-size:16px;">
+  <div class="card">
+    <h1 class="mt-0 text-hero">Offside</h1>
+    <p class="muted text-lg">
       Offside turns your EA Sports FC Discord into an ops dashboard: rosters, recruiting, clubs, tournaments, and analytics.
     </p>
-    <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:14px;">
+    <div class="flex gap-10 flex-wrap mt-14">
       {{ button("Add to Discord", "/install", "blue") }}
       {{ button("Open Dashboard", "/app", "secondary") }}
       {{ button("Features", "/features", "secondary") }}
     </div>
-    <p class="muted" style="margin-top:14px;">Direct invite URL:</p>
+    <p class="muted mt-14">Direct invite URL:</p>
     <p><a href="{{ invite_href }}">{{ invite_href }}</a></p>
   </div>
 
@@ -20,15 +20,15 @@
   <div class="row">
     <div class="card">
       <strong>1) Invite</strong>
-      <div class="muted" style="margin-top:6px;">Add the bot to your server with the right permissions.</div>
+      <div class="muted mt-6">Add the bot to your server with the right permissions.</div>
     </div>
     <div class="card">
       <strong>2) Configure</strong>
-      <div class="muted" style="margin-top:6px;">Run setup, confirm roles/channels, and post dashboards.</div>
+      <div class="muted mt-6">Run setup, confirm roles/channels, and post dashboards.</div>
     </div>
     <div class="card">
       <strong>3) Run</strong>
-      <div class="muted" style="margin-top:6px;">Manage rosters and recruiting while Offside tracks your data.</div>
+      <div class="muted mt-6">Manage rosters and recruiting while Offside tracks your data.</div>
     </div>
   </div>
 
@@ -36,23 +36,23 @@
   <div class="row">
     <div class="card">
       <strong>Rosters</strong>
-      <div class="muted" style="margin-top:6px;">Create rosters, manage caps, and track openings.</div>
+      <div class="muted mt-6">Create rosters, manage caps, and track openings.</div>
     </div>
     <div class="card">
       <strong>Recruiting</strong>
-      <div class="muted" style="margin-top:6px;">Streamline recruiting workflows and listing channels.</div>
+      <div class="muted mt-6">Streamline recruiting workflows and listing channels.</div>
     </div>
     <div class="card">
       <strong>Clubs</strong>
-      <div class="muted" style="margin-top:6px;">Organize clubs and staff operations across the server.</div>
+      <div class="muted mt-6">Organize clubs and staff operations across the server.</div>
     </div>
     <div class="card">
       <strong>Tournaments</strong>
-      <div class="muted" style="margin-top:6px;">Tournament automation tooling for staff (Pro).</div>
+      <div class="muted mt-6">Tournament automation tooling for staff (Pro).</div>
     </div>
     <div class="card">
       <strong>Analytics</strong>
-      <div class="muted" style="margin-top:6px;">See what your server produces, by collection and record type.</div>
+      <div class="muted mt-6">See what your server produces, by collection and record type.</div>
     </div>
   </div>
 
@@ -60,25 +60,25 @@
   <div class="card">
     <p><strong>What permissions are needed?</strong></p>
     <p class="muted">Offside needs permissions to create/manage roles and channels during setup, and to post embeds.</p>
-    <p style="margin-top:14px;"><strong>How does pricing work?</strong></p>
+    <p class="mt-14"><strong>How does pricing work?</strong></p>
     <p class="muted">Start on Free. Upgrade to Pro for premium features and advanced modules. See <a href="/pricing">pricing</a>.</p>
-    <p style="margin-top:14px;"><strong>Where is data stored?</strong></p>
+    <p class="mt-14"><strong>Where is data stored?</strong></p>
     <p class="muted">Data is stored per-server in MongoDB (configurable) and is isolated by guild.</p>
-    <p style="margin-top:14px;"><strong>How do I get support?</strong></p>
+    <p class="mt-14"><strong>How do I get support?</strong></p>
     <p class="muted">Use the documentation and support links in the repo; a support page is coming soon.</p>
   </div>
 
   <div class="card">
-    <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
+    <div class="flex justify-between items-center gap-12 flex-wrap">
       <div>
         <div><strong>Ready to get started?</strong></div>
-        <div class="muted" style="margin-top:6px;">Invite the bot, then log in to run setup and manage your server.</div>
+        <div class="muted mt-6">Invite the bot, then log in to run setup and manage your server.</div>
       </div>
-      <div style="display:flex; gap:10px; flex-wrap:wrap;">
+      <div class="flex gap-10 flex-wrap">
         {{ button("Add to Discord", "/install", "blue") }}
         {{ button("Open Dashboard", "/app", "secondary") }}
       </div>
     </div>
-    <p class="muted" style="margin-top:14px;">By inviting the bot you agree to the <a href="/terms">Terms</a> and <a href="/privacy">Privacy Policy</a>.</p>
+    <p class="muted mt-14">By inviting the bot you agree to the <a href="/terms">Terms</a> and <a href="/privacy">Privacy Policy</a>.</p>
   </div>
 {% endblock %}

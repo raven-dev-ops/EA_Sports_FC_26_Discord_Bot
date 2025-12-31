@@ -351,6 +351,16 @@ code {
   font-size: 32px;
 }
 
+.text-hero {
+  font-size: 36px;
+  line-height: 1.2;
+}
+
+.text-hero-sm {
+  font-size: 32px;
+  line-height: 1.2;
+}
+
 .mt-0 {
   margin-top: 0;
 }
@@ -387,6 +397,10 @@ code {
   margin-top: 18px;
 }
 
+.mt-20 {
+  margin-top: 20px;
+}
+
 .font-600 {
   font-weight: 600;
 }
@@ -399,6 +413,15 @@ code {
   max-width: 980px;
 }
 
+.hidden {
+  display: none;
+}
+
+.input-grow {
+  flex: 1 1 260px;
+  min-width: 200px;
+}
+
 .avatar-lg {
   width: 48px;
   height: 48px;
@@ -409,14 +432,6 @@ code {
 .card-plain {
   border: 0;
   padding: 0;
-}
-
-.font-600 {
-  font-weight: 600;
-}
-
-.max-w-980 {
-  max-width: 980px;
 }
 
 .sidebar {
