@@ -894,7 +894,10 @@ async def security_headers_middleware(request: web.Request, handler):
     if not isinstance(response, web.StreamResponse):
         return response
 
-    response.headers.setdefault("Cache-Control", "no-store")
+    if request.path.startswith("/static/"):
+        response.headers.setdefault("Cache-Control", "public, max-age=3600")
+    else:
+        response.headers.setdefault("Cache-Control", "no-store")
     response.headers.setdefault("X-Content-Type-Options", "nosniff")
     response.headers.setdefault("X-Frame-Options", "DENY")
     response.headers.setdefault("Referrer-Policy", "no-referrer")
@@ -1092,6 +1095,7 @@ async def app_index(request: web.Request) -> web.Response:
         name = _escape_html(g.get("name") or gid)
         gid_str = str(gid)
         eligible = gid_str in eligible_ids
+        plan = None
         plan_badge = ""
         if eligible and gid_str.isdigit():
             plan = entitlements_service.get_guild_plan(settings, guild_id=int(gid_str))
@@ -1107,13 +1111,17 @@ async def app_index(request: web.Request) -> web.Response:
 
         actions = ""
         if eligible:
+            upgrade_cta = ""
+            if plan and plan != entitlements_service.PLAN_PRO:
+                upgrade_cta = (
+                    f"<a class='btn blue' href='/app/upgrade?guild_id={gid_str}&from=server-card&section=overview'>Upgrade</a>"
+                )
             actions = (
                 f"<div class='btn-group mt-10'>"
-                f"<a class='btn' href='/guild/{gid_str}/overview'>Overview</a>"
-                f"<a class='btn secondary' href='/guild/{gid_str}'>Analytics</a>"
-                f"<a class='btn secondary' href='/guild/{gid_str}/settings'>Settings</a>"
+                f"<a class='btn' href='/guild/{gid_str}/overview'>Open</a>"
                 f"<a class='btn secondary' href='/app/billing?guild_id={gid_str}'>Billing</a>"
-                f"<a class='btn blue' href='/install?guild_id={gid_str}'>Invite bot</a>"
+                f"{upgrade_cta}"
+                f"<a class='btn secondary' href='/install?guild_id={gid_str}'>Invite bot</a>"
                 f"</div>"
             )
         else:
