@@ -2,6 +2,8 @@
 
 This project stores guild data in MongoDB. For multi-tenant production, the recommended configuration is **per-guild databases** (`MONGODB_PER_GUILD_DB=true`) so each Discord server can be isolated and safely deleted.
 
+For a full disaster recovery checklist (backups, restores, Stripe replay, credential rotation), see `docs/disaster-recovery.md`.
+
 ## Backups
 
 Recommended backup strategy (production):

@@ -4,6 +4,9 @@ All notable changes to this project will be documented in this file.
 
 ## [0.2.52] - 2025-12-31
 
+### Added
+- Docs: disaster recovery checklist for backups, Stripe replay, and credential rotation.
+
 ### Changed
 - Dependencies: bump `jinja2` to 3.1.6 to address `pip-audit` vulnerability reporting.
 - Docs/CI: document semantic versioning and add a release metadata check (VERSION/changelog/tag consistency).

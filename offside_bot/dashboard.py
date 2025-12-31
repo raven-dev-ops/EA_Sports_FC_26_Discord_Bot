@@ -99,6 +99,12 @@ DOCS_PAGES: list[dict[str, str]] = [
         "summary": "Retention, deletion, and data export guidance.",
     },
     {
+        "slug": "disaster-recovery",
+        "title": "Disaster recovery",
+        "path": "docs/disaster-recovery.md",
+        "summary": "Backup/restore, Stripe replay, and credential rotation checklist.",
+    },
+    {
         "slug": "monitoring",
         "title": "Monitoring",
         "path": "docs/monitoring.md",
