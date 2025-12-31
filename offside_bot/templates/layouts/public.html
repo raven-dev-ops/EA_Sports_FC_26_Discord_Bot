@@ -3,7 +3,7 @@
 
 {% block body %}
   <div class="topbar">
-    <div>
+    <div class="flex gap-14 items-center flex-wrap">
       <a class="brand" href="/">
         <img
           class="brand-logo"
@@ -14,6 +14,12 @@
         />
         <span>{{ brand|default("Offside") }}</span>
       </a>
+      <nav class="topbar-links" aria-label="Primary">
+        <a href="/features">Features</a>
+        <a href="/pricing">Pricing</a>
+        <a href="/docs">Docs</a>
+        <a href="/support">Support</a>
+      </nav>
     </div>
     <div class="flex gap-10 items-center">
       {% if right_cta %}

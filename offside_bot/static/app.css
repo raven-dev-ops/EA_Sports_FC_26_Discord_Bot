@@ -278,6 +278,23 @@ code {
   background: var(--surface);
 }
 
+.topbar-links {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.topbar-links a {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.topbar-links a:hover {
+  color: var(--text);
+  text-decoration: none;
+}
+
 .topbar .brand {
   display: inline-flex;
   align-items: center;
@@ -297,6 +314,25 @@ code {
   width: 100%;
   max-width: 980px;
   margin: 0 auto;
+}
+
+.breadcrumbs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--muted);
+  margin-bottom: 12px;
+}
+
+.breadcrumbs a {
+  color: var(--muted);
+}
+
+.breadcrumbs a:hover {
+  color: var(--text);
+  text-decoration: none;
 }
 
 .layout {
@@ -449,10 +485,35 @@ code {
 }
 
 .navlink {
-  display: block;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   padding: 10px 12px;
   border-radius: 12px;
   color: var(--text);
+}
+
+.navlink.locked {
+  opacity: 0.85;
+}
+
+.nav-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.nav-group {
+  margin-bottom: 12px;
+}
+
+.nav-group-title {
+  margin: 10px 12px 4px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
 }
 
 .navlink:hover {

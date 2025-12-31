@@ -338,35 +338,82 @@ def _app_shell(
     nav_guild = str(selected_guild_id or "")
     is_pro = guild_plan == entitlements_service.PLAN_PRO
     nav_items: list[dict[str, Any]] = []
+    nav_groups: list[dict[str, Any]] = []
+    breadcrumbs: list[dict[str, str]] = [{"label": "Dashboard", "href": "/app"}]
     if nav_guild:
-        nav_items = [
-            {"label": "Overview", "href": _guild_section_url(nav_guild, section="overview"), "active": section == "overview"},
-            {"label": "Setup", "href": _guild_section_url(nav_guild, section="setup"), "active": section == "setup"},
-            {"label": "Analytics", "href": _guild_section_url(nav_guild, section="analytics"), "active": section == "analytics"},
-            {"label": "Settings", "href": _guild_section_url(nav_guild, section="settings"), "active": section == "settings"},
-            {"label": "Permissions", "href": _guild_section_url(nav_guild, section="permissions"), "active": section == "permissions"},
-        ]
-        nav_items.append(
+        selected_guild_label = next(
+            (
+                str(g.get("name") or g.get("id") or "")
+                for g in session.owner_guilds
+                if str(g.get("id")) == nav_guild
+            ),
+            nav_guild,
+        )
+        if selected_guild_label:
+            breadcrumbs.append(
+                {"label": selected_guild_label, "href": _guild_section_url(nav_guild, section="overview")}
+            )
+
+        section_labels = {
+            "overview": "Overview",
+            "setup": "Setup Wizard",
+            "analytics": "Analytics",
+            "settings": "Settings",
+            "permissions": "Permissions",
+            "audit": "Audit Log",
+            "ops": "Ops",
+            "billing": "Billing",
+        }
+        section_label = section_labels.get(section)
+        if section_label:
+            breadcrumbs.append({"label": section_label, "href": _guild_section_url(nav_guild, section=section)})
+
+        nav_groups = [
             {
-                "label": "Audit Log",
-                "href": _guild_section_url(nav_guild, section="audit"),
-                "active": section == "audit",
-                "locked": not is_pro,
-                "lock_reason": "Pro plan required for audit log.",
-            }
-        )
-        nav_items.extend(
-            [
-                {
-                    "label": "Ops",
-                    "href": _guild_section_url(nav_guild, section="ops"),
-                    "active": section == "ops",
-                    "locked": not is_pro,
-                    "lock_reason": "Pro plan required for ops tasks.",
-                },
-                {"label": "Billing", "href": _guild_section_url(nav_guild, section="billing"), "active": section == "billing"},
-            ]
-        )
+                "label": "Setup",
+                "items": [
+                    {"label": "Overview", "href": _guild_section_url(nav_guild, section="overview"), "active": section == "overview"},
+                    {"label": "Setup Wizard", "href": _guild_section_url(nav_guild, section="setup"), "active": section == "setup"},
+                    {"label": "Settings", "href": _guild_section_url(nav_guild, section="settings"), "active": section == "settings"},
+                    {"label": "Permissions", "href": _guild_section_url(nav_guild, section="permissions"), "active": section == "permissions"},
+                ],
+            },
+            {
+                "label": "Operations",
+                "items": [
+                    {"label": "Analytics", "href": _guild_section_url(nav_guild, section="analytics"), "active": section == "analytics"},
+                    {
+                        "label": "Audit Log",
+                        "href": _guild_section_url(nav_guild, section="audit"),
+                        "active": section == "audit",
+                        "locked": not is_pro,
+                        "lock_reason": "Pro plan required for audit log.",
+                    },
+                    {
+                        "label": "Ops",
+                        "href": _guild_section_url(nav_guild, section="ops"),
+                        "active": section == "ops",
+                        "locked": not is_pro,
+                        "lock_reason": "Pro plan required for ops tasks.",
+                    },
+                ],
+            },
+            {
+                "label": "Billing",
+                "items": [
+                    {"label": "Billing", "href": _guild_section_url(nav_guild, section="billing"), "active": section == "billing"},
+                ],
+            },
+            {
+                "label": "Resources",
+                "items": [
+                    {"label": "Docs hub", "href": "/docs", "active": False},
+                    {"label": "Setup checklist", "href": "/docs/server-setup-checklist", "active": False},
+                    {"label": "Billing guide", "href": "/docs/billing", "active": False},
+                    {"label": "Data lifecycle", "href": "/docs/data-lifecycle", "active": False},
+                ],
+            },
+        ]
 
     return render(
         "partials/app_shell.html",
@@ -376,6 +423,8 @@ def _app_shell(
         install_badge=safe_html(install_badge) if install_badge else "",
         invite_cta=safe_html(invite_cta) if invite_cta else "",
         nav_items=nav_items,
+        nav_groups=nav_groups,
+        breadcrumbs=breadcrumbs,
         plan_notice=safe_html(plan_notice) if plan_notice else "",
         content=safe_html(content),
     )

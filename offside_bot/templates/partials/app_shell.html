@@ -37,7 +37,28 @@
   <div class="sidebar-backdrop" data-sidebar-toggle aria-hidden="true"></div>
   <aside class="sidebar" id="app-sidebar" aria-label="Navigation">
     <div class="card">
-      {% if nav_items %}
+      {% if nav_groups %}
+        {% for group in nav_groups %}
+          <div class="nav-group">
+            <div class="nav-group-title">{{ group.label }}</div>
+            {% for item in group.items %}
+              <a
+                class="navlink{% if item.active %} active{% endif %}{% if item.locked %} locked{% endif %}"
+                href="{{ item.href }}"
+                {% if item.lock_reason %}title="{{ item.lock_reason }}"{% endif %}
+              >
+                <span>{{ item.label }}</span>
+                {% if item.locked %}
+                  <span class="nav-meta">
+                    <span class="muted">&#128274;</span>
+                    <span class="badge pro inline">PRO</span>
+                  </span>
+                {% endif %}
+              </a>
+            {% endfor %}
+          </div>
+        {% endfor %}
+      {% elif nav_items %}
         {% for item in nav_items %}
           <a class="navlink{% if item.active %} active{% endif %}" href="{{ item.href }}">{{ item.label }}</a>
         {% endfor %}
@@ -48,6 +69,20 @@
   </aside>
   <main class="content">
     {% if plan_notice %}{{ plan_notice|safe }}{% endif %}
+    {% if breadcrumbs %}
+      <div class="breadcrumbs">
+        {% for crumb in breadcrumbs %}
+          {% if crumb.href %}
+            <a href="{{ crumb.href }}">{{ crumb.label }}</a>
+          {% else %}
+            <span>{{ crumb.label }}</span>
+          {% endif %}
+          {% if not loop.last %}
+            <span class="muted">/</span>
+          {% endif %}
+        {% endfor %}
+      </div>
+    {% endif %}
     {{ content|safe }}
   </main>
 </div>
