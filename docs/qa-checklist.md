@@ -17,6 +17,12 @@ See also: `docs/server-setup-checklist.md`
 - With `TEST_MODE=true`, confirm all dashboards/posts/logs route to `staff-monitor`
 - Restart with `TEST_MODE=false`, confirm `staff-monitor` is deleted and routing uses normal channels
 
+## Accessibility spot checks
+- Keyboard-only: use Tab to reach topbar links, server picker, and primary action buttons.
+- Confirm focus ring is visible on links, buttons, and form fields.
+- In the dashboard sidebar, active item should announce as the current page.
+- Commands page: search + filters update with screen reader announcements.
+
 ## Recruitment Portal
 - Register profile via `recruit-portal`:
   - Submit the 2-step modal

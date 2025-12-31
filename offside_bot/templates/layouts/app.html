@@ -55,14 +55,20 @@
       <div class="card">
         {% if nav_items %}
           {% for item in nav_items %}
-            <a class="navlink {% if item.active %}active{% endif %}" href="{{ item.href }}">{{ item.label }}</a>
+            <a
+              class="navlink {% if item.active %}active{% endif %}"
+              href="{{ item.href }}"
+              {% if item.active %}aria-current="page"{% endif %}
+            >
+              {{ item.label }}
+            </a>
           {% endfor %}
         {% else %}
           <div class="muted">Select a server to see modules.</div>
         {% endif %}
       </div>
     </aside>
-    <main class="content">
+    <main class="content" id="main-content" tabindex="-1">
       {% if plan_notice %}
         {{ plan_notice|safe }}
       {% endif %}

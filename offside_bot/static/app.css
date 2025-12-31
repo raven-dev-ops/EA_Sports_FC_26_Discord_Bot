@@ -29,6 +29,21 @@ body {
   color: var(--text);
 }
 
+.skip-link {
+  position: absolute;
+  top: -40px;
+  left: 16px;
+  background: var(--brand);
+  color: #fff;
+  padding: 8px 12px;
+  border-radius: 10px;
+  z-index: 1000;
+}
+
+.skip-link:focus {
+  top: 16px;
+}
+
 a {
   color: var(--link);
   text-decoration: none;
@@ -36,6 +51,11 @@ a {
 
 a:hover {
   text-decoration: underline;
+}
+
+:focus-visible {
+  outline: 3px solid rgba(88, 101, 242, 0.7);
+  outline-offset: 2px;
 }
 
 .card {

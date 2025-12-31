@@ -47,6 +47,7 @@
               <a
                 class="navlink{% if item.active %} active{% endif %}{% if item.locked %} locked{% endif %}"
                 href="{{ item.href }}"
+                {% if item.active %}aria-current="page"{% endif %}
                 {% if item.lock_reason %}title="{{ item.lock_reason }}"{% endif %}
               >
                 <span>{{ item.label }}</span>
@@ -62,14 +63,20 @@
         {% endfor %}
       {% elif nav_items %}
         {% for item in nav_items %}
-          <a class="navlink{% if item.active %} active{% endif %}" href="{{ item.href }}">{{ item.label }}</a>
+          <a
+            class="navlink{% if item.active %} active{% endif %}"
+            href="{{ item.href }}"
+            {% if item.active %}aria-current="page"{% endif %}
+          >
+            {{ item.label }}
+          </a>
         {% endfor %}
       {% else %}
         <div class="muted">Select a server to see modules.</div>
       {% endif %}
     </div>
   </aside>
-  <main class="content">
+  <main class="content" id="main-content" tabindex="-1">
     {% if plan_notice %}
       <div class="card">
         <div class="flex-between gap-12">

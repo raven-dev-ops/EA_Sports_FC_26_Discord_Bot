@@ -33,3 +33,7 @@ CI runs `python -m scripts.check_release_metadata` to verify:
 ## Log hygiene checks
 
 CI runs `python -m scripts.check_log_hygiene` to flag logging calls that include sensitive variable names.
+
+## A11y template checks
+
+CI runs `python -m scripts.check_a11y_templates` to enforce skip links, aria-current, and live region markers.

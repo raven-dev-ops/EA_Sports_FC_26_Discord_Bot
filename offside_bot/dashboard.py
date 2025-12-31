@@ -1379,7 +1379,7 @@ async def docs_index_page(_request: web.Request) -> web.Response:
         for page in DOCS_PAGES
     ]
     docs.extend(DOCS_EXTRAS)
-    page_html = render("pages/docs_index.html", title="Docs", docs=docs)
+    page_html = render("pages/docs_index.html", title="Docs", docs=docs, active_nav="docs")
     return web.Response(text=page_html, content_type="text/html")
 
 
@@ -1399,7 +1399,12 @@ async def docs_page(request: web.Request) -> web.Response:
     """
     from offside_bot.web_templates import render, safe_html
 
-    page_html = render("pages/markdown_page.html", title=doc["title"], content=safe_html(content))
+    page_html = render(
+        "pages/markdown_page.html",
+        title=doc["title"],
+        content=safe_html(content),
+        active_nav="docs",
+    )
     return web.Response(text=page_html, content_type="text/html")
 
 
@@ -1488,14 +1493,14 @@ async def commands_page(_request: web.Request) -> web.Response:
     categories = _parse_commands_markdown(text)
     from offside_bot.web_templates import render
 
-    page = render("pages/commands.html", title="Commands", categories=categories)
+    page = render("pages/commands.html", title="Commands", categories=categories, active_nav="docs")
     return web.Response(text=page, content_type="text/html")
 
 
 async def features_page(_request: web.Request) -> web.Response:
     from offside_bot.web_templates import render
 
-    page = render("pages/features.html", title="Features")
+    page = render("pages/features.html", title="Features", active_nav="features")
     return web.Response(text=page, content_type="text/html")
 
 
@@ -1568,7 +1573,12 @@ async def support_page(_request: web.Request) -> web.Response:
     """
     from offside_bot.web_templates import render, safe_html
 
-    page = render("pages/markdown_page.html", title="Support", content=safe_html(content))
+    page = render(
+        "pages/markdown_page.html",
+        title="Support",
+        content=safe_html(content),
+        active_nav="support",
+    )
     return web.Response(text=page, content_type="text/html")
 
 
@@ -1674,6 +1684,7 @@ async def pricing_page(request: web.Request) -> web.Response:
         pro_cta_href=pro_cta_href,
         enterprise_cta_href=enterprise_cta_href,
         features=features,
+        active_nav="pricing",
     )
     return web.Response(text=html, content_type="text/html")
 
