@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.44] - 2025-12-31
+
+### Docs
+- Release checklist + env/migration checklist + rollback plan: `docs/release-playbook.md`.
+
 ## [0.2.43] - 2025-12-31
 
 ### Added

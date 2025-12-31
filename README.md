@@ -14,6 +14,7 @@ Roster management and staff review bot for Discord tournaments.
    - Keep `TEST_MODE=true` while validating in a staging guild (routes all portal/listing posts + forwarded logs to the staff monitor channel).
 3. Deploy and verify:
    - Run locally (`python -m offside_bot`) or deploy to your host (e.g., Heroku worker).
+   - Maintainers: release + rollback checklist: `docs/release-playbook.md`
    - Confirm the coach and staff portal embeds appear in their channels (or run the portal refresh buttons).
    - Submit a test roster, approve/reject, and confirm approved rosters flow to the roster listing channel.
 
