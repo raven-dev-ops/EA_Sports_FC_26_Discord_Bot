@@ -1,0 +1,65 @@
+{% extends "layouts/public.html" %}
+
+{% block content %}
+  <p><a href="/">&larr; Back</a></p>
+  <h1 style="margin-top:0;">Commands</h1>
+  <p class="muted">Generated from <code>docs/commands.md</code>.</p>
+
+  <div class="card">
+    <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+      <input
+        id="commands-search"
+        type="search"
+        placeholder="Search commands..."
+        aria-label="Search commands"
+        style="flex:1 1 260px;"
+      />
+      <div style="display:flex; gap:10px; flex-wrap:wrap;">
+        <button class="btn secondary" type="button" data-commands-filter="all">All</button>
+        <button class="btn secondary" type="button" data-commands-filter="coach">Coach</button>
+        <button class="btn secondary" type="button" data-commands-filter="staff">Staff</button>
+        <button class="btn secondary" type="button" data-commands-filter="tournament">Tournament</button>
+        <button class="btn secondary" type="button" data-commands-filter="ops">Ops</button>
+      </div>
+    </div>
+    <div class="muted" style="margin-top:10px;" id="commands-count"></div>
+  </div>
+
+  <div id="commands-empty" class="muted" style="display:none;">
+    No commands match your search.
+  </div>
+
+  {% for category in categories %}
+    <section data-commands-section data-commands-group="{{ category.group }}" style="margin-top:18px;">
+      <h2>{{ category.name }}</h2>
+
+      {% for command in category.commands %}
+        <div
+          class="card command-card"
+          data-command-card
+          data-commands-group="{{ category.group }}"
+          data-commands-search="{{ command.search_text }}"
+        >
+          <div style="display:flex; gap:10px; justify-content:space-between; align-items:center; flex-wrap:wrap;">
+            <div><code>{{ command.signature }}</code></div>
+            <span class="badge">{{ category.group|upper }}</span>
+          </div>
+
+          {% if command.description %}
+            <div class="muted" style="margin-top:8px;">{{ command.description }}</div>
+          {% endif %}
+
+          <div style="margin-top:10px;">
+            {% if command.permissions %}
+              <div><span class="muted">Permissions:</span> {{ command.permissions }}</div>
+            {% endif %}
+            {% if command.example %}
+              <div style="margin-top:6px;"><span class="muted">Example:</span> <code>{{ command.example }}</code></div>
+            {% endif %}
+          </div>
+        </div>
+      {% endfor %}
+    </section>
+  {% endfor %}
+{% endblock %}
+

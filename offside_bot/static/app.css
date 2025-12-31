@@ -157,6 +157,8 @@ code {
   color: var(--text);
   padding: 10px 14px;
   border-radius: 12px;
+  cursor: pointer;
+  font: inherit;
 }
 
 .btn:hover {
@@ -272,6 +274,32 @@ select {
   border: 1px solid var(--border);
   background: var(--surface-2);
   color: var(--text);
+}
+
+input[type="search"],
+input[type="text"],
+input[type="email"],
+input[type="number"],
+input[type="password"],
+textarea {
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--muted);
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+  outline: none;
+  border-color: rgba(88, 101, 242, 0.55);
+  box-shadow: 0 0 0 3px rgba(88, 101, 242, 0.25);
 }
 
 .footer {

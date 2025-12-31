@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.42] - 2025-12-31
+
+### Added
+- Web: `/commands` page generated from `docs/commands.md` with client-side search + category filters.
+
 ## [0.2.41] - 2025-12-31
 
 ### Added

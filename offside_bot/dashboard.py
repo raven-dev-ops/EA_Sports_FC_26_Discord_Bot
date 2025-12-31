@@ -967,6 +967,95 @@ async def privacy_page(_request: web.Request) -> web.Response:
     return web.Response(text=page, content_type="text/html")
 
 
+def _commands_group_for_category(category: str) -> str:
+    key = (category or "").strip().lower()
+    if key in {"roster", "recruitment"}:
+        return "coach"
+    if key == "staff":
+        return "staff"
+    if key == "operations":
+        return "ops"
+    if key == "tournament":
+        return "tournament"
+    return "other"
+
+
+def _strip_inline_code(value: str) -> str:
+    text = (value or "").strip()
+    if len(text) >= 2 and text.startswith("`") and text.endswith("`"):
+        return text[1:-1].strip()
+    return text
+
+
+def _parse_commands_markdown(text: str) -> list[dict[str, Any]]:
+    categories: list[dict[str, Any]] = []
+    current_category: dict[str, Any] | None = None
+    current_command: dict[str, Any] | None = None
+
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+
+        if line.startswith("## "):
+            name = line[3:].strip()
+            current_category = {"name": name, "group": _commands_group_for_category(name), "commands": []}
+            categories.append(current_category)
+            current_command = None
+            continue
+
+        if line.startswith("### "):
+            if current_category is None:
+                continue
+            signature = line[4:].strip()
+            current_command = {"signature": signature, "description": "", "permissions": "", "example": ""}
+            current_category["commands"].append(current_command)
+            continue
+
+        if line.startswith("- ") and current_command is not None:
+            item = line[2:].strip()
+            if ":" not in item:
+                continue
+            key, value = item.split(":", 1)
+            normalized_key = key.strip().lower()
+            normalized_value = value.strip()
+            if normalized_key == "description":
+                current_command["description"] = normalized_value
+            elif normalized_key == "permissions":
+                current_command["permissions"] = normalized_value
+            elif normalized_key == "example":
+                current_command["example"] = _strip_inline_code(normalized_value)
+            continue
+
+    for category in categories:
+        for command in category.get("commands", []):
+            blob = " ".join(
+                part
+                for part in [
+                    str(command.get("signature") or ""),
+                    str(command.get("description") or ""),
+                    str(command.get("permissions") or ""),
+                    str(command.get("example") or ""),
+                ]
+                if part
+            )
+            command["search_text"] = blob.lower()
+
+    return [c for c in categories if c.get("commands")]
+
+
+async def commands_page(_request: web.Request) -> web.Response:
+    text = _repo_read_text("docs/commands.md")
+    if text is None:
+        raise web.HTTPNotFound(text="docs/commands.md not found.")
+
+    categories = _parse_commands_markdown(text)
+    from offside_bot.web_templates import render
+
+    page = render("pages/commands.html", title="Commands", categories=categories)
+    return web.Response(text=page, content_type="text/html")
+
+
 async def support_page(_request: web.Request) -> web.Response:
     support_discord = os.environ.get("SUPPORT_DISCORD_INVITE_URL", "").strip()
     support_email = os.environ.get("SUPPORT_EMAIL", "").strip()
@@ -3835,6 +3924,7 @@ def create_app(*, settings: Settings | None = None) -> web.Application:
     app.router.add_get("/terms", terms_page)
     app.router.add_get("/privacy", privacy_page)
     app.router.add_get("/support", support_page)
+    app.router.add_get("/commands", commands_page)
     app.router.add_get("/login", login)
     app.router.add_get("/install", install)
     app.router.add_get("/oauth/callback", oauth_callback)
