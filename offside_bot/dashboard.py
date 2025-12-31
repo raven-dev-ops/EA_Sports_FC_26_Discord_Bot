@@ -970,19 +970,6 @@ async def app_index(request: web.Request) -> web.Response:
         <label for="guild-search" class="muted">Search servers</label>
         <input id="guild-search" class="w-full mt-6" type="text" placeholder="Search by name..." />
       </div>
-      <script>
-        (function(){
-          const input = document.getElementById('guild-search');
-          if (!input) return;
-          input.addEventListener('input', function() {
-            const term = (this.value || '').toLowerCase();
-            document.querySelectorAll('.guild-card').forEach(function(card){
-              const name = (card.getAttribute('data-name') || '').toLowerCase();
-              card.style.display = name.includes(term) ? '' : 'none';
-            });
-          });
-        })();
-      </script>
     """
     eligible_ids = {str(g.get("id")) for g in session.owner_guilds}
     for g in session.all_guilds:

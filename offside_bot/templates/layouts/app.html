@@ -3,7 +3,7 @@
 
 {% block body %}
   <div class="topbar">
-    <div style="display:flex; gap:10px; align-items:center;">
+    <div class="flex gap-10 items-center">
       <button
         class="icon-btn"
         type="button"
@@ -25,7 +25,7 @@
         <span>{{ brand|default("Offside") }}</span>
       </a>
     </div>
-    <div style="display:flex; gap:10px; align-items:center;">
+    <div class="flex gap-10 items-center">
       {% if guild_selector %}
         <select aria-label="Select server" onchange="window.location=this.value">
           {% for opt in guild_selector %}
@@ -40,7 +40,7 @@
         {{ install_badge|safe }}
       {% endif %}
     </div>
-    <div style="display:flex; gap:10px; align-items:center;">
+    <div class="flex gap-10 items-center">
       {% if invite_cta %}
         {{ invite_cta|safe }}
       {% endif %}

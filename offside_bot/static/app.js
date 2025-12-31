@@ -117,4 +117,16 @@
 
     setCommandsFilter("all");
   }
+
+  const guildSearch = document.getElementById("guild-search");
+  if (guildSearch) {
+    const guildCards = Array.from(document.querySelectorAll(".guild-card"));
+    guildSearch.addEventListener("input", () => {
+      const term = (guildSearch.value || "").toLowerCase();
+      guildCards.forEach((card) => {
+        const name = (card.dataset.name || "").toLowerCase();
+        card.style.display = !term || name.includes(term) ? "" : "none";
+      });
+    });
+  }
 })();
