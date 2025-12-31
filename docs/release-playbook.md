@@ -11,6 +11,7 @@ See also:
 ## Release checklist
 
 - [ ] CI is green on `main` (ruff, mypy, pytest, build).
+- [ ] Ensure the self-hosted runner is online (CI + tag releases run on self-hosted runners; see `docs/ci.md`).
 - [ ] Review open PRs and Dependabot updates; merge or defer intentionally.
 - [ ] Verify secrets are not committed (no `.env` changes, no tokens in git history).
 - [ ] Update `VERSION` and `CHANGELOG.md` (add the new release section at the top).
@@ -25,6 +26,13 @@ See also:
 - [ ] Confirm Discord developer portal settings are correct (redirect URIs, install link, bot perms).
 - [ ] Deploy the release to production (see platform notes below).
 - [ ] Watch logs for 5–10 minutes after deploy (startup migrations, setup tasks, dashboard health).
+
+## Known GitHub Actions caveat (billing-gated dynamic workflow)
+
+Some repos may show a failing check named `Automatic Dependency Submission (Python)` even when CI is green.
+It is GitHub-managed and may fail if GitHub-hosted runners cannot start due to account billing/spending limits.
+
+If you don’t need it, disable it in repo settings (details: `docs/ci.md`).
 
 ## Environment variable checklist
 

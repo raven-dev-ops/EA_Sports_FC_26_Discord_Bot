@@ -4,8 +4,13 @@ Thanks for helping improve Offside! This guide covers local setup, coding standa
 
 ## Local Setup
 
-1. Clone the repo and create a Python 3.12 virtualenv.
-2. Copy `.env.example` to `.env` and fill required values (tokens, channel IDs, Mongo URI).
+1. Clone the repo and create a Python 3.12 virtualenv:
+   - Windows: `py -3.12 -m venv .venv`
+   - macOS/Linux: `python3.12 -m venv .venv`
+2. Copy `.env.example` to `.env` and fill required values:
+   - Required: `DISCORD_TOKEN`, `DISCORD_APPLICATION_ID`, `MONGODB_URI`
+   - Optional (web dashboard OAuth): `DISCORD_CLIENT_SECRET`, `DASHBOARD_REDIRECT_URI`
+   - Channel/role IDs are optional overrides; the bot auto-creates channels/roles on join/startup.
 3. Install dependencies:
    ```bash
    python -m pip install -r requirements.txt -r requirements-dev.txt
