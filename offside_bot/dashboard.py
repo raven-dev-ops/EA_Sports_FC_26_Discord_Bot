@@ -3601,7 +3601,7 @@ async def guild_ops_page(request: web.Request) -> web.Response:
     deletion_note = ""
     if deletion_task_error:
         deletion_note = (
-            f"<p class='muted' style='margin-top:8px;'>"
+            f"<p class='muted mt-8'>"
             f"Deletion status unavailable: <code>{_escape_html(deletion_task_error)}</code>"
             "</p>"
         )
@@ -3609,7 +3609,7 @@ async def guild_ops_page(request: web.Request) -> web.Response:
     delete_card_body = ""
     if not settings.mongodb_per_guild_db:
         delete_card_body = (
-            "<p class='muted' style='margin-top:8px;'>"
+            "<p class='muted mt-8'>"
             "<strong>Unavailable:</strong> Data deletion requires per-guild databases "
             "(set <code>MONGODB_PER_GUILD_DB=true</code>).</p>"
         )
@@ -3620,17 +3620,17 @@ async def guild_ops_page(request: web.Request) -> web.Response:
         if status == "queued":
             when = f"<code>{_escape_html(run_after_text)}</code>" if run_after_text else "soon"
             delete_card_body = (
-                "<p class='muted' style='margin-top:8px;'>"
+                "<p class='muted mt-8'>"
                 f"<strong>Deletion scheduled.</strong> This guild's stored data will be deleted {when}."
                 "</p>"
-                f"<form method='post' action='/api/guild/{guild_id}/ops/cancel_delete_data' style='margin-top:10px;'>"
+                f"<form method='post' action='/api/guild/{guild_id}/ops/cancel_delete_data' class='mt-10'>"
                 f"<input type='hidden' name='csrf' value='{_escape_html(session.csrf_token)}' />"
                 "<button class='btn secondary' type='submit'>Cancel deletion</button>"
                 "</form>"
             )
         else:
             delete_card_body = (
-                "<p class='muted' style='margin-top:8px;'>"
+                "<p class='muted mt-8'>"
                 f"<strong>Deletion task active.</strong> Status: <code>{_escape_html(status)}</code>."
                 "</p>"
             )
@@ -3638,16 +3638,16 @@ async def guild_ops_page(request: web.Request) -> web.Response:
         run_after = datetime.now(timezone.utc) + timedelta(hours=grace_hours)
         confirm_phrase = f"DELETE {guild_id}"
         delete_card_body = (
-            "<p class='muted' style='margin-top:8px;'>"
+            "<p class='muted mt-8'>"
             "<strong>Danger:</strong> Schedule an irreversible delete of this guild's stored data. "
             f"Deletion runs after a {grace_hours}h grace period "
             f"(scheduled for <code>{_escape_html(run_after.isoformat())}</code>)."
             "</p>"
-            f"<form method='post' action='/api/guild/{guild_id}/ops/schedule_delete_data' style='margin-top:10px;'>"
+            f"<form method='post' action='/api/guild/{guild_id}/ops/schedule_delete_data' class='mt-10'>"
             f"<input type='hidden' name='csrf' value='{_escape_html(session.csrf_token)}' />"
             f"<label class='muted' for='confirm_delete_{guild_id}'>Type <code>{_escape_html(confirm_phrase)}</code> to confirm</label>"
-            f"<input id='confirm_delete_{guild_id}' name='confirm' type='text' placeholder='{_escape_html(confirm_phrase)}' style='width:100%; margin-top:6px;' />"
-            "<button class='btn red' type='submit' style='margin-top:10px;'>Schedule deletion</button>"
+            f"<input id='confirm_delete_{guild_id}' name='confirm' type='text' placeholder='{_escape_html(confirm_phrase)}' class='w-full mt-6' />"
+            "<button class='btn red mt-10' type='submit'>Schedule deletion</button>"
             "</form>"
         )
 
