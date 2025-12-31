@@ -2,6 +2,10 @@
 
 These are manual/automation-ready scenarios that can be exercised with mocked credentials or in a staging guild. They are meant to guide end-to-end validation without hitting production:
 
+0) **Web dashboard smoke**
+   - Run: `pytest -q tests/e2e/test_dashboard_smoke.py`
+   - Covers: unauth marketing pages, OAuth return-to-route, settings page load, and a mocked Stripe checkout redirect.
+
 1) **Roster lifecycle**
    - `/roster` create → add 8 players → submit → approve/reject → unlock → resubmit.
    - Verify approved roster posts to roster listing channel; staff card cleans up on decision.

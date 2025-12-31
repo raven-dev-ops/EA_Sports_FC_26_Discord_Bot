@@ -18,7 +18,9 @@ See also:
   - `mypy .`
   - `pytest -q`
   - `python -m build --outdir dist`
-- [ ] Run a fast smoke test in a staging guild: `docs/qa-checklist.md`.
+- [ ] Run fast smoke tests:
+  - Web dashboard: `pytest -q tests/e2e/test_dashboard_smoke.py`
+  - Discord staging guild: `docs/qa-checklist.md`
 - [ ] Confirm Discord developer portal settings are correct (redirect URIs, install link, bot perms).
 - [ ] Deploy the release to production (see platform notes below).
 - [ ] Watch logs for 5–10 minutes after deploy (startup migrations, setup tasks, dashboard health).
@@ -94,4 +96,3 @@ MongoDB changes are not always reversible automatically. Options:
 - Re-run the smoke test checklist (`docs/qa-checklist.md`).
 - Confirm the dashboard works (login, select guild, open settings).
 - Confirm portals/listings are posting correctly in Discord.
-

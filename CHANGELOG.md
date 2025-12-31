@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.45] - 2025-12-31
+
+### Added
+- QA: E2E dashboard smoke test (`tests/e2e/test_dashboard_smoke.py`) for critical web flows.
+
 ## [0.2.44] - 2025-12-31
 
 ### Docs
