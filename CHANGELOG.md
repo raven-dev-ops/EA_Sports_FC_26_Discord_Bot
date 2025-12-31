@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.52] - 2025-12-31
+
+### Changed
+- Dependencies: bump `jinja2` to 3.1.6 to address `pip-audit` vulnerability reporting.
+
 ## [0.2.51] - 2025-12-31
 
 ### Changed
