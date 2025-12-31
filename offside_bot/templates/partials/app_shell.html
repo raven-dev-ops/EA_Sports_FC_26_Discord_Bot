@@ -43,7 +43,7 @@
         {% for group in nav_groups %}
           <div class="nav-group">
             <div class="nav-group-title">{{ group.label }}</div>
-            {% for item in group.items %}
+          {% for item in group["items"] %}
               <a
                 class="navlink{% if item.active %} active{% endif %}{% if item.locked %} locked{% endif %}"
                 href="{{ item.href }}"

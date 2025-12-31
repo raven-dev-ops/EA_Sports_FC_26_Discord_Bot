@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import hashlib
+import hmac
+import json
 import time
 from datetime import datetime, timedelta, timezone
 
@@ -45,6 +48,12 @@ def _settings() -> Settings:
         banlist_cache_ttl_seconds=300,
         google_sheets_credentials_json=None,
     )
+
+
+def _stripe_sig_header(*, payload: bytes, secret: str, timestamp: int) -> str:
+    signed_payload = str(timestamp).encode("utf-8") + b"." + payload
+    expected = hmac.new(secret.encode("utf-8"), signed_payload, hashlib.sha256).hexdigest()
+    return f"t={timestamp},v1={expected}"
 
 
 @pytest.mark.asyncio
@@ -582,6 +591,59 @@ async def test_billing_success_syncs_subscription(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
+async def test_billing_webhook_is_idempotent(monkeypatch) -> None:
+    from aiohttp.test_utils import TestClient, TestServer
+
+    monkeypatch.setattr(database, "MongoClient", mongomock.MongoClient)
+    monkeypatch.setattr(database, "_CLIENT", None)
+    monkeypatch.setenv("STRIPE_WEBHOOK_SECRET", "whsec_test")
+    entitlements_service.invalidate_all()
+
+    event = {
+        "id": "evt_idempotent",
+        "type": "checkout.session.completed",
+        "data": {
+            "object": {
+                "customer": "cus_123",
+                "subscription": "sub_123",
+                "metadata": {"guild_id": "123", "plan": "pro"},
+            }
+        },
+    }
+    payload = json.dumps(event).encode("utf-8")
+    sig_header = _stripe_sig_header(payload=payload, secret="whsec_test", timestamp=int(time.time()))
+
+    app = dashboard.create_app(settings=_settings())
+    client = TestClient(TestServer(app))
+    await client.start_server()
+    try:
+        resp = await client.post(
+            "/api/billing/webhook",
+            data=payload,
+            headers={"Stripe-Signature": sig_header},
+        )
+        assert resp.status == 200
+        data = await resp.json()
+        assert data["status"] == "processed"
+
+        resp = await client.post(
+            "/api/billing/webhook",
+            data=payload,
+            headers={"Stripe-Signature": sig_header},
+        )
+        assert resp.status == 200
+        data = await resp.json()
+        assert data["status"] in {"duplicate", "in_progress"}
+
+        doc = subscription_service.get_guild_subscription(_settings(), guild_id=123)
+        assert isinstance(doc, dict)
+        assert doc.get("plan") == "pro"
+        assert doc.get("status") == "checkout_completed"
+    finally:
+        await client.close()
+
+
+@pytest.mark.asyncio
 async def test_dashboard_shows_pro_expired_notice(monkeypatch) -> None:
     from aiohttp.test_utils import TestClient, TestServer
 
@@ -905,6 +967,59 @@ async def test_audit_page_is_locked_for_free_plan(monkeypatch) -> None:
         assert "Pro feature" in html
         assert "Upgrade to Pro" in html
         assert "/app/upgrade?guild_id=123" in html
+    finally:
+        await client.close()
+
+
+@pytest.mark.asyncio
+async def test_audit_page_allows_pro_plan(monkeypatch) -> None:
+    from aiohttp.test_utils import TestClient, TestServer
+
+    monkeypatch.setattr(database, "MongoClient", mongomock.MongoClient)
+    monkeypatch.setattr(database, "_CLIENT", None)
+    entitlements_service.invalidate_all()
+
+    async def fake_detect_installed(*_args, **_kwargs):
+        return True, None
+
+    monkeypatch.setattr(dashboard, "_detect_bot_installed", fake_detect_installed)
+
+    subscription_service.upsert_guild_subscription(
+        _settings(),
+        guild_id=123,
+        plan="pro",
+        status="active",
+        period_end=datetime(2030, 1, 1, tzinfo=timezone.utc),
+        customer_id="cus_123",
+        subscription_id="sub_123",
+    )
+
+    app = dashboard.create_app(settings=_settings())
+    sessions = app["session_collection"]
+    sessions.insert_one(
+        {
+            "_id": "sess1",
+            "created_at": time.time(),
+            "expires_at": datetime.now(timezone.utc) + timedelta(hours=6),
+            "user": {"id": "1", "username": "alice"},
+            "owner_guilds": [{"id": "123", "name": "Managed"}],
+            "all_guilds": [{"id": "123", "name": "Managed"}],
+            "csrf_token": "csrf_good",
+        }
+    )
+
+    client = TestClient(TestServer(app))
+    await client.start_server()
+    try:
+        resp = await client.get(
+            "/guild/123/audit",
+            headers={"Cookie": f"{dashboard.COOKIE_NAME}=sess1"},
+            allow_redirects=False,
+        )
+        assert resp.status == 200
+        html = await resp.text()
+        assert "Audit Log" in html
+        assert "Download CSV" in html
     finally:
         await client.close()
 
