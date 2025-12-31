@@ -339,6 +339,7 @@ def _app_shell(
 
     nav_guild = str(selected_guild_id or "")
     is_pro = guild_plan == entitlements_service.PLAN_PRO
+    is_owner = bool(selected_guild_id and _guild_is_owner(session, selected_guild_id))
     nav_items: list[dict[str, Any]] = []
     nav_groups: list[dict[str, Any]] = []
     breadcrumbs: list[dict[str, str]] = [{"label": "Dashboard", "href": "/app"}]
@@ -403,7 +404,13 @@ def _app_shell(
             {
                 "label": "Billing",
                 "items": [
-                    {"label": "Billing", "href": _guild_section_url(nav_guild, section="billing"), "active": section == "billing"},
+                    {
+                        "label": "Billing",
+                        "href": _guild_section_url(nav_guild, section="billing"),
+                        "active": section == "billing",
+                        "locked": not is_owner,
+                        "lock_reason": "Billing is available to guild owners.",
+                    },
                 ],
             },
             {
@@ -479,6 +486,49 @@ def _pro_locked_page(
         <ul class="list-reset">
           {benefits_html}
         </ul>
+      </div>
+    """
+    return web.Response(
+        text=_html_page(
+            title=title,
+            body=_app_shell(
+                settings=settings,
+                session=session,
+                section=section,
+                selected_guild_id=guild_id,
+                installed=installed,
+                content=body,
+            ),
+        ),
+        content_type="text/html",
+    )
+
+
+def _owner_locked_page(
+    *,
+    settings: Settings,
+    session: SessionData,
+    guild_id: int,
+    installed: bool | None,
+    section: str,
+    title: str,
+    message: str,
+) -> web.Response:
+    body = f"""
+      <h1 class="mt-0">{_escape_html(title)}</h1>
+      <div class="card">
+        <div class="flex-between">
+          <div class="flex-start">
+            <span class="badge warn">OWNER</span>
+            <strong>Restricted</strong>
+          </div>
+          <span class="badge warn">LOCKED</span>
+        </div>
+        <p class="muted spacer-sm">{_escape_html(message)}</p>
+        <div class="btn-group spacer-sm">
+          <a class="btn secondary" href="/guild/{guild_id}/overview">Back to overview</a>
+          <a class="btn secondary" href="/support">Support</a>
+        </div>
       </div>
     """
     return web.Response(
@@ -1092,6 +1142,13 @@ def _guild_is_eligible(guild: dict[str, Any]) -> bool:
     except (TypeError, ValueError):
         perms = 0
     return bool(perms & (PERM_ADMINISTRATOR | PERM_MANAGE_GUILD))
+
+
+def _guild_is_owner(session: SessionData, guild_id: int) -> bool:
+    for guild in session.all_guilds:
+        if str(guild.get("id")) == str(guild_id):
+            return guild.get("owner") is True
+    return False
 
 
 async def index(request: web.Request) -> web.Response:
@@ -1949,6 +2006,42 @@ def _require_owned_guild(
     raise web.HTTPForbidden(text="You do not have access to this guild.")
 
 
+def _require_guild_owner(
+    session: SessionData,
+    *,
+    guild_id: int,
+    settings: Settings | None = None,
+    path: str | None = None,
+) -> None:
+    if _guild_is_owner(session, guild_id):
+        return
+    try:
+        user = session.user
+        actor_id = int(user.get("id")) if isinstance(user, dict) and str(user.get("id")).isdigit() else None
+        actor_username = None
+        if isinstance(user, dict):
+            username = user.get("username")
+            discriminator = user.get("discriminator")
+            if username:
+                actor_username = f"{username}#{discriminator or ''}".strip("#")
+        audit_collection = None
+        if settings is not None:
+            audit_collection = get_collection(settings, record_type="audit_event", guild_id=guild_id)
+        record_audit_event(
+            guild_id=guild_id,
+            category="auth",
+            action="dashboard.billing_denied",
+            source="dashboard",
+            actor_discord_id=actor_id,
+            actor_username=actor_username,
+            details={"reason": "owner_required", "path": path},
+            collection=audit_collection,
+        )
+    except Exception:
+        pass
+    raise web.HTTPForbidden(text="Billing is restricted to guild owners.")
+
+
 def _parse_int_list(raw: str) -> list[int] | None:
     value = (raw or "").strip()
     if not value:
@@ -2356,6 +2449,16 @@ async def guild_settings_save(request: web.Request) -> web.Response:
     guild_id = _require_owned_guild(session, settings=settings, path=request.path_qs, guild_id=guild_id_str)
 
     installed, _install_error = await _detect_bot_installed(request, guild_id=guild_id)
+    if not _guild_is_owner(session, guild_id):
+        return _owner_locked_page(
+            settings=settings,
+            session=session,
+            guild_id=guild_id,
+            installed=installed,
+            section="billing",
+            title="Billing",
+            message="Billing access is restricted to the server owner. Ask the owner to manage upgrades and invoices.",
+        )
     if installed is False:
         raise web.HTTPBadRequest(text="Bot is not installed in this server yet. Invite it first.")
 
@@ -4426,6 +4529,8 @@ async def billing_checkout(request: web.Request) -> web.Response:
         raise web.HTTPBadRequest(text="Invalid CSRF token.")
 
     guild_id = _require_owned_guild(session, settings=settings, path=request.path_qs, guild_id=str(data.get("guild_id") or ""))
+    _require_guild_owner(session, guild_id=guild_id, settings=settings, path=request.path_qs)
+    _require_guild_owner(session, guild_id=guild_id, settings=settings, path=request.path_qs)
     plan = str(data.get("plan") or "pro").strip().lower()
     if plan != entitlements_service.PLAN_PRO:
         raise web.HTTPBadRequest(text="Unsupported plan.")
@@ -4589,6 +4694,8 @@ async def billing_cancel(request: web.Request) -> web.Response:
     guild_id = _require_owned_guild(session, settings=settings, path=request.path_qs, guild_id=gid) if gid else 0
     if not guild_id:
         raise web.HTTPBadRequest(text="Missing guild_id.")
+    _require_guild_owner(session, guild_id=guild_id, settings=settings, path=request.path_qs)
+    _require_guild_owner(session, guild_id=guild_id, settings=settings, path=request.path_qs)
     raise web.HTTPFound(f"/app/billing?guild_id={guild_id}&status=cancelled")
 
 
