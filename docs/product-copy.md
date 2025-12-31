@@ -17,6 +17,7 @@ Offside turns your EA Sports FC Discord into an ops dashboard: rosters, recruiti
 - **Server owners / league operators:** want consistent workflows, visibility, and guardrails.
 - **Staff & moderators:** need review, auditability, and reliable listing channels.
 - **Coaches:** want fast roster actions, clear caps/openings, and a clean submission flow.
+- **Players:** want trustworthy listings, clear expectations, and fast matching to clubs.
 
 ## Modules (canonical names)
 
@@ -28,6 +29,8 @@ Offside turns your EA Sports FC Discord into an ops dashboard: rosters, recruiti
 | Clubs | managers + staff | club ads, club listings, premium coach workflows and reporting |
 | Tournaments | staff | tournament creation, registration, brackets, fixtures, match/dispute flows |
 | Analytics | owners + staff | per-guild collection analytics + operational visibility |
+| Billing | owners/admins | per-guild Stripe billing, invoices, and entitlements status |
+| Audit + Ops | owners + staff | audit log, ops tasks (setup runs, data deletes), health/readiness |
 
 ## Plans (gating)
 
@@ -52,3 +55,13 @@ Pro unlocks feature-keys listed in `services/entitlements_service.py` `PRO_FEATU
 Enterprise is for large organizations that need custom workflows, dedicated support, and/or custom deployments.
 It includes everything in Pro, plus negotiated features and operational commitments (SLA, onboarding, custom integrations).
 
+## Routes (public vs app)
+
+- `/` — public landing
+- `/features` — module overviews
+- `/pricing` — plan cards + FAQ (Discord-friendly terms, per-guild billing)
+- `/support` — support channels (Discord + email) + docs
+- `/docs` — index of allowlisted docs (setup, billing, data lifecycle, monitoring, QA, release)
+- `/docs/<slug>` — allowlisted markdown docs rendered for self-serve
+- `/app` — server picker (requires login)
+- `/app/:guild_id/overview|setup|billing|analytics|settings|permissions|ops` — authenticated guild-scoped routes
