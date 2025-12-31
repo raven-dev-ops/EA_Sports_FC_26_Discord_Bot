@@ -105,6 +105,98 @@ async def test_app_requires_login_redirects_with_next(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
+async def test_admin_console_allows_allowlisted_user(monkeypatch) -> None:
+    from urllib.parse import parse_qs, urlparse
+
+    from aiohttp.test_utils import TestClient, TestServer
+
+    monkeypatch.setattr(database, "MongoClient", mongomock.MongoClient)
+    monkeypatch.setattr(database, "_CLIENT", None)
+    monkeypatch.setenv("DISCORD_CLIENT_SECRET", "secret")
+    monkeypatch.setenv("DASHBOARD_REDIRECT_URI", "http://localhost:8080/oauth/callback")
+    monkeypatch.setenv("ADMIN_DISCORD_IDS", "1")
+
+    async def fake_exchange_code(*_args, **_kwargs):
+        return {"access_token": "access_token"}
+
+    async def fake_discord_get_json(*_args, url: str, **_kwargs):
+        if url == dashboard.ME_URL:
+            return {"id": "1", "username": "alice", "discriminator": "0001"}
+        if url == dashboard.MY_GUILDS_URL:
+            return [{"id": "123", "name": "Managed", "owner": False, "permissions": str(1 << 5)}]
+        raise AssertionError(f"Unexpected Discord URL: {url}")
+
+    monkeypatch.setattr(dashboard, "_exchange_code", fake_exchange_code)
+    monkeypatch.setattr(dashboard, "_discord_get_json", fake_discord_get_json)
+
+    app = dashboard.create_app(settings=_settings())
+    client = TestClient(TestServer(app))
+    await client.start_server()
+    try:
+        resp = await client.get("/login?next=/admin", allow_redirects=False)
+        location = resp.headers.get("Location")
+        assert location is not None
+        state = parse_qs(urlparse(location).query).get("state", [""])[0]
+        assert state
+
+        resp = await client.get(f"/oauth/callback?code=abc&state={state}", allow_redirects=False)
+        cookie = resp.cookies.get(dashboard.COOKIE_NAME)
+        assert cookie is not None
+        cookie_header = f"{dashboard.COOKIE_NAME}={cookie.value}"
+
+        admin_page = await client.get("/admin", headers={"Cookie": cookie_header})
+        assert admin_page.status == 200
+    finally:
+        await client.close()
+
+
+@pytest.mark.asyncio
+async def test_admin_console_denies_non_admin(monkeypatch) -> None:
+    from urllib.parse import parse_qs, urlparse
+
+    from aiohttp.test_utils import TestClient, TestServer
+
+    monkeypatch.setattr(database, "MongoClient", mongomock.MongoClient)
+    monkeypatch.setattr(database, "_CLIENT", None)
+    monkeypatch.setenv("DISCORD_CLIENT_SECRET", "secret")
+    monkeypatch.setenv("DASHBOARD_REDIRECT_URI", "http://localhost:8080/oauth/callback")
+    monkeypatch.setenv("ADMIN_DISCORD_IDS", "999")
+
+    async def fake_exchange_code(*_args, **_kwargs):
+        return {"access_token": "access_token"}
+
+    async def fake_discord_get_json(*_args, url: str, **_kwargs):
+        if url == dashboard.ME_URL:
+            return {"id": "1", "username": "alice", "discriminator": "0001"}
+        if url == dashboard.MY_GUILDS_URL:
+            return [{"id": "123", "name": "Managed", "owner": False, "permissions": str(1 << 5)}]
+        raise AssertionError(f"Unexpected Discord URL: {url}")
+
+    monkeypatch.setattr(dashboard, "_exchange_code", fake_exchange_code)
+    monkeypatch.setattr(dashboard, "_discord_get_json", fake_discord_get_json)
+
+    app = dashboard.create_app(settings=_settings())
+    client = TestClient(TestServer(app))
+    await client.start_server()
+    try:
+        resp = await client.get("/login?next=/admin", allow_redirects=False)
+        location = resp.headers.get("Location")
+        assert location is not None
+        state = parse_qs(urlparse(location).query).get("state", [""])[0]
+        assert state
+
+        resp = await client.get(f"/oauth/callback?code=abc&state={state}", allow_redirects=False)
+        cookie = resp.cookies.get(dashboard.COOKIE_NAME)
+        assert cookie is not None
+        cookie_header = f"{dashboard.COOKIE_NAME}={cookie.value}"
+
+        admin_page = await client.get("/admin", headers={"Cookie": cookie_header})
+        assert admin_page.status == 403
+    finally:
+        await client.close()
+
+
+@pytest.mark.asyncio
 async def test_oauth_callback_access_denied_renders_friendly_page(monkeypatch) -> None:
     from aiohttp.test_utils import TestClient, TestServer
 

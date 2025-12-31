@@ -1,0 +1,148 @@
+{% from "macros/ui.html" import notice, form_row %}
+
+<h1 class="mt-0">Admin console</h1>
+<p class="muted">Internal tools for subscriptions, webhook health, and ops tasks.</p>
+
+{% if status_message %}
+  {{ notice(status_title, status_message, status_kind) }}
+{% endif %}
+
+<div class="card">
+  <h2 class="mt-0">Stripe resync</h2>
+  <form method="post" action="/admin/stripe/resync">
+    <input type="hidden" name="csrf" value="{{ csrf_token }}" />
+    {% call form_row("Guild ID") %}
+      <input id="admin-guild-id" name="guild_id" type="text" placeholder="1234567890" />
+    {% endcall %}
+    {% call form_row("Subscription ID", "Provide either a guild ID or subscription ID.") %}
+      <input id="admin-subscription-id" name="subscription_id" type="text" placeholder="sub_123" />
+    {% endcall %}
+    <button class="btn secondary" type="submit">Resync subscription</button>
+  </form>
+</div>
+
+<div class="card">
+  <h2 class="mt-0">Subscriptions</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>guild</th>
+        <th>plan</th>
+        <th>status</th>
+        <th>period end</th>
+        <th>subscription</th>
+        <th>updated</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for sub in subscriptions %}
+        <tr>
+          <td><code>{{ sub.guild_id }}</code></td>
+          <td>{{ sub.plan }}</td>
+          <td>{{ sub.status }}</td>
+          <td>{{ sub.period_end }}</td>
+          <td><code>{{ sub.subscription_id }}</code></td>
+          <td>{{ sub.updated_at }}</td>
+          <td>
+            <form method="post" action="/admin/stripe/resync">
+              <input type="hidden" name="csrf" value="{{ csrf_token }}" />
+              <input type="hidden" name="guild_id" value="{{ sub.guild_id }}" />
+              <input type="hidden" name="subscription_id" value="{{ sub.subscription_id }}" />
+              <button class="btn secondary" type="submit">Resync</button>
+            </form>
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="7" class="muted">No subscriptions found.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div class="row">
+  <div class="card">
+    <h2 class="mt-0">Recent webhook events</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>event</th>
+          <th>type</th>
+          <th>status</th>
+          <th>handled</th>
+          <th>guild</th>
+          <th>received</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for event in events %}
+          <tr>
+            <td><code>{{ event.event_id }}</code></td>
+            <td>{{ event.event_type }}</td>
+            <td>{{ event.status }}</td>
+            <td>{{ event.handled }}</td>
+            <td><code>{{ event.guild_id }}</code></td>
+            <td>{{ event.received_at }}</td>
+          </tr>
+        {% else %}
+          <tr><td colspan="6" class="muted">No recent webhook events.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="card">
+    <h2 class="mt-0">Dead letters</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>event</th>
+          <th>type</th>
+          <th>reason</th>
+          <th>received</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for event in dead_letters %}
+          <tr>
+            <td><code>{{ event.event_id }}</code></td>
+            <td>{{ event.event_type }}</td>
+            <td>{{ event.reason }}</td>
+            <td>{{ event.received_at }}</td>
+          </tr>
+        {% else %}
+          <tr><td colspan="4" class="muted">No dead letters.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="card">
+  <h2 class="mt-0">Ops tasks</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>task</th>
+        <th>guild</th>
+        <th>action</th>
+        <th>status</th>
+        <th>run after</th>
+        <th>created</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for task in ops_tasks %}
+        <tr>
+          <td><code>{{ task.task_id }}</code></td>
+          <td><code>{{ task.guild_id }}</code></td>
+          <td>{{ task.action }}</td>
+          <td>{{ task.status }}</td>
+          <td>{{ task.run_after }}</td>
+          <td>{{ task.created_at }}</td>
+        </tr>
+      {% else %}
+        <tr><td colspan="6" class="muted">No ops tasks found.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>

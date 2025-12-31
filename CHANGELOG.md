@@ -12,6 +12,7 @@ All notable changes to this project will be documented in this file.
 - Monitoring: request metrics and Discord API error log events with dashboard guidance.
 - Environments: add `APP_ENV`/`STRIPE_MODE` gating and environment separation doc.
 - Observability: add `/healthz` alias and interaction IDs in bot logs.
+- Admin console: allowlisted `/admin` dashboard for subscriptions, webhooks, and ops tasks.
 
 ### Changed
 - Dependencies: bump `jinja2` to 3.1.6 to address `pip-audit` vulnerability reporting.

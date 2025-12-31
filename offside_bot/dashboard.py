@@ -35,6 +35,7 @@ from services.guild_settings_schema import (
 from services.heartbeat_service import get_worker_heartbeat
 from services.ops_tasks_service import (
     OPS_TASK_ACTION_DELETE_GUILD_DATA,
+    OPS_TASKS_COLLECTION,
     OPS_TASK_ACTION_REPOST_PORTALS,
     OPS_TASK_ACTION_RUN_SETUP,
     cancel_ops_task,
@@ -43,8 +44,18 @@ from services.ops_tasks_service import (
     get_active_ops_task,
     list_ops_tasks,
 )
-from services.stripe_webhook_service import ensure_stripe_webhook_indexes, handle_stripe_webhook
-from services.subscription_service import get_guild_subscription
+from services.stripe_webhook_service import (
+    STRIPE_DEAD_LETTERS_COLLECTION,
+    STRIPE_EVENTS_COLLECTION,
+    ensure_stripe_webhook_indexes,
+    handle_stripe_webhook,
+)
+from services.subscription_service import (
+    get_guild_subscription,
+    get_guild_subscription_by_subscription_id,
+    get_subscription_collection,
+    upsert_guild_subscription,
+)
 from utils.redaction import redact_ip, redact_text
 from utils.environment import validate_stripe_environment
 
@@ -118,6 +129,12 @@ DOCS_PAGES: list[dict[str, str]] = [
         "title": "Monitoring",
         "path": "docs/monitoring.md",
         "summary": "Health checks, uptime checks, and operational signals.",
+    },
+    {
+        "slug": "admin-console",
+        "title": "Admin console",
+        "path": "docs/admin-console.md",
+        "summary": "Internal allowlisted tools for subscriptions and webhooks.",
     },
     {
         "slug": "qa-checklist",
@@ -282,6 +299,10 @@ def _app_shell(
     selected_guild_id: int | None,
     installed: bool | None,
     content: str,
+    nav_items_override: list[dict[str, Any]] | None = None,
+    nav_groups_override: list[dict[str, Any]] | None = None,
+    breadcrumbs_override: list[dict[str, str]] | None = None,
+    guild_selector_override: list[dict[str, str]] | None = None,
 ) -> str:
     from offside_bot.web_templates import render, safe_html
 
@@ -298,6 +319,8 @@ def _app_shell(
         for g in session.owner_guilds
         if isinstance(g, dict)
     ]
+    if guild_selector_override is not None:
+        guild_selector = guild_selector_override
 
     guild_plan: str | None = None
     plan_badge: dict[str, str] | None = None
@@ -440,6 +463,14 @@ def _app_shell(
                 ],
             },
         ]
+
+    if nav_items_override is not None:
+        nav_items = nav_items_override
+        nav_groups = nav_groups_override or []
+    elif nav_groups_override is not None:
+        nav_groups = nav_groups_override
+    if breadcrumbs_override is not None:
+        breadcrumbs = breadcrumbs_override
 
     return render(
         "partials/app_shell.html",
@@ -922,6 +953,28 @@ def _require_session(request: web.Request) -> SessionData:
         query = urllib.parse.urlencode({"next": next_path})
         raise web.HTTPFound(f"/login?{query}")
     return session
+
+
+def _admin_ids() -> set[int]:
+    raw = os.environ.get("ADMIN_DISCORD_IDS", "").strip()
+    if not raw:
+        return set()
+    ids: set[int] = set()
+    for part in raw.split(","):
+        token = part.strip()
+        if token.isdigit():
+            ids.add(int(token))
+    return ids
+
+
+def _require_admin(session: SessionData) -> None:
+    allowlist = _admin_ids()
+    if not allowlist:
+        raise web.HTTPForbidden(text="Admin console is not configured.")
+    user = session.user
+    user_id = str(user.get("id") or "")
+    if not user_id.isdigit() or int(user_id) not in allowlist:
+        raise web.HTTPForbidden(text="Admin access required.")
 
 
 def _is_https(request: web.Request) -> bool:
@@ -1643,6 +1696,212 @@ async def support_page(_request: web.Request) -> web.Response:
         active_nav="support",
     )
     return web.Response(text=page, content_type="text/html")
+
+
+def _format_admin_dt(value: Any) -> str:
+    if isinstance(value, datetime):
+        if value.tzinfo is None:
+            value = value.replace(tzinfo=timezone.utc)
+        return value.strftime("%Y-%m-%d %H:%M UTC")
+    return ""
+
+
+def _admin_actor(session: SessionData) -> tuple[int | None, str | None]:
+    user = session.user
+    actor_id = int(user.get("id")) if isinstance(user, dict) and str(user.get("id")).isdigit() else None
+    actor_username = None
+    if isinstance(user, dict):
+        username = user.get("username")
+        discriminator = user.get("discriminator")
+        if username:
+            actor_username = f"{username}#{discriminator or ''}".strip("#")
+    return actor_id, actor_username
+
+
+async def admin_dashboard(request: web.Request) -> web.Response:
+    session = _require_session(request)
+    _require_admin(session)
+    settings: Settings = request.app["settings"]
+    from offside_bot.web_templates import render
+
+    status = str(request.query.get("status") or "").strip().lower()
+    status_message = ""
+    status_kind = "info"
+    status_title = "Admin action"
+    if status == "resync_ok":
+        status_message = "Stripe resync completed."
+        status_kind = "success"
+    elif status == "resync_failed":
+        status_message = "Stripe resync failed. Check logs for details."
+        status_kind = "warn"
+
+    subscriptions: list[dict[str, Any]] = []
+    events: list[dict[str, Any]] = []
+    dead_letters: list[dict[str, Any]] = []
+    ops_tasks: list[dict[str, Any]] = []
+    if settings.mongodb_uri:
+        subs_col = get_subscription_collection(settings)
+        for doc in subs_col.find({}).sort("updated_at", -1).limit(50):
+            if not isinstance(doc, dict):
+                continue
+            subscriptions.append(
+                {
+                    "guild_id": doc.get("guild_id") or doc.get("_id"),
+                    "plan": str(doc.get("plan") or "").upper(),
+                    "status": str(doc.get("status") or ""),
+                    "period_end": _format_admin_dt(doc.get("period_end")),
+                    "customer_id": str(doc.get("customer_id") or ""),
+                    "subscription_id": str(doc.get("subscription_id") or ""),
+                    "updated_at": _format_admin_dt(doc.get("updated_at")),
+                }
+            )
+
+        events_col = get_global_collection(settings, name=STRIPE_EVENTS_COLLECTION)
+        for doc in events_col.find({}).sort("received_at", -1).limit(25):
+            if not isinstance(doc, dict):
+                continue
+            events.append(
+                {
+                    "event_id": str(doc.get("_id") or ""),
+                    "event_type": str(doc.get("type") or doc.get("event_type") or ""),
+                    "status": str(doc.get("status") or ""),
+                    "handled": str(doc.get("handled") or ""),
+                    "guild_id": str(doc.get("guild_id") or ""),
+                    "received_at": _format_admin_dt(doc.get("received_at")),
+                }
+            )
+
+        dead_col = get_global_collection(settings, name=STRIPE_DEAD_LETTERS_COLLECTION)
+        for doc in dead_col.find({}).sort("received_at", -1).limit(25):
+            if not isinstance(doc, dict):
+                continue
+            dead_letters.append(
+                {
+                    "event_id": str(doc.get("_id") or ""),
+                    "event_type": str(doc.get("event_type") or ""),
+                    "reason": str(doc.get("reason") or ""),
+                    "received_at": _format_admin_dt(doc.get("received_at")),
+                }
+            )
+
+        ops_col = get_global_collection(settings, name=OPS_TASKS_COLLECTION)
+        for doc in ops_col.find({}).sort("created_at", -1).limit(25):
+            if not isinstance(doc, dict):
+                continue
+            ops_tasks.append(
+                {
+                    "task_id": str(doc.get("_id") or ""),
+                    "guild_id": str(doc.get("guild_id") or ""),
+                    "action": str(doc.get("action") or ""),
+                    "status": str(doc.get("status") or ""),
+                    "run_after": _format_admin_dt(doc.get("run_after")),
+                    "created_at": _format_admin_dt(doc.get("created_at")),
+                }
+            )
+
+    content = render(
+        "pages/admin/dashboard.html",
+        subscriptions=subscriptions,
+        events=events,
+        dead_letters=dead_letters,
+        ops_tasks=ops_tasks,
+        status_message=status_message,
+        status_kind=status_kind,
+        status_title=status_title,
+        csrf_token=session.csrf_token,
+    )
+
+    body = _app_shell(
+        settings=settings,
+        session=session,
+        section="admin",
+        selected_guild_id=None,
+        installed=None,
+        content=content,
+        nav_items_override=[{"label": "Admin", "href": "/admin", "active": True}],
+        breadcrumbs_override=[{"label": "Admin", "href": "/admin"}],
+        guild_selector_override=[],
+    )
+    return web.Response(text=_html_page(title="Admin", body=body), content_type="text/html")
+
+
+async def admin_stripe_resync(request: web.Request) -> web.Response:
+    session = _require_session(request)
+    _require_admin(session)
+    settings: Settings = request.app["settings"]
+    if not settings.mongodb_uri:
+        raise web.HTTPBadRequest(text="MongoDB is not configured.")
+
+    data = await request.post()
+    if str(data.get("csrf", "")) != session.csrf_token:
+        raise web.HTTPBadRequest(text="Invalid CSRF token.")
+
+    guild_id_raw = str(data.get("guild_id") or "").strip()
+    subscription_id = str(data.get("subscription_id") or "").strip()
+    guild_id = int(guild_id_raw) if guild_id_raw.isdigit() else None
+
+    sub_doc: dict[str, Any] | None = None
+    if subscription_id:
+        sub_doc = get_guild_subscription_by_subscription_id(settings, subscription_id=subscription_id)
+    if sub_doc is None and guild_id is not None:
+        sub_doc = get_guild_subscription(settings, guild_id=guild_id)
+    if not subscription_id and isinstance(sub_doc, dict):
+        subscription_id = str(sub_doc.get("subscription_id") or "").strip()
+
+    if not subscription_id:
+        raise web.HTTPBadRequest(text="Missing subscription ID.")
+
+    try:
+        import stripe  # type: ignore[import-not-found]
+    except Exception:
+        raise web.HTTPBadRequest(text="Stripe SDK is not installed.") from None
+
+    try:
+        stripe.api_key = _require_env("STRIPE_SECRET_KEY")
+        sub = stripe.Subscription.retrieve(subscription_id)
+        metadata = sub.get("metadata") if hasattr(sub, "get") else {}
+        metadata = metadata if isinstance(metadata, dict) else {}
+        meta_guild_id = _parse_int(metadata.get("guild_id"))
+        target_guild_id = guild_id or meta_guild_id or _parse_int(sub_doc.get("guild_id") if sub_doc else None)
+        if target_guild_id is None:
+            raise RuntimeError("Unable to resolve guild_id for subscription.")
+
+        plan = str(metadata.get("plan") or (sub_doc.get("plan") if sub_doc else "") or entitlements_service.PLAN_PRO)
+        status = str(sub.get("status") if hasattr(sub, "get") else getattr(sub, "status", "unknown") or "unknown")
+        period_end_raw = sub.get("current_period_end") if hasattr(sub, "get") else getattr(sub, "current_period_end", None)
+        period_end = None
+        if isinstance(period_end_raw, (int, float)):
+            period_end = datetime.fromtimestamp(float(period_end_raw), tz=timezone.utc)
+        customer_id = sub.get("customer") if hasattr(sub, "get") else getattr(sub, "customer", None)
+
+        upsert_guild_subscription(
+            settings,
+            guild_id=target_guild_id,
+            plan=str(plan).strip().lower(),
+            status=str(status).strip().lower(),
+            period_end=period_end,
+            customer_id=str(customer_id) if customer_id else None,
+            subscription_id=subscription_id,
+        )
+        entitlements_service.invalidate_guild_plan(target_guild_id)
+        actor_id, actor_username = _admin_actor(session)
+        record_audit_event(
+            guild_id=target_guild_id,
+            category="admin",
+            action="stripe.resync",
+            source="admin_console",
+            actor_discord_id=actor_id,
+            actor_username=actor_username,
+            details={
+                "subscription_id": subscription_id,
+                "status": str(status),
+            },
+        )
+    except Exception:
+        logging.exception("admin_stripe_resync_failed", extra={"subscription_id": subscription_id})
+        raise web.HTTPFound("/admin?status=resync_failed") from None
+
+    raise web.HTTPFound("/admin?status=resync_ok")
 
 
 async def enterprise_page(_request: web.Request) -> web.Response:
@@ -4519,6 +4778,8 @@ def create_app(*, settings: Settings | None = None) -> web.Application:
     app.router.add_get("/privacy", privacy_page)
     app.router.add_get("/product", product_copy_page)
     app.router.add_get("/support", support_page)
+    app.router.add_get("/admin", admin_dashboard)
+    app.router.add_post("/admin/stripe/resync", admin_stripe_resync)
     app.router.add_get("/docs", docs_index_page)
     app.router.add_get("/docs/{slug}", docs_page)
     app.router.add_get("/commands", commands_page)

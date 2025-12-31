@@ -241,4 +241,5 @@ staff monitor channel (`channel_staff_monitor_id`) only.
 - Disaster recovery: `docs/disaster-recovery.md`
 - Environments: `docs/environments.md`
 - CI notes (self-hosted runner, dynamic checks): `docs/ci.md`
+- Admin console: `docs/admin-console.md`
 - Data lifecycle (backups/retention/deletion): `docs/data-lifecycle.md`
