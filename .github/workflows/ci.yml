@@ -45,6 +45,9 @@ jobs:
       - name: Generate docs (check)
         run: .\.venv\Scripts\python -m scripts.generate_docs --check
 
+      - name: Release metadata check
+        run: .\.venv\Scripts\python -m scripts.check_release_metadata
+
       - name: Dependency audit
         run: .\.venv\Scripts\python -m pip_audit -r requirements.txt
 

@@ -194,7 +194,7 @@ staff monitor channel (`channel_staff_monitor_id`) only.
 - Signals & shutdown: SIGTERM/SIGINT trigger a graceful shutdown and close the Mongo client; Discord backoff helpers use timeouts and honor `retry_after`.
 - Docs/Help sync: `python -m scripts.generate_docs` refreshes `docs/commands.md`; `/help` pulls from the same catalog.
 - Per-guild config: staff can use `/config_guild_set` to override settings per guild; stored in Mongo `guild_settings`.
-- Releases: pushing a `v*` tag runs the release workflow (requires the self-hosted runner to be online) to build and attach wheel/sdist artifacts.
+- Releases: update `VERSION` + `CHANGELOG.md`, then tag `vX.Y.Z` (see `docs/release-playbook.md`); pushing the tag runs the release workflow (requires the self-hosted runner to be online) to build and attach wheel/sdist artifacts.
 - Dev watch: `python -m scripts.dev_watch` (requires `watchfiles`) restarts the bot on Python file changes.
 - Profiling: `python -m scripts.profile --module offside_bot.__main__ --func main` for quick CPU profiling (non-production).
 - Feature flags: use `FEATURE_FLAGS=metrics_log` to enable sample scheduler job; extend via `utils/flags.py`.

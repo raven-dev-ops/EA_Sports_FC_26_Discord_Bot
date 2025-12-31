@@ -8,6 +8,13 @@ See also:
 - `docs/data-lifecycle.md`
 - `.env.example`
 
+## Versioning policy
+
+- Offside uses semantic versioning: `MAJOR.MINOR.PATCH`.
+- `VERSION` is the source of truth (and is read by `pyproject.toml`).
+- Every release must add a top `CHANGELOG.md` entry that matches `VERSION`.
+- Release tags follow `vX.Y.Z` (example: `v0.3.0`).
+
 ## Release checklist
 
 - [ ] CI is green on `main` (ruff, mypy, pytest, build).
@@ -16,6 +23,7 @@ See also:
 - [ ] Verify secrets are not committed (no `.env` changes, no tokens in git history).
 - [ ] Confirm gitleaks is green and `.slugignore` excludes `.env` and local artifacts.
 - [ ] Update `VERSION` and `CHANGELOG.md` (add the new release section at the top).
+- [ ] Commit the release changes, tag `vX.Y.Z`, and push the tag to trigger the release workflow.
 - [ ] Run local gates:
   - `ruff check .`
   - `mypy .`

@@ -22,3 +22,10 @@ How to fix:
 
 Notes:
 - `docs/billing.md` is Stripe billing for the app, not GitHub billing.
+
+## Release metadata checks
+
+CI runs `python -m scripts.check_release_metadata` to verify:
+- `VERSION` is valid SemVer.
+- The top `CHANGELOG.md` entry matches `VERSION`.
+- Tag releases use `vX.Y.Z` that matches `VERSION`.
