@@ -312,15 +312,18 @@ def _pro_locked_page(
     section: str,
     title: str,
     message: str,
+    benefits: list[tuple[str, str]] | None = None,
+    upgrade_href: str | None = None,
 ) -> web.Response:
-    upgrade_href = f"/app/upgrade?guild_id={guild_id}&from=locked&section={urllib.parse.quote(section)}"
-    benefits = [
-        ("Premium coach tiers", "Coach Premium and Coach Premium+ roles, caps, and workflow."),
-        ("Premium Coaches report", "Public listing embed of Premium coaches and openings."),
-        ("FC stats integration", "FC25/FC26 stats lookup, caching, and richer player profiles."),
-        ("Banlist integration", "Google Sheets-driven banlist checks and moderation tooling."),
-        ("Tournament automation", "Automated brackets, fixtures, and match reporting workflows."),
-    ]
+    upgrade_href = upgrade_href or f"/app/upgrade?guild_id={guild_id}&from=locked&section={urllib.parse.quote(section)}"
+    if benefits is None:
+        benefits = [
+            ("Premium coach tiers", "Coach Premium and Coach Premium+ roles, caps, and workflow."),
+            ("Premium Coaches report", "Public listing embed of Premium coaches and openings."),
+            ("FC stats integration", "FC25/FC26 stats lookup, caching, and richer player profiles."),
+            ("Banlist integration", "Google Sheets-driven banlist checks and moderation tooling."),
+            ("Tournament automation", "Automated brackets, fixtures, and match reporting workflows."),
+        ]
     benefits_html = "\n".join(
         f"<li><strong>{_escape_html(name)}</strong> — {_escape_html(desc)}</li>"
         for name, desc in benefits
@@ -3371,6 +3374,23 @@ async def guild_audit_csv(request: web.Request) -> web.Response:
 
     guild_id_str = request.match_info["guild_id"]
     guild_id = _require_owned_guild(session, settings=settings, path=request.path_qs, guild_id=guild_id_str)
+    plan = entitlements_service.get_guild_plan(settings, guild_id=guild_id)
+    if plan != entitlements_service.PLAN_PRO:
+        return _pro_locked_page(
+            settings=settings,
+            session=session,
+            guild_id=guild_id,
+            installed=None,
+            section="audit",
+            title="Audit Log Export",
+            message="Audit Log export is available on the Pro plan.",
+            benefits=[
+                ("Audit export", "Downloadable CSV for compliance and review."),
+                ("Billing & entitlements", "Keep entitlements synced across web and bot."),
+                ("Priority support", "Access help for billing and operational issues."),
+            ],
+            upgrade_href=f"/app/upgrade?guild_id={guild_id}&from=audit_csv&section=audit",
+        )
 
     plan = entitlements_service.get_guild_plan(settings, guild_id=guild_id)
     if plan != entitlements_service.PLAN_PRO:
@@ -3433,6 +3453,23 @@ async def guild_ops_page(request: web.Request) -> web.Response:
 
     guild_id_str = request.match_info["guild_id"]
     guild_id = _require_owned_guild(session, settings=settings, path=request.path_qs, guild_id=guild_id_str)
+    plan = entitlements_service.get_guild_plan(settings, guild_id=guild_id)
+    if plan != entitlements_service.PLAN_PRO:
+        return _pro_locked_page(
+            settings=settings,
+            session=session,
+            guild_id=guild_id,
+            installed=None,
+            section="ops",
+            title="Operations",
+            message="Ops tasks (setup runs, portal reposts, data delete scheduling) are available on the Pro plan.",
+            benefits=[
+                ("Setup automation", "Re-run setup tasks reliably."),
+                ("Portal reposts", "Regenerate staff/portal messages with one click."),
+                ("Data ops", "Schedule data deletion with auditability."),
+            ],
+            upgrade_href=f"/app/upgrade?guild_id={guild_id}&from=ops&section=ops",
+        )
 
     installed, install_error = await _detect_bot_installed(request, guild_id=guild_id)
     if not settings.mongodb_uri:
