@@ -63,4 +63,8 @@ def test_apply_migrations_with_mongomock(monkeypatch) -> None:
     meta = client[settings.mongodb_db_name]["_meta"].find_one({"_id": "schema_version"})
     assert meta and meta["version"] == 6
 
+    entitlements = client[settings.mongodb_db_name]["entitlements"]
+    indexes = entitlements.index_information()
+    assert "uniq_guild_id" in indexes
+
     close_client()

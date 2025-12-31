@@ -8,6 +8,7 @@ from config import load_settings
 from database import ensure_indexes, ensure_offside_indexes, get_collection, get_database
 from services.stripe_webhook_service import ensure_stripe_webhook_indexes
 from services.subscription_service import ensure_subscription_indexes
+from services.entitlements_service import ensure_entitlements_indexes
 
 MigrationFunc = Callable[[dict], None]
 
@@ -89,6 +90,7 @@ def _migration_6(context: dict) -> None:
     settings = context["settings"]
     ensure_subscription_indexes(settings)
     ensure_stripe_webhook_indexes(settings)
+    ensure_entitlements_indexes(settings)
 
 
 MIGRATIONS: list[tuple[int, str, MigrationFunc]] = [

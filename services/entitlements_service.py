@@ -5,7 +5,10 @@ import time
 from datetime import datetime, timezone
 from typing import Final
 
+from pymongo.collection import Collection
+
 from config import Settings
+from database import get_global_collection
 from services.subscription_service import get_guild_subscription
 
 PLAN_FREE: Final[str] = "free"
@@ -25,12 +28,52 @@ PRO_FEATURE_KEYS: Final[set[str]] = {
     FEATURE_TOURNAMENT_AUTOMATION,
 }
 
+ENTITLEMENTS_COLLECTION = "entitlements"
+
 _CACHE_TTL_SECONDS: float = 15.0
 _PLAN_CACHE: dict[int, tuple[float, str]] = {}
 
 
 def _utc_now() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def _entitlements_collection(settings: Settings | None) -> Collection | None:
+    if settings is None or not settings.mongodb_uri:
+        return None
+    return get_global_collection(settings, name=ENTITLEMENTS_COLLECTION)
+
+
+def ensure_entitlements_indexes(settings: Settings | None = None) -> list[str]:
+    col = _entitlements_collection(settings)
+    if col is None:
+        return []
+    indexes: list[str] = []
+    indexes.append(col.create_index([("guild_id", 1)], unique=True, name="uniq_guild_id"))
+    indexes.append(col.create_index([("plan", 1)], name="idx_plan"))
+    indexes.append(col.create_index([("status", 1)], name="idx_status"))
+    return indexes
+
+
+def _upsert_entitlement(
+    settings: Settings | None,
+    *,
+    guild_id: int,
+    plan: str,
+    status: str | None = None,
+) -> None:
+    col = _entitlements_collection(settings)
+    if col is None:
+        return
+    now = _utc_now()
+    doc = {
+        "_id": guild_id,
+        "guild_id": guild_id,
+        "plan": plan,
+        "status": status or plan,
+        "updated_at": now,
+    }
+    col.update_one({"_id": guild_id}, {"$set": doc, "$setOnInsert": {"created_at": now}}, upsert=True)
 
 
 def _cache_get(*, guild_id: int) -> str | None:
@@ -103,6 +146,12 @@ def get_guild_plan(settings: Settings | None, *, guild_id: int) -> str:
     doc = get_guild_subscription(settings, guild_id=guild_id)
     plan = _plan_from_subscription_doc(doc) if doc else PLAN_FREE
     _cache_set(guild_id=guild_id, plan=plan)
+    try:
+        status = str(doc.get("status")) if doc else None
+        _upsert_entitlement(settings, guild_id=guild_id, plan=plan, status=status)
+    except Exception:
+        # Avoid breaking runtime if entitlements persistence fails; logging happens upstream.
+        pass
     return plan
 
 
@@ -111,4 +160,3 @@ def is_feature_enabled(settings: Settings | None, *, guild_id: int, feature_key:
     if key in {k.lower() for k in PRO_FEATURE_KEYS}:
         return get_guild_plan(settings, guild_id=guild_id) == PLAN_PRO
     return True
-
