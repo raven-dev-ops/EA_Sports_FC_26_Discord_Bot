@@ -12,6 +12,11 @@ All notable changes to this project will be documented in this file.
 - Ops: ops tasks support scheduled execution (`run_after`) and cancellation.
 - Data: retention via TTL (`expires_at`) for audit collections; ops task history cleanup is configurable.
 
+## [0.2.50] - 2025-12-31
+
+### Changed
+- CI: run gitleaks via CLI (no gitleaks-action license required) and run `build` independently of the secrets scan.
+
 ## [0.2.48] - 2025-12-31
 
 ### Added
