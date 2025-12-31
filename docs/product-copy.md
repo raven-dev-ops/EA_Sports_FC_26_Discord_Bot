@@ -61,7 +61,7 @@ It includes everything in Pro, plus negotiated features and operational commitme
 - `/features` — module overviews
 - `/pricing` — plan cards + FAQ (Discord-friendly terms, per-guild billing)
 - `/support` — support channels (Discord + email) + docs
-- `/docs` — index of allowlisted docs (setup, billing, data lifecycle, environments, admin console, disaster recovery, monitoring, QA, release)
+- `/docs` — index of allowlisted docs (setup, billing, data lifecycle, environments, admin console, localization, disaster recovery, monitoring, QA, release)
 - `/docs/<slug>` — allowlisted markdown docs rendered for self-serve
 - `/app` — server picker (requires login)
 - `/app/:guild_id/overview|setup|billing|analytics|settings|permissions|ops` — authenticated guild-scoped routes

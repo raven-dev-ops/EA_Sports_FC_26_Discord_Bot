@@ -8,7 +8,7 @@
         class="icon-btn"
         type="button"
         data-sidebar-toggle
-        aria-label="Toggle menu"
+        aria-label="{{ t('nav.toggle_menu') }}"
         aria-controls="app-sidebar"
         aria-expanded="false"
       >
@@ -27,7 +27,7 @@
     </div>
     <div class="flex gap-10 items-center">
       {% if guild_selector %}
-        <select aria-label="Select server" onchange="window.location=this.value">
+        <select aria-label="{{ t('nav.select_server') }}" onchange="window.location=this.value">
           {% for opt in guild_selector %}
             <option value="{{ opt.href }}" {% if opt.selected %}selected{% endif %}>{{ opt.label }}</option>
           {% endfor %}
@@ -45,7 +45,7 @@
         {{ invite_cta|safe }}
       {% endif %}
       <span class="muted">{{ username }}</span>
-      <a class="btn secondary" href="/logout">Logout</a>
+      <a class="btn secondary" href="/logout">{{ t("nav.logout") }}</a>
     </div>
   </div>
 

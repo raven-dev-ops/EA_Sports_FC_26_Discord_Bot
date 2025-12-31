@@ -6,6 +6,7 @@ from typing import Any
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from markupsafe import Markup
 
+from utils.i18n import t
 _TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
 _STATIC_DIR = Path(__file__).resolve().parent / "static"
 
@@ -33,6 +34,7 @@ def env() -> Environment:
             autoescape=select_autoescape(["html", "xml"]),
         )
         _ENV.globals["static_url"] = static_url
+        _ENV.globals["t"] = t
     return _ENV
 
 
@@ -43,4 +45,3 @@ def render(template_name: str, /, **context: Any) -> str:
 
 def safe_html(html: str) -> Markup:
     return Markup(html)
-

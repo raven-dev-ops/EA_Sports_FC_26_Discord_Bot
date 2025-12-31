@@ -1,23 +1,23 @@
 {% from "macros/ui.html" import notice, form_row %}
 
-<h1 class="mt-0">Admin console</h1>
-<p class="muted">Internal tools for subscriptions, webhook health, and ops tasks.</p>
+<h1 class="mt-0">{{ t("admin.title") }}</h1>
+<p class="muted">{{ t("admin.subtitle") }}</p>
 
 {% if status_message %}
   {{ notice(status_title, status_message, status_kind) }}
 {% endif %}
 
 <div class="card">
-  <h2 class="mt-0">Stripe resync</h2>
+  <h2 class="mt-0">{{ t("admin.resync.title") }}</h2>
   <form method="post" action="/admin/stripe/resync">
     <input type="hidden" name="csrf" value="{{ csrf_token }}" />
-    {% call form_row("Guild ID") %}
+    {% call form_row(t("admin.resync.guild_id")) %}
       <input id="admin-guild-id" name="guild_id" type="text" placeholder="1234567890" />
     {% endcall %}
-    {% call form_row("Subscription ID", "Provide either a guild ID or subscription ID.") %}
+    {% call form_row(t("admin.resync.subscription_id"), t("admin.resync.help")) %}
       <input id="admin-subscription-id" name="subscription_id" type="text" placeholder="sub_123" />
     {% endcall %}
-    <button class="btn secondary" type="submit">Resync subscription</button>
+    <button class="btn secondary" type="submit">{{ t("admin.resync.button") }}</button>
   </form>
 </div>
 

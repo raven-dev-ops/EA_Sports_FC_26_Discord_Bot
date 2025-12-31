@@ -58,6 +58,7 @@ from services.subscription_service import (
 )
 from utils.redaction import redact_ip, redact_text
 from utils.environment import validate_stripe_environment
+from utils.i18n import t
 
 DISCORD_API_BASE = "https://discord.com/api"
 AUTHORIZE_URL = "https://discord.com/oauth2/authorize"
@@ -159,6 +160,12 @@ DOCS_PAGES: list[dict[str, str]] = [
         "title": "CI",
         "path": "docs/ci.md",
         "summary": "CI setup, runners, and release workflows.",
+    },
+    {
+        "slug": "localization",
+        "title": "Localization",
+        "path": "docs/localization.md",
+        "summary": "i18n scaffold and locale workflow.",
     },
     {
         "slug": "fc25-stats-policy",
@@ -1727,12 +1734,12 @@ async def admin_dashboard(request: web.Request) -> web.Response:
     status = str(request.query.get("status") or "").strip().lower()
     status_message = ""
     status_kind = "info"
-    status_title = "Admin action"
+    status_title = t("admin.action.title", "Admin action")
     if status == "resync_ok":
-        status_message = "Stripe resync completed."
+        status_message = t("admin.resync.success", "Stripe resync completed.")
         status_kind = "success"
     elif status == "resync_failed":
-        status_message = "Stripe resync failed. Check logs for details."
+        status_message = t("admin.resync.failed", "Stripe resync failed. Check logs for details.")
         status_kind = "warn"
 
     subscriptions: list[dict[str, Any]] = []
@@ -2152,14 +2159,17 @@ async def oauth_callback(request: web.Request) -> web.Response:
     if error:
         if error == "access_denied":
             return _oauth_error_response(
-                title="Login cancelled",
-                message="Discord authorization was cancelled. You can try again when you're ready.",
+                title=t("oauth.cancelled.title", "Login cancelled"),
+                message=t(
+                    "oauth.cancelled.message",
+                    "Discord authorization was cancelled. You can try again when you're ready.",
+                ),
                 next_path=next_path,
                 status=200,
             )
         detail = f" ({error_description})" if error_description else ""
         return _oauth_error_response(
-            title="Login failed",
+            title=t("oauth.failed.title", "Login failed"),
             message=f"Discord returned an OAuth error: {error}{detail}",
             next_path=next_path,
             status=400,
@@ -2167,16 +2177,16 @@ async def oauth_callback(request: web.Request) -> web.Response:
 
     if not state or not code:
         return _oauth_error_response(
-            title="Login failed",
-            message="Missing code/state. Please try logging in again.",
+            title=t("oauth.failed.title", "Login failed"),
+            message=t("oauth.failed.missing_code", "Missing code/state. Please try logging in again."),
             next_path=next_path,
             status=400,
         )
 
     if issued_at is None or time.time() - issued_at > STATE_TTL_SECONDS:
         return _oauth_error_response(
-            title="Login expired",
-            message="Your login attempt expired. Please try logging in again.",
+            title=t("oauth.expired.title", "Login expired"),
+            message=t("oauth.expired.message", "Your login attempt expired. Please try logging in again."),
             next_path=next_path,
             status=400,
         )
@@ -2199,8 +2209,8 @@ async def oauth_callback(request: web.Request) -> web.Response:
             extra=_log_extra(request, status=exc.status),
         )
         return _oauth_error_response(
-            title="Login failed",
-            message="Discord token exchange failed. Please try again.",
+            title=t("oauth.failed.title", "Login failed"),
+            message=t("oauth.failed.token", "Discord token exchange failed. Please try again."),
             next_path=next_path,
             status=502,
         )
@@ -2211,16 +2221,16 @@ async def oauth_callback(request: web.Request) -> web.Response:
             extra=_log_extra(request),
         )
         return _oauth_error_response(
-            title="Login failed",
-            message="Discord token exchange failed. Please try again.",
+            title=t("oauth.failed.title", "Login failed"),
+            message=t("oauth.failed.token", "Discord token exchange failed. Please try again."),
             next_path=next_path,
             status=502,
         )
     access_token = str(token.get("access_token") or "")
     if not access_token:
         return _oauth_error_response(
-            title="Login failed",
-            message="Discord did not return an access token. Please try again.",
+            title=t("oauth.failed.title", "Login failed"),
+            message=t("oauth.failed.no_token", "Discord did not return an access token. Please try again."),
             next_path=next_path,
             status=502,
         )
@@ -2238,8 +2248,8 @@ async def oauth_callback(request: web.Request) -> web.Response:
             extra=_log_extra(request, status=exc.status),
         )
         return _oauth_error_response(
-            title="Login failed",
-            message="Discord API request failed. Please try again.",
+            title=t("oauth.failed.title", "Login failed"),
+            message=t("oauth.failed.api", "Discord API request failed. Please try again."),
             next_path=next_path,
             status=502,
         )
@@ -2250,8 +2260,8 @@ async def oauth_callback(request: web.Request) -> web.Response:
             extra=_log_extra(request),
         )
         return _oauth_error_response(
-            title="Login failed",
-            message="Discord API request failed. Please try again.",
+            title=t("oauth.failed.title", "Login failed"),
+            message=t("oauth.failed.api", "Discord API request failed. Please try again."),
             next_path=next_path,
             status=502,
         )
