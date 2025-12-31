@@ -14,6 +14,7 @@ from interactions.modals import RecruitProfileModalStep1
 from interactions.recruit_availability import RecruitAvailabilityView
 from interactions.recruit_embeds import build_recruit_profile_embed
 from interactions.views import SafeView
+from services import entitlements_service
 from services.fc25_stats_feature import fc25_stats_enabled
 from services.fc25_stats_service import get_latest_snapshot, get_link
 from services.recruitment_service import delete_recruit_profile, get_recruit_profile
@@ -159,6 +160,17 @@ class RecruitPortalView(SafeView):
             profile = get_recruit_profile(guild.id, interaction.user.id)
         except Exception:
             profile = None
+        settings = getattr(interaction.client, "settings", None)
+        if settings is not None and not entitlements_service.is_feature_enabled(
+            settings,
+            guild_id=guild.id,
+            feature_key=entitlements_service.FEATURE_FC25_STATS,
+        ):
+            await interaction.response.send_message(
+                "Recruit profiles with FC stats and rich embeds are available on the Pro plan for this server.",
+                ephemeral=True,
+            )
+            return
         if not profile:
             await interaction.response.send_message(
                 "No profile found yet. Use Register / Edit first.",
@@ -167,7 +179,6 @@ class RecruitPortalView(SafeView):
             return
         fc25_link = None
         fc25_snapshot = None
-        settings = getattr(interaction.client, "settings", None)
         if settings is not None and fc25_stats_enabled(settings, guild_id=guild.id):
             try:
                 fc25_link = get_link(guild.id, interaction.user.id)
@@ -209,6 +220,16 @@ class RecruitPortalView(SafeView):
         if settings is None:
             await interaction.response.send_message(
                 "Bot configuration is not loaded.",
+                ephemeral=True,
+            )
+            return
+        if not entitlements_service.is_feature_enabled(
+            settings,
+            guild_id=guild.id,
+            feature_key=entitlements_service.FEATURE_FC25_STATS,
+        ):
+            await interaction.response.send_message(
+                "Recruit availability scheduling is available on the Pro plan for this server.",
                 ephemeral=True,
             )
             return

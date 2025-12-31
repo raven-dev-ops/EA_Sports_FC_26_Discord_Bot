@@ -160,3 +160,8 @@ def is_feature_enabled(settings: Settings | None, *, guild_id: int, feature_key:
     if key in {k.lower() for k in PRO_FEATURE_KEYS}:
         return get_guild_plan(settings, guild_id=guild_id) == PLAN_PRO
     return True
+
+
+def require_feature(settings: Settings | None, *, guild_id: int, feature_key: str) -> None:
+    if not is_feature_enabled(settings, guild_id=guild_id, feature_key=feature_key):
+        raise PermissionError(f"Feature {feature_key} requires Pro plan for guild {guild_id}.")
