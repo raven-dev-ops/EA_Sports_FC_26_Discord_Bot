@@ -4061,6 +4061,7 @@ async def billing_portal(request: web.Request) -> web.Response:
 
 async def billing_checkout(request: web.Request) -> web.Response:
     session = _require_session(request)
+    settings: Settings = request.app["settings"]
     data = await request.post()
     if str(data.get("csrf", "")) != session.csrf_token:
         raise web.HTTPBadRequest(text="Invalid CSRF token.")
@@ -4069,6 +4070,12 @@ async def billing_checkout(request: web.Request) -> web.Response:
     plan = str(data.get("plan") or "pro").strip().lower()
     if plan != entitlements_service.PLAN_PRO:
         raise web.HTTPBadRequest(text="Unsupported plan.")
+
+    existing = get_guild_subscription(settings, guild_id=guild_id)
+    existing_status = str(existing.get("status") or "").strip().lower() if isinstance(existing, dict) else ""
+    active_like_statuses = {"active", "trialing", "past_due", "incomplete"}
+    if existing_status in active_like_statuses:
+        raise web.HTTPBadRequest(text="This guild already has an active or pending subscription; manage via billing.")
 
     secret_key = _require_env("STRIPE_SECRET_KEY")
     price_id = _require_env("STRIPE_PRICE_PRO_ID")

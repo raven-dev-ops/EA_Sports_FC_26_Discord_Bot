@@ -351,6 +351,8 @@ async def test_billing_checkout_requires_csrf(monkeypatch) -> None:
 
     monkeypatch.setattr(database, "MongoClient", mongomock.MongoClient)
     monkeypatch.setattr(database, "_CLIENT", None)
+    monkeypatch.setenv("STRIPE_SECRET_KEY", "sk_test_123")
+    monkeypatch.setenv("STRIPE_PRICE_PRO_ID", "price_123")
 
     app = dashboard.create_app(settings=_settings())
     sessions = app["session_collection"]
@@ -378,6 +380,58 @@ async def test_billing_checkout_requires_csrf(monkeypatch) -> None:
         assert resp.status == 400
         text = await resp.text()
         assert "CSRF" in text
+    finally:
+        await client.close()
+
+
+@pytest.mark.asyncio
+async def test_billing_checkout_blocks_duplicate_subscription(monkeypatch) -> None:
+    from aiohttp.test_utils import TestClient, TestServer
+
+    monkeypatch.setattr(database, "MongoClient", mongomock.MongoClient)
+    monkeypatch.setattr(database, "_CLIENT", None)
+    monkeypatch.setenv("STRIPE_SECRET_KEY", "sk_test_123")
+    monkeypatch.setenv("STRIPE_PRICE_PRO_ID", "price_123")
+
+    async def fake_create(*_args, **_kwargs):
+        return {"url": "https://stripe.test/checkout"}
+
+    import stripe  # type: ignore[import-not-found]
+
+    monkeypatch.setattr(stripe.checkout.Session, "create", fake_create)
+
+    def fake_subscription(settings, *, guild_id):
+        return {"status": "active", "plan": "pro", "subscription_id": "sub_123", "guild_id": guild_id}
+
+    monkeypatch.setattr(subscription_service, "get_guild_subscription", fake_subscription)
+    monkeypatch.setattr(dashboard, "get_guild_subscription", fake_subscription)
+
+    app = dashboard.create_app(settings=_settings())
+    sessions = app["session_collection"]
+    sessions.insert_one(
+        {
+            "_id": "sess1",
+            "created_at": time.time(),
+            "expires_at": datetime.now(timezone.utc) + timedelta(hours=6),
+            "user": {"id": "1", "username": "alice"},
+            "owner_guilds": [{"id": "123", "name": "Managed"}],
+            "all_guilds": [{"id": "123", "name": "Managed"}],
+            "csrf_token": "csrf_good",
+        }
+    )
+
+    client = TestClient(TestServer(app))
+    await client.start_server()
+    try:
+        resp = await client.post(
+            "/app/billing/checkout",
+            data={"csrf": "csrf_good", "guild_id": "123", "plan": "pro"},
+            headers={"Cookie": f"{dashboard.COOKIE_NAME}=sess1"},
+            allow_redirects=False,
+        )
+        assert resp.status == 400
+        text = await resp.text()
+        assert "already has an active" in text.lower()
     finally:
         await client.close()
 
