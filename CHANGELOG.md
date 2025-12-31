@@ -9,6 +9,7 @@ All notable changes to this project will be documented in this file.
 - Logging: redaction helper and log hygiene check script.
 - A11y: skip link, focus-visible styles, and template checks.
 - Visual regression: Playwright screenshot baselines for key pages.
+- Monitoring: request metrics and Discord API error log events with dashboard guidance.
 
 ### Changed
 - Dependencies: bump `jinja2` to 3.1.6 to address `pip-audit` vulnerability reporting.

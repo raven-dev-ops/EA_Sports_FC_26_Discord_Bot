@@ -994,6 +994,16 @@ def _request_id(request: web.Request) -> str:
     return str(request.get("request_id") or "")
 
 
+def _request_guild_id(request: web.Request) -> int | None:
+    raw = request.match_info.get("guild_id") or request.query.get("guild_id")
+    if raw is None:
+        return None
+    text = str(raw).strip()
+    if text.isdigit():
+        return int(text)
+    return None
+
+
 def _log_extra(request: web.Request, **extra: object) -> dict[str, object]:
     data = {"request_id": _request_id(request)}
     data.update(extra)
@@ -1047,6 +1057,52 @@ async def request_id_middleware(request: web.Request, handler):
         exc.headers[REQUEST_ID_HEADER] = request_id
         raise
     response.headers[REQUEST_ID_HEADER] = request_id
+    return response
+
+
+@web.middleware
+async def request_metrics_middleware(request: web.Request, handler):
+    if request.path.startswith("/static/"):
+        return await handler(request)
+    start = time.perf_counter()
+    try:
+        response = await handler(request)
+    except web.HTTPException as exc:
+        duration_ms = (time.perf_counter() - start) * 1000.0
+        logging.info(
+            "event=http_request method=%s path=%s status=%s duration_ms=%.1f request_id=%s",
+            request.method,
+            request.path,
+            exc.status,
+            duration_ms,
+            _request_id(request),
+            extra=_log_extra(
+                request,
+                method=request.method,
+                path=request.path,
+                status=exc.status,
+                duration_ms=duration_ms,
+                guild_id=_request_guild_id(request),
+            ),
+        )
+        raise
+    duration_ms = (time.perf_counter() - start) * 1000.0
+    logging.info(
+        "event=http_request method=%s path=%s status=%s duration_ms=%.1f request_id=%s",
+        request.method,
+        request.path,
+        response.status,
+        duration_ms,
+        _request_id(request),
+        extra=_log_extra(
+            request,
+            method=request.method,
+            path=request.path,
+            status=response.status,
+            duration_ms=duration_ms,
+            guild_id=_request_guild_id(request),
+        ),
+    )
     return response
 
 
@@ -4411,6 +4467,7 @@ def create_app(*, settings: Settings | None = None) -> web.Application:
         client_max_size=max(1, int(MAX_REQUEST_BYTES)),
         middlewares=[
             request_id_middleware,
+            request_metrics_middleware,
             security_headers_middleware,
             rate_limit_middleware,
             timeout_middleware,

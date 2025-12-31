@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from typing import Any, Awaitable, Callable, TypeVar
 
 import discord
@@ -10,6 +11,24 @@ from utils.cache import TTLCache
 T = TypeVar("T")
 
 _CHANNEL_CACHE = TTLCache[discord.abc.Messageable](ttl_seconds=60.0)
+
+
+def _log_discord_error(operation: str, exc: Exception) -> None:
+    if isinstance(exc, discord.HTTPException):
+        logging.warning(
+            "event=discord_api_error operation=%s status=%s code=%s",
+            operation,
+            exc.status,
+            exc.code,
+            extra={"operation": operation, "status": exc.status, "code": exc.code},
+        )
+        return
+    logging.warning(
+        "event=discord_api_error operation=%s error=%s",
+        operation,
+        type(exc).__name__,
+        extra={"operation": operation, "error": type(exc).__name__},
+    )
 
 
 async def with_backoff(
@@ -65,7 +84,8 @@ async def fetch_channel(
         if ch:
             _CHANNEL_CACHE.set(cache_key, ch)
         return ch
-    except discord.DiscordException:
+    except discord.DiscordException as exc:
+        _log_discord_error("fetch_channel", exc)
         return None
 
 
@@ -83,7 +103,8 @@ async def send_message(
 
     try:
         return await with_backoff(_do)
-    except discord.DiscordException:
+    except discord.DiscordException as exc:
+        _log_discord_error("send_message", exc)
         return None
 
 
@@ -96,7 +117,8 @@ async def edit_message(
 
     try:
         return await with_backoff(_do)
-    except discord.DiscordException:
+    except discord.DiscordException as exc:
+        _log_discord_error("edit_message", exc)
         return None
 
 
@@ -107,5 +129,6 @@ async def delete_message(message: discord.Message) -> bool:
     try:
         await with_backoff(_do)
         return True
-    except discord.DiscordException:
+    except discord.DiscordException as exc:
+        _log_discord_error("delete_message", exc)
         return False

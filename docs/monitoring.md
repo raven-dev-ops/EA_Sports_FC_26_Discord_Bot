@@ -24,6 +24,26 @@ The bot worker writes a heartbeat every ~30 seconds to MongoDB:
 
 `/ready` reads this heartbeat to detect partial outages where the web is up but the bot worker is down.
 
+## Dashboards and alerts
+
+Suggested log-derived metrics (Grafana/Loki/Datadog):
+- Web requests: `event=http_request` with `status` and `duration_ms` for req/s, error rate, and latency.
+- Bot commands: `command metric name=...` from `utils.metrics` for success/failure rates.
+- Discord API errors: `event=discord_api_error` with `operation` + `status`.
+- Stripe webhooks: `stripe_webhook_processed` / `stripe_webhook_failed` / `stripe_webhook_in_progress`.
+
+Dashboard panels (baseline):
+- Web: requests per minute, 95p latency, 4xx/5xx error rate.
+- Bot: command success rate, command latency buckets.
+- Billing: Stripe webhook failures and dead letters per hour.
+- Discord: API error rate by operation and status code.
+
+Alert starters (link to runbooks):
+- Web 5xx > 2% for 5 minutes (see `docs/qa-checklist.md`).
+- Stripe webhook failures > 0 in 5 minutes (see `docs/billing.md`).
+- Discord API errors spike (see `docs/release-playbook.md`).
+- Worker heartbeat stale (see `docs/monitoring.md` + `docs/release-playbook.md`).
+
 ## Logging hygiene
 
 - Do not log secrets (tokens, auth headers, cookies) or PII (emails, raw payloads).
