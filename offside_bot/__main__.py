@@ -635,6 +635,8 @@ class OffsideBot(commands.AutoShardedBot):
                         user_id,
                     )
                     continue
+                if status == "feature_disabled":
+                    continue
                 if status in {"refreshed", "cached"}:
                     refreshed += 1
 

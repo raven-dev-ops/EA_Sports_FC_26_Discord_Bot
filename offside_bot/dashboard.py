@@ -336,7 +336,7 @@ def _pro_locked_page(
             ("Tournament automation", "Automated brackets, fixtures, and match reporting workflows."),
         ]
     benefits_html = "\n".join(
-        f"<li><strong>{_escape_html(name)}</strong> — {_escape_html(desc)}</li>"
+        f"<li><strong>{_escape_html(name)}</strong> - {_escape_html(desc)}</li>"
         for name, desc in benefits
     )
     body = f"""
@@ -374,6 +374,12 @@ def _pro_locked_page(
         ),
         content_type="text/html",
     )
+
+
+def _require_pro_plan_for_ops(settings: Settings, guild_id: int) -> None:
+    plan = entitlements_service.get_guild_plan(settings, guild_id=guild_id)
+    if plan != entitlements_service.PLAN_PRO:
+        raise web.HTTPForbidden(text="Ops tasks are available on the Pro plan.")
 
 
 async def upgrade_redirect(request: web.Request) -> web.Response:
@@ -1834,10 +1840,12 @@ async def guild_settings_page(request: web.Request) -> web.Response:
     premium_plus_role_id = _parse_int(cfg.get("role_coach_premium_plus_id"))
     premium_tiers_disabled_attr = "disabled" if not premium_tiers_enabled else ""
     premium_tiers_note = (
-        f"<p class='muted'>Premium coach tiers require Pro. <a href=\"{_escape_html(upgrade_href)}\">Upgrade</a></p>"
+        f"<p class='muted'><span class=\"badge warn\">LOCKED</span> Premium coach tiers require Pro. <a href=\"{_escape_html(upgrade_href)}\">Upgrade</a></p>"
         if not premium_tiers_enabled
         else ""
     )
+    premium_badge_class = "pro" if premium_tiers_enabled else "warn"
+    premium_badge_html = f"<span class='badge {premium_badge_class}' style='margin-left:6px;'>PRO</span>"
 
     if roles:
         valid_role_ids = {_parse_int(r.get("id")) for r in roles}
@@ -1865,11 +1873,11 @@ async def guild_settings_page(request: web.Request) -> web.Response:
             <select name="role_coach_id" style="width:100%; padding:10px; margin-top:6px;">
               {_role_options(coach_role_id)}
             </select>
-            <label style="display:block; margin-top:10px;">Coach Premium role</label>
+            <label style="display:block; margin-top:10px;">Coach Premium role {premium_badge_html}</label>
             <select name="role_coach_premium_id" {premium_tiers_disabled_attr} style="width:100%; padding:10px; margin-top:6px;">
               {_role_options(premium_role_id)}
             </select>
-            <label style="display:block; margin-top:10px;">Coach Premium+ role</label>
+            <label style="display:block; margin-top:10px;">Coach Premium+ role {premium_badge_html}</label>
             <select name="role_coach_premium_plus_id" {premium_tiers_disabled_attr} style="width:100%; padding:10px; margin-top:6px;">
               {_role_options(premium_plus_role_id)}
             </select>
@@ -1880,9 +1888,9 @@ async def guild_settings_page(request: web.Request) -> web.Response:
             <h3 style="margin:14px 0 6px;">Coach tiers</h3>
             <label>Coach role ID</label><br/>
             <input name="role_coach_id" style="width:100%; padding:10px; margin-top:6px;" value="{_escape_html(coach_role_id or '')}" />
-            <label style="display:block; margin-top:10px;">Coach Premium role ID</label>
+            <label style="display:block; margin-top:10px;">Coach Premium role ID {premium_badge_html}</label>
             <input name="role_coach_premium_id" {premium_tiers_disabled_attr} style="width:100%; padding:10px; margin-top:6px;" value="{_escape_html(premium_role_id or '')}" />
-            <label style="display:block; margin-top:10px;">Coach Premium+ role ID</label>
+            <label style="display:block; margin-top:10px;">Coach Premium+ role ID {premium_badge_html}</label>
             <input name="role_coach_premium_plus_id" {premium_tiers_disabled_attr} style="width:100%; padding:10px; margin-top:6px;" value="{_escape_html(premium_plus_role_id or '')}" />
             {premium_tiers_note}
         """
@@ -1951,12 +1959,14 @@ async def guild_settings_page(request: web.Request) -> web.Response:
     premium_pin_checked = "checked" if premium_pin_enabled else ""
     premium_report_disabled_attr = "disabled" if not premium_report_enabled else ""
     premium_report_note = (
-        f"<p class='muted'>Premium Coaches report controls require Pro. <a href=\"{_escape_html(upgrade_href)}\">Upgrade</a></p>"
+        f"<p class='muted'><span class=\"badge warn\">LOCKED</span> Premium Coaches report controls require Pro. <a href=\"{_escape_html(upgrade_href)}\">Upgrade</a></p>"
         if not premium_report_enabled
         else ""
     )
+    premium_report_badge_class = "pro" if premium_report_enabled else "warn"
+    premium_report_badge_html = f"<span class='badge {premium_report_badge_class}' style='margin-left:6px;'>PRO</span>"
     premium_pin_control_html = f"""
-            <h3 style="margin:14px 0 6px;">Premium Coaches</h3>
+            <h3 style="margin:14px 0 6px;">Premium Coaches {premium_report_badge_html}</h3>
             <label><input type="checkbox" name="{PREMIUM_COACHES_PIN_ENABLED_KEY}" value="1" {premium_pin_checked} {premium_report_disabled_attr} /> Pin listing message</label>
             <p class="muted">Pins the bot's Premium Coaches listing message in the Premium Coaches channel (requires Manage Messages).</p>
             {premium_report_note}
@@ -1975,10 +1985,32 @@ async def guild_settings_page(request: web.Request) -> web.Response:
     selected_false = "selected" if fc25_selected == "false" else ""
     fc25_disabled_attr = "disabled" if not fc25_stats_enabled else ""
     fc25_note = (
-        f"<p class='muted'>FC25 stats controls require Pro. <a href=\"{_escape_html(upgrade_href)}\">Upgrade</a></p>"
+        f"<p class='muted'><span class=\"badge warn\">LOCKED</span> FC25 stats controls require Pro. <a href=\"{_escape_html(upgrade_href)}\">Upgrade</a></p>"
         if not fc25_stats_enabled
         else ""
     )
+    fc25_badge_class = "pro" if fc25_stats_enabled else "warn"
+    fc25_badge_html = f"<span class='badge {fc25_badge_class}' style='margin-left:6px;'>PRO</span>"
+
+    pro_callout_html = ""
+    if not is_pro:
+        pro_callout_html = f"""
+      <div class="card">
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
+          <div>
+            <div style="display:flex; align-items:center; gap:8px;">
+              <span class="badge warn">PRO</span>
+              <strong>Premium features locked</strong>
+            </div>
+            <p class="muted" style="margin:6px 0 0;">Premium coach tiers, Premium Coaches report, and FC25 stats are available on the Pro plan.</p>
+          </div>
+          <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            <a class="btn blue" href="{_escape_html(upgrade_href)}">Upgrade</a>
+            <a class="btn secondary" href="/app/billing?guild_id={guild_id}">Billing</a>
+          </div>
+        </div>
+      </div>
+    """
 
     invite_href = _invite_url(settings, guild_id=str(guild_id), disable_guild_select=True)
     saved = request.query.get("saved", "").strip()
@@ -2002,21 +2034,22 @@ async def guild_settings_page(request: web.Request) -> web.Response:
         </div>
       </div>
       {message_html}
+      {pro_callout_html}
       <div class="row">
          <div class="card">
            <h2 style="margin-top:0;">Access</h2>
            <form method="post" action="/guild/{guild_id}/settings">
              <input type="hidden" name="csrf" value="{session.csrf_token}" />
              {metadata_warning_html}
-             {staff_roles_control_html}
-             {coach_roles_control_html}
-              {channels_control_html}
-              {premium_pin_control_html}
-              <label>FC25 stats override</label><br/>
-              <select name="fc25_stats_enabled" {fc25_disabled_attr} style="width:100%; padding:10px; margin-top:6px;">
-                <option value="default" {selected_default}>Default</option>
-                <option value="true" {selected_true}>Enabled</option>
-               <option value="false" {selected_false}>Disabled</option>
+              {staff_roles_control_html}
+              {coach_roles_control_html}
+               {channels_control_html}
+               {premium_pin_control_html}
+               <label>FC25 stats override {fc25_badge_html}</label><br/>
+               <select name="fc25_stats_enabled" {fc25_disabled_attr} style="width:100%; padding:10px; margin-top:6px;">
+                 <option value="default" {selected_default}>Default</option>
+                 <option value="true" {selected_true}>Enabled</option>
+                <option value="false" {selected_false}>Disabled</option>
              </select>
              {fc25_note}
              <div style="margin-top:12px;">
@@ -3689,6 +3722,8 @@ async def _enqueue_ops_from_dashboard(
     guild_id_str = request.match_info["guild_id"]
     guild_id = _require_owned_guild(session, settings=settings, path=request.path_qs, guild_id=guild_id_str)
 
+    _require_pro_plan_for_ops(settings, guild_id)
+
     installed, _install_error = await _detect_bot_installed(request, guild_id=guild_id)
     if installed is False:
         raise web.HTTPBadRequest(text="Bot is not installed in this server yet. Invite it first.")
@@ -3806,6 +3841,8 @@ async def guild_ops_schedule_delete_data(request: web.Request) -> web.Response:
     guild_id_str = request.match_info["guild_id"]
     guild_id = _require_owned_guild(session, settings=settings, path=request.path_qs, guild_id=guild_id_str)
 
+    _require_pro_plan_for_ops(settings, guild_id)
+
     data = await request.post()
     if str(data.get("csrf", "")) != session.csrf_token:
         raise web.HTTPBadRequest(text="Invalid CSRF token.")
@@ -3862,6 +3899,8 @@ async def guild_ops_cancel_delete_data(request: web.Request) -> web.Response:
 
     guild_id_str = request.match_info["guild_id"]
     guild_id = _require_owned_guild(session, settings=settings, path=request.path_qs, guild_id=guild_id_str)
+
+    _require_pro_plan_for_ops(settings, guild_id)
 
     data = await request.post()
     if str(data.get("csrf", "")) != session.csrf_token:
@@ -4275,6 +4314,7 @@ async def billing_success(request: web.Request) -> web.Response:
 
 async def billing_cancel(request: web.Request) -> web.Response:
     session = _require_session(request)
+    settings: Settings = request.app["settings"]
     gid = request.query.get("guild_id", "").strip()
     guild_id = _require_owned_guild(session, settings=settings, path=request.path_qs, guild_id=gid) if gid else 0
     if not guild_id:

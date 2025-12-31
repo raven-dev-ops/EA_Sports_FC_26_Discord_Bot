@@ -161,16 +161,19 @@ class RecruitPortalView(SafeView):
         except Exception:
             profile = None
         settings = getattr(interaction.client, "settings", None)
-        if settings is not None and not entitlements_service.is_feature_enabled(
-            settings,
-            guild_id=guild.id,
-            feature_key=entitlements_service.FEATURE_FC25_STATS,
-        ):
-            await interaction.response.send_message(
-                "Recruit profiles with FC stats and rich embeds are available on the Pro plan for this server.",
-                ephemeral=True,
-            )
-            return
+        if settings is not None:
+            try:
+                entitlements_service.require_feature(
+                    settings,
+                    guild_id=guild.id,
+                    feature_key=entitlements_service.FEATURE_FC25_STATS,
+                )
+            except PermissionError:
+                await interaction.response.send_message(
+                    "Recruit profiles with FC stats and rich embeds are available on the Pro plan for this server.",
+                    ephemeral=True,
+                )
+                return
         if not profile:
             await interaction.response.send_message(
                 "No profile found yet. Use Register / Edit first.",
@@ -223,11 +226,13 @@ class RecruitPortalView(SafeView):
                 ephemeral=True,
             )
             return
-        if not entitlements_service.is_feature_enabled(
-            settings,
-            guild_id=guild.id,
-            feature_key=entitlements_service.FEATURE_FC25_STATS,
-        ):
+        try:
+            entitlements_service.require_feature(
+                settings,
+                guild_id=guild.id,
+                feature_key=entitlements_service.FEATURE_FC25_STATS,
+            )
+        except PermissionError:
             await interaction.response.send_message(
                 "Recruit availability scheduling is available on the Pro plan for this server.",
                 ephemeral=True,

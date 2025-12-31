@@ -42,6 +42,7 @@ def _get_gateway(client: discord.Client, settings: Settings) -> FC25StatsGateway
 
 
 FC25_REFRESH_COOLDOWN = Cooldown(seconds=120.0)
+FC25_PRO_MESSAGE = "FC25 stats integration is a Pro feature for this server. Upgrade in the dashboard to unlock it."
 
 
 class LinkFC25StatsModal(SafeModal, title="Link FC25 Clubs Stats"):
@@ -79,15 +80,14 @@ class LinkFC25StatsModal(SafeModal, title="Link FC25 Clubs Stats"):
             )
             return
 
-        if not entitlements_service.is_feature_enabled(
-            settings,
-            guild_id=guild.id,
-            feature_key=entitlements_service.FEATURE_FC25_STATS,
-        ):
-            await interaction.response.send_message(
-                "FC25 stats integration is a Pro feature for this server.",
-                ephemeral=True,
+        try:
+            entitlements_service.require_feature(
+                settings,
+                guild_id=guild.id,
+                feature_key=entitlements_service.FEATURE_FC25_STATS,
             )
+        except PermissionError:
+            await interaction.response.send_message(FC25_PRO_MESSAGE, ephemeral=True)
             return
         if not fc25_stats_enabled(settings, guild_id=guild.id):
             await interaction.response.send_message(
@@ -288,15 +288,14 @@ async def refresh_fc25_stats(interaction: discord.Interaction) -> None:
             ephemeral=True,
         )
         return
-    if not entitlements_service.is_feature_enabled(
-        settings,
-        guild_id=guild.id,
-        feature_key=entitlements_service.FEATURE_FC25_STATS,
-    ):
-        await interaction.response.send_message(
-            "FC25 stats integration is a Pro feature for this server.",
-            ephemeral=True,
+    try:
+        entitlements_service.require_feature(
+            settings,
+            guild_id=guild.id,
+            feature_key=entitlements_service.FEATURE_FC25_STATS,
         )
+    except PermissionError:
+        await interaction.response.send_message(FC25_PRO_MESSAGE, ephemeral=True)
         return
     if not fc25_stats_enabled(settings, guild_id=guild.id):
         await interaction.response.send_message(
@@ -331,6 +330,9 @@ async def refresh_fc25_stats(interaction: discord.Interaction) -> None:
             ephemeral=True,
         )
         return
+    if status == "feature_disabled":
+        await interaction.followup.send(FC25_PRO_MESSAGE, ephemeral=True)
+        return
     if status == "cached":
         await interaction.followup.send(
             "Stats are already fresh (served from cache).",
@@ -358,6 +360,15 @@ async def refresh_fc25_stats_for_user(
     test_mode: bool,
     reason: str,
 ) -> str:
+    try:
+        entitlements_service.require_feature(
+            settings,
+            guild_id=guild_id,
+            feature_key=entitlements_service.FEATURE_FC25_STATS,
+        )
+    except PermissionError:
+        return "feature_disabled"
+
     link = None
     try:
         link = get_link(guild_id, user_id)
@@ -559,15 +570,14 @@ async def unlink_fc25_stats(interaction: discord.Interaction) -> None:
             ephemeral=True,
         )
         return
-    if not entitlements_service.is_feature_enabled(
-        settings,
-        guild_id=guild.id,
-        feature_key=entitlements_service.FEATURE_FC25_STATS,
-    ):
-        await interaction.response.send_message(
-            "FC25 stats integration is a Pro feature for this server.",
-            ephemeral=True,
+    try:
+        entitlements_service.require_feature(
+            settings,
+            guild_id=guild.id,
+            feature_key=entitlements_service.FEATURE_FC25_STATS,
         )
+    except PermissionError:
+        await interaction.response.send_message(FC25_PRO_MESSAGE, ephemeral=True)
         return
     if not fc25_stats_enabled(settings, guild_id=guild.id):
         await interaction.response.send_message(
