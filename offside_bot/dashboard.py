@@ -158,6 +158,7 @@ class SessionData:
     csrf_token: str
     last_seen_at: float
     guilds_fetched_at: float
+    last_guild_id: int | None = None
 
 
 _RATE_LIMIT_STATE: dict[tuple[str, str], tuple[int, float]] = {}
@@ -812,6 +813,12 @@ async def session_middleware(request: web.Request, handler):
         expires_at_ts = expires_at_dt.timestamp() if isinstance(expires_at_dt, datetime) else None
         last_seen_at = doc.get("last_seen_at", created_at)
         guilds_fetched_at = doc.get("guilds_fetched_at", created_at)
+        last_guild_id = doc.get("last_guild_id")
+        last_guild_id_value = None
+        if isinstance(last_guild_id, int):
+            last_guild_id_value = last_guild_id
+        elif isinstance(last_guild_id, str) and last_guild_id.isdigit():
+            last_guild_id_value = int(last_guild_id)
 
         within_absolute_ttl = isinstance(created_at, (int, float)) and now - float(created_at) <= SESSION_TTL_SECONDS
         within_expires_at = expires_at_ts is None or now <= expires_at_ts
@@ -849,6 +856,7 @@ async def session_middleware(request: web.Request, handler):
                     guilds_fetched_at=float(guilds_fetched_at)
                     if isinstance(guilds_fetched_at, (int, float))
                     else float(created_at),
+                    last_guild_id=last_guild_id_value,
                 )
         if session is None:
             sessions.delete_one({"_id": session_id})
@@ -858,6 +866,10 @@ async def session_middleware(request: web.Request, handler):
             if should_touch:
                 sessions.update_one({"_id": session_id}, {"$set": {"last_seen_at": now}})
                 session.last_seen_at = now
+            requested_guild_id = _extract_guild_id_from_request(request)
+            if requested_guild_id and requested_guild_id != session.last_guild_id:
+                sessions.update_one({"_id": session_id}, {"$set": {"last_guild_id": requested_guild_id}})
+                session.last_guild_id = requested_guild_id
     request["session"] = session
     return await handler(request)
 
@@ -883,6 +895,18 @@ def _public_base_url(request: web.Request) -> str:
     scheme = "https" if _is_https(request) else "http"
     host = request.headers.get("X-Forwarded-Host", "").strip() or request.host
     return f"{scheme}://{host}"
+
+
+def _extract_guild_id_from_request(request: web.Request) -> int | None:
+    path = request.path or ""
+    if path.startswith("/guild/"):
+        parts = path.split("/")
+        if len(parts) > 2 and parts[2].isdigit():
+            return int(parts[2])
+    gid = str(request.query.get("guild_id") or "").strip()
+    if gid.isdigit():
+        return int(gid)
+    return None
 
 
 @web.middleware
@@ -1097,7 +1121,17 @@ async def app_index(request: web.Request) -> web.Response:
             settings,
             guild_ids=[int(gid) for gid in eligible_ids if str(gid).isdigit()],
         )
-    for g in session.all_guilds:
+    last_guild_id = session.last_guild_id
+    guilds = [g for g in session.all_guilds if isinstance(g, dict)]
+    if guilds:
+        def _guild_sort_key(guild: dict[str, Any]) -> tuple[int, str]:
+            gid = str(guild.get("id") or "")
+            name_value = str(guild.get("name") or gid).strip().lower()
+            is_last = 0 if last_guild_id and gid == str(last_guild_id) else 1
+            return (is_last, name_value)
+
+        guilds = sorted(guilds, key=_guild_sort_key)
+    for g in guilds:
         gid = g.get("id")
         name = _escape_html(g.get("name") or gid)
         gid_str = str(gid)
@@ -1176,9 +1210,13 @@ async def app_index(request: web.Request) -> web.Response:
     invite_href = _invite_url(settings)
     selected_guild_id = None
     if session.owner_guilds:
-        gid = str(session.owner_guilds[0].get("id") or "").strip()
-        if gid.isdigit():
-            selected_guild_id = int(gid)
+        last_gid = session.last_guild_id
+        if isinstance(last_gid, int) and str(last_gid) in eligible_ids:
+            selected_guild_id = last_gid
+        else:
+            gid = str(session.owner_guilds[0].get("id") or "").strip()
+            if gid.isdigit():
+                selected_guild_id = int(gid)
     installed, _install_error = (
         await _detect_bot_installed(request, guild_id=selected_guild_id)
         if selected_guild_id is not None
@@ -1657,7 +1695,7 @@ async def install(request: web.Request) -> web.Response:
     if requested_guild_id.isdigit():
         extra["guild_id"] = requested_guild_id
         extra["disable_guild_select"] = "true"
-        next_path = f"/guild/{requested_guild_id}/overview"
+        next_path = f"/guild/{requested_guild_id}/permissions"
 
     states: Collection = request.app["state_collection"]
     expires_at = _utc_now() + timedelta(seconds=STATE_TTL_SECONDS)
@@ -1820,6 +1858,7 @@ async def oauth_callback(request: web.Request) -> web.Response:
         logging.exception("event=upsert_user_record_failed")
 
     installed_guild_id = request.query.get("guild_id", "").strip()
+    last_guild_id = int(installed_guild_id) if installed_guild_id.isdigit() else None
     if installed_guild_id.isdigit():
         for g in owner_guilds:
             if str(g.get("id")) == installed_guild_id:
@@ -1842,6 +1881,7 @@ async def oauth_callback(request: web.Request) -> web.Response:
             "owner_guilds": owner_guilds,
             "all_guilds": all_guilds,
             "csrf_token": csrf_token,
+            "last_guild_id": last_guild_id,
         },
     )
 
