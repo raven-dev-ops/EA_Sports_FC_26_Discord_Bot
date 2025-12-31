@@ -26,6 +26,11 @@ from services.error_reporting_service import capture_exception, init_error_repor
 from services.fc25_stats_feature import fc25_stats_enabled
 from services.fc25_stats_service import list_links
 from services.guild_config_service import get_guild_config, set_guild_config
+from services.guild_install_service import (
+    ensure_guild_install_indexes,
+    mark_guild_install,
+    refresh_guild_installs,
+)
 from services.heartbeat_service import upsert_worker_heartbeat
 from services.recovery_service import run_startup_recovery
 from services.role_setup_service import ensure_offside_roles
@@ -402,6 +407,12 @@ class OffsideBot(commands.AutoShardedBot):
         await self._start_scheduler()
 
     async def on_guild_join(self, guild: discord.Guild) -> None:
+        settings = getattr(self, "settings", None)
+        if settings is not None and settings.mongodb_uri:
+            try:
+                mark_guild_install(settings, guild_id=guild.id, installed=True, guild_name=guild.name)
+            except Exception:
+                logging.exception("Failed to record guild install (guild=%s).", guild.id)
         async with self._auto_setup_lock:
             await self._auto_setup_guild(guild)
         try:
@@ -409,12 +420,29 @@ class OffsideBot(commands.AutoShardedBot):
         except Exception:
             logging.exception("Failed to post portals on guild join (guild=%s).", guild.id)
 
+    async def on_guild_remove(self, guild: discord.Guild) -> None:
+        settings = getattr(self, "settings", None)
+        if settings is not None and settings.mongodb_uri:
+            try:
+                mark_guild_install(settings, guild_id=guild.id, installed=False, guild_name=guild.name)
+            except Exception:
+                logging.exception("Failed to record guild removal (guild=%s).", guild.id)
+
     async def on_ready(self) -> None:
         user = self.user
         if user:
             logging.info("Bot ready as %s (ID: %s).", user, user.id)
         else:
             logging.info("Bot ready (user not available yet).")
+        settings = getattr(self, "settings", None)
+        if settings is not None and settings.mongodb_uri:
+            try:
+                refresh_guild_installs(
+                    settings,
+                    guilds=[(g.id, g.name) for g in self.guilds],
+                )
+            except Exception:
+                logging.exception("Failed to refresh guild install status.")
         await self._auto_setup_all_guilds()
         if not getattr(self, "_test_mode_cleanup_done", False):
             await self._cleanup_test_mode_channels()
@@ -687,8 +715,9 @@ def main() -> None:
     if settings.mongodb_uri:
         try:
             ensure_subscription_indexes(settings)
+            ensure_guild_install_indexes(settings)
         except Exception:
-            logging.exception("Failed to ensure subscription indexes.")
+            logging.exception("Failed to ensure database indexes.")
             raise
     if settings.mongodb_per_guild_db:
         logging.info(

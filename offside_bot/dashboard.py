@@ -25,6 +25,7 @@ from services.analytics_service import get_guild_analytics
 from services.audit_log_service import list_audit_events, record_audit_event
 from services.error_reporting_service import init_error_reporting, set_guild_tag
 from services.guild_config_service import get_guild_config, set_guild_config
+from services.guild_install_service import ensure_guild_install_indexes, list_guild_installs
 from services.guild_settings_schema import (
     FC25_STATS_ENABLED_KEY,
     GUILD_CHANNEL_FIELDS,
@@ -1090,6 +1091,12 @@ async def app_index(request: web.Request) -> web.Response:
       </div>
     """
     eligible_ids = {str(g.get("id")) for g in session.owner_guilds}
+    install_statuses: dict[int, dict[str, Any]] = {}
+    if settings.mongodb_uri and eligible_ids:
+        install_statuses = list_guild_installs(
+            settings,
+            guild_ids=[int(gid) for gid in eligible_ids if str(gid).isdigit()],
+        )
     for g in session.all_guilds:
         gid = g.get("id")
         name = _escape_html(g.get("name") or gid)
@@ -1100,6 +1107,20 @@ async def app_index(request: web.Request) -> web.Response:
         if eligible and gid_str.isdigit():
             plan = entitlements_service.get_guild_plan(settings, guild_id=int(gid_str))
             plan_badge = f"<span class='badge {plan}'>{_escape_html(plan.upper())}</span>"
+        install_badge = ""
+        install_status: bool | None = None
+        if eligible and gid_str.isdigit():
+            status_doc = install_statuses.get(int(gid_str))
+            if isinstance(status_doc, dict):
+                status_value = status_doc.get("installed")
+                if isinstance(status_value, bool):
+                    install_status = status_value
+            if install_status is True:
+                install_badge = "<span class='badge ok'>INSTALLED</span>"
+            elif install_status is False:
+                install_badge = "<span class='badge warn'>NOT INSTALLED</span>"
+            else:
+                install_badge = "<span class='badge warn'>UNKNOWN</span>"
         icon_url = _guild_icon_url(g)
         if icon_url:
             icon_html = (
@@ -1116,12 +1137,16 @@ async def app_index(request: web.Request) -> web.Response:
                 upgrade_cta = (
                     f"<a class='btn blue' href='/app/upgrade?guild_id={gid_str}&from=server-card&section=overview'>Upgrade</a>"
                 )
+            invite_cta = ""
+            if install_status is not True:
+                invite_class = "blue" if install_status is False else "secondary"
+                invite_cta = f"<a class='btn {invite_class}' href='/install?guild_id={gid_str}'>Invite bot</a>"
             actions = (
                 f"<div class='btn-group mt-10'>"
                 f"<a class='btn' href='/guild/{gid_str}/overview'>Open</a>"
                 f"<a class='btn secondary' href='/app/billing?guild_id={gid_str}'>Billing</a>"
                 f"{upgrade_cta}"
-                f"<a class='btn secondary' href='/install?guild_id={gid_str}'>Invite bot</a>"
+                f"{invite_cta}"
                 f"</div>"
             )
         else:
@@ -1140,7 +1165,7 @@ async def app_index(request: web.Request) -> web.Response:
                     icon_html,
                     f"<div><div class='font-600'>{name}</div><div class='muted'>Guild ID: <code>{gid}</code></div></div>",
                     "</div>",
-                    f"<div class='flex gap-8 items-center'>{plan_badge}</div>",
+                    f"<div class='flex gap-8 items-center'>{plan_badge}{install_badge}</div>",
                     "</div>",
                     actions,
                     "</div>",
@@ -4558,6 +4583,7 @@ def create_app(*, settings: Settings | None = None) -> web.Application:
     if app_settings.mongodb_uri:
         ensure_stripe_webhook_indexes(app_settings)
         ensure_ops_task_indexes(app_settings)
+        ensure_guild_install_indexes(app_settings)
     app["guild_metadata_cache"] = {}
     app["http"] = None
     app.on_startup.append(_on_startup)
