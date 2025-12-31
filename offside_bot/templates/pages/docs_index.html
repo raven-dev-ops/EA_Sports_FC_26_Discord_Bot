@@ -1,0 +1,16 @@
+{% extends "layouts/public.html" %}
+
+{% block content %}
+  <h1>Docs</h1>
+  <p class="muted">Guides, checklists, and runbooks for Offside.</p>
+
+  <div class="row">
+    {% for doc in docs %}
+      <div class="card">
+        <strong>{{ doc.title }}</strong>
+        <div class="muted mt-6">{{ doc.summary }}</div>
+        <div class="mt-10"><a href="{{ doc.href }}">Read doc</a></div>
+      </div>
+    {% endfor %}
+  </div>
+{% endblock %}

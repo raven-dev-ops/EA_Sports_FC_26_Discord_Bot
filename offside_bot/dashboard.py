@@ -76,6 +76,73 @@ GUILD_DATA_DELETE_GRACE_HOURS = int(
 # - Manage Channels, Manage Roles, View Channel, Send Messages, Embed Links, Read Message History
 DEFAULT_BOT_PERMISSIONS = 268520464
 
+DEFAULT_PUBLIC_REPO_URL = "https://github.com/raven-dev-ops/EA_Sports_FC_26_Discord_Bot"
+
+DOCS_PAGES: list[dict[str, str]] = [
+    {
+        "slug": "server-setup-checklist",
+        "title": "Server setup checklist",
+        "path": "docs/server-setup-checklist.md",
+        "summary": "Step-by-step setup for new servers.",
+    },
+    {
+        "slug": "billing",
+        "title": "Billing",
+        "path": "docs/billing.md",
+        "summary": "Stripe setup, pricing, and subscription details.",
+    },
+    {
+        "slug": "data-lifecycle",
+        "title": "Data lifecycle",
+        "path": "docs/data-lifecycle.md",
+        "summary": "Retention, deletion, and data export guidance.",
+    },
+    {
+        "slug": "monitoring",
+        "title": "Monitoring",
+        "path": "docs/monitoring.md",
+        "summary": "Health checks, uptime checks, and operational signals.",
+    },
+    {
+        "slug": "qa-checklist",
+        "title": "QA checklist",
+        "path": "docs/qa-checklist.md",
+        "summary": "Staging validation flow before release.",
+    },
+    {
+        "slug": "release-playbook",
+        "title": "Release playbook",
+        "path": "docs/release-playbook.md",
+        "summary": "Deployment steps, migrations, and rollback notes.",
+    },
+    {
+        "slug": "performance",
+        "title": "Performance",
+        "path": "docs/performance.md",
+        "summary": "Performance targets and tuning notes.",
+    },
+    {
+        "slug": "ci",
+        "title": "CI",
+        "path": "docs/ci.md",
+        "summary": "CI setup, runners, and release workflows.",
+    },
+    {
+        "slug": "fc25-stats-policy",
+        "title": "FC stats policy",
+        "path": "docs/fc25-stats-policy.md",
+        "summary": "Stats data handling policy and expectations.",
+    },
+]
+DOCS_BY_SLUG = {page["slug"]: page for page in DOCS_PAGES}
+DOCS_EXTRAS = [
+    {
+        "title": "Commands reference",
+        "summary": "Slash command list grouped by category.",
+        "href": "/commands",
+    }
+]
+
 DASHBOARD_SESSIONS_COLLECTION = "dashboard_sessions"
 DASHBOARD_OAUTH_STATES_COLLECTION = "dashboard_oauth_states"
 DASHBOARD_USERS_COLLECTION = "dashboard_users"
@@ -1014,9 +1081,9 @@ async def app_index(request: web.Request) -> web.Response:
                     "<div class='flex gap-12 items-center justify-between flex-wrap'>",
                     "<div class='flex gap-12 items-center'>",
                     icon_html,
-                    f\"<div><div class='font-600'>{name}</div><div class='muted'>Guild ID: <code>{gid}</code></div></div>\",
+                    f"<div><div class='font-600'>{name}</div><div class='muted'>Guild ID: <code>{gid}</code></div></div>",
                     "</div>",
-                    f\"<div class='flex gap-8 items-center'>{plan_badge}</div>\",
+                    f"<div class='flex gap-8 items-center'>{plan_badge}</div>",
                     "</div>",
                     actions,
                     "</div>",
@@ -1073,6 +1140,19 @@ def _markdown_to_html(text: str) -> str:
     return markdown.markdown(text, extensions=["extra"], output_format="html")
 
 
+def _public_repo_url() -> str:
+    repo = (os.environ.get("PUBLIC_REPO_URL") or "").strip()
+    if not repo:
+        repo = (os.environ.get("GITHUB_REPO_URL") or "").strip()
+    if not repo:
+        repo = DEFAULT_PUBLIC_REPO_URL
+    return repo.rstrip("/")
+
+
+def _mailto_link(address: str) -> str:
+    return "mailto:" + urllib.parse.quote(address)
+
+
 async def terms_page(_request: web.Request) -> web.Response:
     text = _repo_read_text("TERMS_OF_SERVICE.md")
     if text is None:
@@ -1119,6 +1199,38 @@ async def product_copy_page(_request: web.Request) -> web.Response:
 
     page = render("pages/markdown_page.html", title="Product", content=safe_html(content))
     return web.Response(text=page, content_type="text/html")
+
+
+async def docs_index_page(_request: web.Request) -> web.Response:
+    from offside_bot.web_templates import render
+
+    docs = [
+        {"title": page["title"], "summary": page["summary"], "href": f"/docs/{page['slug']}"}
+        for page in DOCS_PAGES
+    ]
+    docs.extend(DOCS_EXTRAS)
+    page_html = render("pages/docs_index.html", title="Docs", docs=docs)
+    return web.Response(text=page_html, content_type="text/html")
+
+
+async def docs_page(request: web.Request) -> web.Response:
+    slug = str(request.match_info.get("slug") or "").strip()
+    doc = DOCS_BY_SLUG.get(slug)
+    if not doc:
+        raise web.HTTPNotFound(text="Doc not found.")
+    text = _repo_read_text(doc["path"])
+    if text is None:
+        raise web.HTTPNotFound(text=f"{doc['path']} not found.")
+    html = _markdown_to_html(text)
+    content = f"""
+      <p><a href="/docs">&larr; Back to docs</a></p>
+      <h1>{_escape_html(doc["title"])}</h1>
+      <div class="card">{html}</div>
+    """
+    from offside_bot.web_templates import render, safe_html
+
+    page_html = render("pages/markdown_page.html", title=doc["title"], content=safe_html(content))
+    return web.Response(text=page_html, content_type="text/html")
 
 
 def _commands_group_for_category(category: str) -> str:
@@ -1220,12 +1332,12 @@ async def features_page(_request: web.Request) -> web.Response:
 async def support_page(_request: web.Request) -> web.Response:
     support_discord = os.environ.get("SUPPORT_DISCORD_INVITE_URL", "").strip()
     support_email = os.environ.get("SUPPORT_EMAIL", "").strip()
-    repo = "https://github.com/raven-dev-ops/EA_Sports_FC_26_Discord_Bot"
-    issues_href = f"{repo}/issues"
-    bug_href = f"{repo}/issues/new?template=bug_report.yml"
-    feature_href = f"{repo}/issues/new?template=feature_request.yml"
-    docs_href = f"{repo}/tree/main/docs"
-    readme_href = f"{repo}#readme"
+    repo = _public_repo_url()
+    issues_href = f"{repo}/issues" if repo else ""
+    bug_href = f"{repo}/issues/new?template=bug_report.yml" if repo else ""
+    feature_href = f"{repo}/issues/new?template=feature_request.yml" if repo else ""
+    docs_href = "/docs"
+    readme_href = f"{repo}#readme" if repo else ""
 
     support_items: list[str] = []
     if support_discord:
@@ -1233,36 +1345,79 @@ async def support_page(_request: web.Request) -> web.Response:
             f'<li><a href="{_escape_html(support_discord)}">Join support Discord</a></li>'
         )
     else:
-        support_items.append("<li><span class='muted'>Join support Discord (coming soon)</span></li>")
+        support_items.append("<li><span class='muted'>Support Discord (invite required)</span></li>")
 
     if support_email:
-        mailto = "mailto:" + urllib.parse.quote(support_email)
+        mailto = _mailto_link(support_email)
         support_items.append(
             f'<li><a href="{_escape_html(mailto)}">{_escape_html(support_email)}</a></li>'
         )
     else:
-        support_items.append("<li><span class='muted'>Email support (coming soon)</span></li>")
+        support_items.append("<li><span class='muted'>Email support (set SUPPORT_EMAIL)</span></li>")
 
-    support_items.append(f'<li><a href="{bug_href}">Report a bug</a></li>')
-    support_items.append(f'<li><a href="{feature_href}">Request a feature</a></li>')
-    support_items.append(f'<li><a href="{issues_href}">Browse issues</a></li>')
-    support_items.append(f'<li><a href="{readme_href}">README</a></li>')
-    support_items.append(f'<li><a href="{docs_href}">Docs</a></li>')
+    docs_items = [
+        f'<li><a href="{docs_href}">Docs hub</a></li>',
+        '<li><a href="/docs/server-setup-checklist">Server setup checklist</a></li>',
+        '<li><a href="/docs/billing">How billing works</a></li>',
+    ]
+    issue_items: list[str] = []
+    if repo:
+        issue_items.append(f'<li><a href="{bug_href}">Report a bug</a></li>')
+        issue_items.append(f'<li><a href="{feature_href}">Request a feature</a></li>')
+        issue_items.append(f'<li><a href="{issues_href}">Browse issues</a></li>')
+        issue_items.append(f'<li><a href="{readme_href}">README</a></li>')
+    else:
+        issue_items.append("<li><span class='muted'>GitHub links unavailable (set PUBLIC_REPO_URL)</span></li>")
 
     content = f"""
       <p><a href="/">&larr; Back</a></p>
       <h1>Support</h1>
-      <div class="card">
-        <p><strong>Need help?</strong></p>
-        <p class="muted">Use the links below to get help, report bugs, and request features.</p>
-        <ul>
-          {"".join(support_items)}
-        </ul>
+      <div class="row">
+        <div class="card">
+          <p><strong>Get help</strong></p>
+          <p class="muted mt-6">Reach the team directly for support requests.</p>
+          <ul>
+            {"".join(support_items)}
+          </ul>
+        </div>
+        <div class="card">
+          <p><strong>Docs</strong></p>
+          <p class="muted mt-6">Guides, checklists, and troubleshooting.</p>
+          <ul>
+            {"".join(docs_items)}
+          </ul>
+        </div>
+        <div class="card">
+          <p><strong>Report an issue</strong></p>
+          <p class="muted mt-6">Use GitHub if you manage the repo.</p>
+          <ul>
+            {"".join(issue_items)}
+          </ul>
+        </div>
       </div>
     """
     from offside_bot.web_templates import render, safe_html
 
     page = render("pages/markdown_page.html", title="Support", content=safe_html(content))
+    return web.Response(text=page, content_type="text/html")
+
+
+async def enterprise_page(_request: web.Request) -> web.Response:
+    support_discord = os.environ.get("SUPPORT_DISCORD_INVITE_URL", "").strip()
+    support_email = os.environ.get("SUPPORT_EMAIL", "").strip()
+    sales_email = os.environ.get("SALES_EMAIL", "").strip()
+    contact_email = sales_email or support_email
+    mailto = _mailto_link(contact_email) if contact_email else ""
+
+    from offside_bot.web_templates import render
+
+    page = render(
+        "pages/enterprise.html",
+        title="Enterprise",
+        contact_email=contact_email,
+        mailto_href=mailto,
+        support_discord=support_discord,
+    )
     return web.Response(text=page, content_type="text/html")
 
 
@@ -1276,6 +1431,7 @@ async def pricing_page(request: web.Request) -> web.Response:
     pro_cta_href = "/app/billing"
     if session is None:
         pro_cta_href = "/login?next=/app/billing"
+    enterprise_cta_href = "/enterprise"
 
     features = [
         {
@@ -1346,6 +1502,7 @@ async def pricing_page(request: web.Request) -> web.Response:
         toggle_yearly_href="/pricing?billing=yearly",
         pro_monthly_price=pro_monthly_price,
         pro_cta_href=pro_cta_href,
+        enterprise_cta_href=enterprise_cta_href,
         features=features,
     )
     return web.Response(text=html, content_type="text/html")
@@ -4364,10 +4521,13 @@ def create_app(*, settings: Settings | None = None) -> web.Application:
     app.router.add_get("/app", app_index)
     app.router.add_get("/features", features_page)
     app.router.add_get("/pricing", pricing_page)
+    app.router.add_get("/enterprise", enterprise_page)
     app.router.add_get("/terms", terms_page)
     app.router.add_get("/privacy", privacy_page)
     app.router.add_get("/product", product_copy_page)
     app.router.add_get("/support", support_page)
+    app.router.add_get("/docs", docs_index_page)
+    app.router.add_get("/docs/{slug}", docs_page)
     app.router.add_get("/commands", commands_page)
     app.router.add_get("/login", login)
     app.router.add_get("/install", install)
