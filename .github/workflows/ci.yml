@@ -42,6 +42,9 @@ jobs:
           .\.venv\Scripts\python -m pip install -r requirements.txt -r requirements-dev.txt
           .\.venv\Scripts\python -m pip install build pip-audit
 
+      - name: Install Playwright browsers
+        run: .\.venv\Scripts\python -m playwright install chromium
+
       - name: Generate docs (check)
         run: .\.venv\Scripts\python -m scripts.generate_docs --check
 

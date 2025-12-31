@@ -37,3 +37,9 @@ CI runs `python -m scripts.check_log_hygiene` to flag logging calls that include
 ## A11y template checks
 
 CI runs `python -m scripts.check_a11y_templates` to enforce skip links, aria-current, and live region markers.
+
+## Visual regression checks
+
+CI runs Playwright screenshot tests for key pages. To update baselines:
+- `python -m playwright install chromium`
+- `UPDATE_VISUAL_BASELINES=1 python -m pytest tests/visual/test_visual_regression.py`

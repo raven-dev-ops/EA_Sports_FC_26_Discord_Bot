@@ -3,3 +3,5 @@ ruff==0.7.0
 mypy==1.19.1
 types-Markdown==3.10.0.20251106
 watchfiles==0.24.0
+playwright==1.49.1
+Pillow==10.4.0
