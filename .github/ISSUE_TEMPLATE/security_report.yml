@@ -1,0 +1,24 @@
+name: Security report
+description: Report a security vulnerability (please use private disclosure)
+title: "[SECURITY] "
+labels: ["security", "type:security"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please do NOT file sensitive vulnerabilities in public issues.
+        Use the private security disclosure instructions in SECURITY.md instead.
+  - type: input
+    id: summary
+    attributes:
+      label: Summary
+      description: High-level summary (non-sensitive).
+      placeholder: Brief summary without exploit details.
+  - type: textarea
+    id: disclosure
+    attributes:
+      label: Disclosure plan
+      description: Confirm you will follow the private disclosure instructions in SECURITY.md.
+      placeholder: I will report this via the SECURITY.md contact process.
+    validations:
+      required: true
