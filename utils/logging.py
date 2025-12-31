@@ -11,11 +11,13 @@ def _interaction_context(interaction: discord.Interaction) -> dict[str, Any]:
     channel_id = getattr(interaction.channel, "id", None) if interaction.channel else None
     user_id = getattr(interaction.user, "id", None) if interaction.user else None
     command = getattr(interaction.command, "qualified_name", None)
+    interaction_id = getattr(interaction, "id", None)
     return {
         "guild_id": guild_id,
         "channel_id": channel_id,
         "user_id": user_id,
         "command": command,
+        "interaction_id": interaction_id,
     }
 
 

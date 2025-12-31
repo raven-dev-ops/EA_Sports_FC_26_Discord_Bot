@@ -4508,6 +4508,7 @@ def create_app(*, settings: Settings | None = None) -> web.Application:
         pass
 
     app.router.add_get("/health", health)
+    app.router.add_get("/healthz", health)
     app.router.add_get("/ready", ready)
     app.router.add_get("/", index)
     app.router.add_get("/app", app_index)

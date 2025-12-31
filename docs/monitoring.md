@@ -3,6 +3,7 @@
 ## Web health
 
 - `GET /health` returns `200` when the web process is alive.
+- `GET /healthz` is an alias for load balancers and uptime checks.
 
 ## Readiness (DB + worker)
 
@@ -48,5 +49,5 @@ Alert starters (link to runbooks):
 
 - Do not log secrets (tokens, auth headers, cookies) or PII (emails, raw payloads).
 - Use `utils.redaction.scrub` / `utils.redaction.redact_text` when logging untrusted data.
-- Include structured fields when possible: `request_id`, `guild_id`, `user_id`.
+- Include structured fields when possible: `request_id`, `interaction_id`, `guild_id`, `user_id`.
 - Optional check: `python -m scripts.check_log_hygiene` flags logging calls that include sensitive variable names.
