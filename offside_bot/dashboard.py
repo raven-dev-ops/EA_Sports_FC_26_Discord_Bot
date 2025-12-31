@@ -279,13 +279,24 @@ def _app_shell(
             {"label": "Settings", "href": _guild_section_url(nav_guild, section="settings"), "active": section == "settings"},
             {"label": "Permissions", "href": _guild_section_url(nav_guild, section="permissions"), "active": section == "permissions"},
         ]
-        if is_pro:
-            nav_items.append(
-                {"label": "Audit Log", "href": _guild_section_url(nav_guild, section="audit"), "active": section == "audit"}
-            )
+        nav_items.append(
+            {
+                "label": "Audit Log",
+                "href": _guild_section_url(nav_guild, section="audit"),
+                "active": section == "audit",
+                "locked": not is_pro,
+                "lock_reason": "Pro plan required for audit log.",
+            }
+        )
         nav_items.extend(
             [
-                {"label": "Ops", "href": _guild_section_url(nav_guild, section="ops"), "active": section == "ops"},
+                {
+                    "label": "Ops",
+                    "href": _guild_section_url(nav_guild, section="ops"),
+                    "active": section == "ops",
+                    "locked": not is_pro,
+                    "lock_reason": "Pro plan required for ops tasks.",
+                },
                 {"label": "Billing", "href": _guild_section_url(nav_guild, section="billing"), "active": section == "billing"},
             ]
         )
