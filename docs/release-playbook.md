@@ -14,6 +14,7 @@ See also:
 - [ ] Ensure the self-hosted runner is online (CI + tag releases run on self-hosted runners; see `docs/ci.md`).
 - [ ] Review open PRs and Dependabot updates; merge or defer intentionally.
 - [ ] Verify secrets are not committed (no `.env` changes, no tokens in git history).
+- [ ] Confirm gitleaks is green and `.slugignore` excludes `.env` and local artifacts.
 - [ ] Update `VERSION` and `CHANGELOG.md` (add the new release section at the top).
 - [ ] Run local gates:
   - `ruff check .`
