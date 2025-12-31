@@ -360,6 +360,7 @@ async def test_billing_checkout_requires_csrf(monkeypatch) -> None:
 
     monkeypatch.setattr(database, "MongoClient", mongomock.MongoClient)
     monkeypatch.setattr(database, "_CLIENT", None)
+    monkeypatch.setenv("STRIPE_MODE", "test")
     monkeypatch.setenv("STRIPE_SECRET_KEY", "sk_test_123")
     monkeypatch.setenv("STRIPE_PRICE_PRO_ID", "price_123")
 
@@ -399,6 +400,7 @@ async def test_billing_checkout_blocks_duplicate_subscription(monkeypatch) -> No
 
     monkeypatch.setattr(database, "MongoClient", mongomock.MongoClient)
     monkeypatch.setattr(database, "_CLIENT", None)
+    monkeypatch.setenv("STRIPE_MODE", "test")
     monkeypatch.setenv("STRIPE_SECRET_KEY", "sk_test_123")
     monkeypatch.setenv("STRIPE_PRICE_PRO_ID", "price_123")
 
@@ -529,6 +531,7 @@ async def test_billing_success_syncs_subscription(monkeypatch) -> None:
 
     monkeypatch.setattr(database, "MongoClient", mongomock.MongoClient)
     monkeypatch.setattr(database, "_CLIENT", None)
+    monkeypatch.setenv("STRIPE_MODE", "test")
     monkeypatch.setenv("STRIPE_SECRET_KEY", "sk_test_123")
     entitlements_service.invalidate_all()
 

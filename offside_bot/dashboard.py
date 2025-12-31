@@ -46,6 +46,7 @@ from services.ops_tasks_service import (
 from services.stripe_webhook_service import ensure_stripe_webhook_indexes, handle_stripe_webhook
 from services.subscription_service import get_guild_subscription
 from utils.redaction import redact_ip, redact_text
+from utils.environment import validate_stripe_environment
 
 DISCORD_API_BASE = "https://discord.com/api"
 AUTHORIZE_URL = "https://discord.com/oauth2/authorize"
@@ -99,6 +100,12 @@ DOCS_PAGES: list[dict[str, str]] = [
         "title": "Data lifecycle",
         "path": "docs/data-lifecycle.md",
         "summary": "Retention, deletion, and data export guidance.",
+    },
+    {
+        "slug": "environments",
+        "title": "Environments",
+        "path": "docs/environments.md",
+        "summary": "Dev/staging/prod separation for Discord + Stripe.",
     },
     {
         "slug": "disaster-recovery",
@@ -4476,6 +4483,7 @@ def create_app(*, settings: Settings | None = None) -> web.Application:
     )
     app_settings = settings or load_settings()
     app["settings"] = app_settings
+    validate_stripe_environment()
     init_error_reporting(settings=app_settings, service_name="dashboard")
     session_collection, state_collection, user_collection = _ensure_dashboard_collections(app_settings)
     app["session_collection"] = session_collection

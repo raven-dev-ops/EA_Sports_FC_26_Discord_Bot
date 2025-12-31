@@ -49,6 +49,8 @@ The source of truth is `.env.example`. Before a release, verify the production e
 
 At minimum, confirm:
 
+- Environment
+  - `APP_ENV` (development/staging/production)
 - Discord
   - `DISCORD_TOKEN`
   - `DISCORD_APPLICATION_ID`
@@ -60,6 +62,7 @@ At minimum, confirm:
   - `MONGODB_COLLECTION`
   - `MONGODB_PER_GUILD_DB` / `MONGODB_GUILD_DB_PREFIX` (if using per-guild databases)
 - Billing (if enabled; see `docs/billing.md`)
+  - `STRIPE_MODE` (test/live)
   - `STRIPE_SECRET_KEY`
   - `STRIPE_WEBHOOK_SECRET`
   - `STRIPE_PRICE_PRO_ID`

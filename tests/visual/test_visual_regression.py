@@ -94,6 +94,7 @@ async def test_visual_regression(monkeypatch) -> None:
 
     monkeypatch.setenv("DISCORD_CLIENT_SECRET", "secret")
     monkeypatch.setenv("DASHBOARD_REDIRECT_URI", "http://localhost:8080/oauth/callback")
+    monkeypatch.setenv("STRIPE_MODE", "test")
     monkeypatch.setenv("STRIPE_SECRET_KEY", "sk_test_123")
     monkeypatch.setenv("STRIPE_PRICE_PRO_ID", "price_test_123")
 

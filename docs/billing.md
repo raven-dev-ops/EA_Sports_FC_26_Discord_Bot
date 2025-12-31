@@ -10,6 +10,12 @@ This project uses Stripe Subscriptions for the `Pro` plan.
 
 See `.env.example` for the full list.
 
+## Environment separation
+
+- Set `APP_ENV` (`development`, `staging`, `production`) and `STRIPE_MODE` (`test` or `live`).
+- Use `STRIPE_MODE=test` for dev/staging and `STRIPE_MODE=live` for production.
+- The dashboard refuses to start if live keys are configured outside production.
+
 ## Stripe setup (Dashboard)
 
 1. Create a Product (example: `Offside Pro`).
