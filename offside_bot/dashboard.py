@@ -970,6 +970,22 @@ async def privacy_page(_request: web.Request) -> web.Response:
     return web.Response(text=page, content_type="text/html")
 
 
+async def product_copy_page(_request: web.Request) -> web.Response:
+    text = _repo_read_text("docs/product-copy.md")
+    if text is None:
+        raise web.HTTPNotFound(text="docs/product-copy.md not found.")
+    html = _markdown_to_html(text)
+    content = f"""
+      <p><a href="/">&larr; Back</a></p>
+      <h1>Product</h1>
+      <div class="card">{html}</div>
+    """
+    from offside_bot.web_templates import render, safe_html
+
+    page = render("pages/markdown_page.html", title="Product", content=safe_html(content))
+    return web.Response(text=page, content_type="text/html")
+
+
 def _commands_group_for_category(category: str) -> str:
     key = (category or "").strip().lower()
     if key in {"roster", "recruitment"}:
@@ -3935,6 +3951,7 @@ def create_app(*, settings: Settings | None = None) -> web.Application:
     app.router.add_get("/pricing", pricing_page)
     app.router.add_get("/terms", terms_page)
     app.router.add_get("/privacy", privacy_page)
+    app.router.add_get("/product", product_copy_page)
     app.router.add_get("/support", support_page)
     app.router.add_get("/commands", commands_page)
     app.router.add_get("/login", login)

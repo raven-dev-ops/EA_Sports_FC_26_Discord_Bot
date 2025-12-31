@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.48] - 2025-12-31
+
+### Added
+- Docs/Web: canonical product positioning + plan gating doc at `docs/product-copy.md` and a public `/product` page.
+
 ## [0.2.47] - 2025-12-31
 
 ### Changed
