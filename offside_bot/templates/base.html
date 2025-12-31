@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{{ title }}</title>
     <link rel="stylesheet" href="{{ static_url('app.css') }}" />
+    <script src="{{ static_url('app.js') }}" defer></script>
   </head>
   <body>
     {% block body %}{{ body|default("")|safe }}{% endblock %}

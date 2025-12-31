@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.41] - 2025-12-31
+
+### Added
+- Web: dark theme styling (Discord-adjacent) across landing/pricing/dashboard pages.
+- Web: responsive app shell with a mobile hamburger menu for sidebar navigation.
+
 ## [0.2.40] - 2025-12-30
 
 ### Added

@@ -3,7 +3,19 @@
 
 {% block body %}
   <div class="topbar">
-    <div><a class="brand" href="/">{{ brand|default("Offside") }}</a></div>
+    <div style="display:flex; gap:10px; align-items:center;">
+      <button
+        class="icon-btn"
+        type="button"
+        data-sidebar-toggle
+        aria-label="Toggle menu"
+        aria-controls="app-sidebar"
+        aria-expanded="false"
+      >
+        &#9776;
+      </button>
+      <a class="brand" href="/">{{ brand|default("Offside") }}</a>
+    </div>
     <div style="display:flex; gap:10px; align-items:center;">
       {% if guild_selector %}
         <select aria-label="Select server" onchange="window.location=this.value">
@@ -29,7 +41,8 @@
   </div>
 
   <div class="layout">
-    <aside class="sidebar">
+    <div class="sidebar-backdrop" data-sidebar-toggle aria-hidden="true"></div>
+    <aside class="sidebar" id="app-sidebar" aria-label="Navigation">
       <div class="card">
         {% if nav_items %}
           {% for item in nav_items %}
@@ -48,4 +61,3 @@
     </main>
   </div>
 {% endblock %}
-
