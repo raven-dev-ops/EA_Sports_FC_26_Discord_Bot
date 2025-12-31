@@ -782,15 +782,20 @@ async def security_headers_middleware(request: web.Request, handler):
     response.headers.setdefault("Permissions-Policy", "interest-cohort=()")
 
     # Inline CSS is used in _html_page, so allow 'unsafe-inline' for styles.
-    response.headers.setdefault(
-        "Content-Security-Policy",
-        "default-src 'self'; "
-        "base-uri 'self'; "
-        "frame-ancestors 'none'; "
-        "img-src 'self' data:; "
-        "style-src 'self' 'unsafe-inline'; "
-        "form-action 'self';",
-    )
+    csp_parts = [
+        "default-src 'self'",
+        "base-uri 'self'",
+        "frame-ancestors 'none'",
+        "img-src 'self' data: https://cdn.discordapp.com https://cdn.discordapp.net",
+        "style-src 'self' 'unsafe-inline'",
+        "script-src 'self'",
+        "connect-src 'self' https://discord.com https://discordapp.com",
+        "font-src 'self'",
+        "form-action 'self'",
+        "frame-src https://checkout.stripe.com",
+        "object-src 'none'",
+    ]
+    response.headers.setdefault("Content-Security-Policy", "; ".join(csp_parts) + ";")
 
     if _is_https(request):
         response.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
