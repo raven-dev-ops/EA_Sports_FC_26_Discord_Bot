@@ -1,0 +1,13 @@
+{% from "macros/ui.html" import badge, button %}
+
+<p><a href="/app/billing?guild_id={{ guild_id }}&status=success">&larr; Billing</a></p>
+<h1>Checkout Success</h1>
+<div class="card">
+  <div><strong>{{ message }}</strong></div>
+  <div class="mt-8">Plan: {{ badge(plan_label, plan_class) }}</div>
+  <div class="mt-10 flex gap-10 flex-wrap">
+    {{ button("View billing", billing_href, "secondary") }}
+    {{ button("Analytics", analytics_href, "") }}
+    {{ button("Settings", settings_href, "secondary") }}
+  </div>
+</div>

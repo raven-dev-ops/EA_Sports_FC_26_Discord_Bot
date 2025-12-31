@@ -1,0 +1,105 @@
+{% from "macros/ui.html" import notice %}
+
+<h1 class="mt-0">Ops</h1>
+{% if notices %}
+  {% for item in notices %}
+    {{ notice(item.title, item.text, item.kind) }}
+  {% endfor %}
+{% endif %}
+<div class="row">
+  <div class="card">
+    <div><strong>Worker heartbeat</strong></div>
+    <div class="muted">{{ heartbeat_text }}</div>
+    <p class="muted mt-10">If the worker is missing/stale, queued tasks will not run.</p>
+  </div>
+  <div class="card">
+    <div><strong>Actions</strong></div>
+    {% if mongodb_configured %}
+      <div class="muted mt-8">These actions run on the bot worker dyno.</div>
+      <div class="mt-10 flex gap-10 flex-wrap">
+        <form method="post" action="/api/guild/{{ guild_id }}/ops/run_setup">
+          <input type="hidden" name="csrf" value="{{ csrf_token }}" />
+          <button class="btn" type="submit" {% if actions_disabled %}disabled{% endif %}>Run setup now</button>
+        </form>
+        <form method="post" action="/api/guild/{{ guild_id }}/ops/repost_portals">
+          <input type="hidden" name="csrf" value="{{ csrf_token }}" />
+          <button class="btn secondary" type="submit" {% if actions_disabled %}disabled{% endif %}>Repost portals</button>
+        </form>
+      </div>
+    {% else %}
+      <p class="muted mt-8">MongoDB is not configured; ops tasks cannot be queued.</p>
+    {% endif %}
+  </div>
+  <div class="card">
+    <div><strong>Data deletion</strong></div>
+    {% if deletion_state.mode == "disabled" %}
+      <p class="muted mt-8"><strong>Unavailable:</strong> {{ deletion_state.reason }}</p>
+    {% elif deletion_state.mode == "scheduled" %}
+      <p class="muted mt-8">
+        <strong>Deletion scheduled.</strong> This guild's stored data will be deleted
+        {% if deletion_state.run_after_text %}
+          <code>{{ deletion_state.run_after_text }}</code>.
+        {% else %}
+          soon.
+        {% endif %}
+      </p>
+      <form method="post" action="/api/guild/{{ guild_id }}/ops/cancel_delete_data" class="mt-10">
+        <input type="hidden" name="csrf" value="{{ csrf_token }}" />
+        <button class="btn secondary" type="submit">Cancel deletion</button>
+      </form>
+    {% elif deletion_state.mode == "active" %}
+      <p class="muted mt-8">
+        <strong>Deletion task active.</strong> Status: <code>{{ deletion_state.status }}</code>.
+      </p>
+    {% else %}
+      <p class="muted mt-8">
+        <strong>Danger:</strong> Schedule an irreversible delete of this guild's stored data. Deletion runs after a
+        {{ deletion_state.grace_hours }}h grace period
+        (scheduled for <code>{{ deletion_state.run_after_text }}</code>).
+      </p>
+      <form method="post" action="/api/guild/{{ guild_id }}/ops/schedule_delete_data" class="mt-10">
+        <input type="hidden" name="csrf" value="{{ csrf_token }}" />
+        <label class="muted" for="{{ deletion_state.confirm_id }}">
+          Type <code>{{ deletion_state.confirm_phrase }}</code> to confirm
+        </label>
+        <input
+          id="{{ deletion_state.confirm_id }}"
+          name="confirm"
+          type="text"
+          placeholder="{{ deletion_state.confirm_phrase }}"
+          class="w-full mt-6"
+        />
+        <button class="btn red mt-10" type="submit">Schedule deletion</button>
+      </form>
+    {% endif %}
+    {% if deletion_note %}
+      <p class="muted mt-8">Deletion status unavailable: <code>{{ deletion_note }}</code></p>
+    {% endif %}
+  </div>
+</div>
+<div class="card">
+  <h2 class="mt-0">Recent tasks</h2>
+  <table>
+    <thead>
+      <tr><th>created</th><th>action</th><th>status</th><th>requested by</th><th>started</th><th>finished</th><th>error</th></tr>
+    </thead>
+    <tbody>
+      {% if tasks %}
+        {% for task in tasks %}
+          <tr>
+            <td><code>{{ task.created }}</code></td>
+            <td><code>{{ task.action }}</code></td>
+            <td><code>{{ task.status }}</code></td>
+            <td>{{ task.requested_by }}</td>
+            <td><code>{{ task.started }}</code></td>
+            <td><code>{{ task.finished }}</code></td>
+            <td class="muted">{{ task.error }}</td>
+          </tr>
+        {% endfor %}
+      {% else %}
+        <tr><td colspan="7" class="muted">No ops tasks yet.</td></tr>
+      {% endif %}
+    </tbody>
+  </table>
+  <p class="muted mt-10">All actions are also recorded in the audit log.</p>
+</div>

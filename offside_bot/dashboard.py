@@ -285,11 +285,11 @@ def _app_shell(
     ]
 
     guild_plan: str | None = None
-    plan_badge = ""
-    plan_notice = ""
+    plan_badge: dict[str, str] | None = None
+    plan_notice: dict[str, Any] | None = None
     if selected_guild_id is not None:
         guild_plan = entitlements_service.get_guild_plan(settings, guild_id=selected_guild_id)
-        plan_badge = f"<span class='badge {guild_plan}'>{_escape_html(guild_plan.upper())}</span>"
+        plan_badge = {"label": str(guild_plan).upper(), "kind": str(guild_plan)}
         if settings.mongodb_uri and guild_plan != entitlements_service.PLAN_PRO:
             subscription = get_guild_subscription(settings, guild_id=selected_guild_id) or {}
             if isinstance(subscription, dict) and (
@@ -309,33 +309,35 @@ def _app_shell(
                     title = "Pro expired"
                     detail = "Pro features are disabled, but your server data is preserved."
                 suffix = f" (ended {expired_at})" if expired_at else ""
-        plan_notice = f"""
-          <div class="card">
-            <div class="flex-between gap-12">
-              <div>
-                <div><span class="badge warn">{_escape_html(title.upper())}</span></div>
-                <div class="mt-6"><strong>{_escape_html(title)}{_escape_html(suffix)}</strong></div>
-                <div class="muted mt-6">{_escape_html(detail)}</div>
-              </div>
-              <div class="btn-group">
-                <a class="btn secondary" href="/app/billing?guild_id={selected_guild_id}">Billing</a>
-                <a class="btn blue" href="/app/upgrade?guild_id={selected_guild_id}&from=notice&section={urllib.parse.quote(section)}">Upgrade</a>
-              </div>
-            </div>
-          </div>
-        """
+                plan_notice = {
+                    "status_label": title.upper(),
+                    "status_kind": "warn",
+                    "title": f"{title}{suffix}",
+                    "detail": detail,
+                    "ctas": [
+                        {
+                            "label": "Billing",
+                            "href": f"/app/billing?guild_id={selected_guild_id}",
+                            "variant": "secondary",
+                        },
+                        {
+                            "label": "Upgrade",
+                            "href": f"/app/upgrade?guild_id={selected_guild_id}&from=notice&section={urllib.parse.quote(section)}",
+                            "variant": "blue",
+                        },
+                    ],
+                }
 
-    install_badge = ""
-    invite_cta = ""
+    install_badge: dict[str, str] | None = None
+    invite_cta: dict[str, str] | None = None
     if selected_guild_id is not None:
         invite_href = _invite_url(settings, guild_id=str(selected_guild_id), disable_guild_select=True)
-        safe_invite_href = _escape_html(invite_href)
         if installed is False:
-            install_badge = "<span class='badge warn'>NOT INSTALLED</span>"
-            invite_cta = f"<a class='btn blue' href=\"{safe_invite_href}\">Invite bot</a>"
+            install_badge = {"label": "NOT INSTALLED", "kind": "warn"}
+            invite_cta = {"label": "Invite bot", "href": invite_href, "variant": "blue"}
         elif installed is None:
-            install_badge = "<span class='badge warn'>UNKNOWN</span>"
-            invite_cta = f"<a class='btn blue' href=\"{safe_invite_href}\">Invite bot</a>"
+            install_badge = {"label": "UNKNOWN", "kind": "warn"}
+            invite_cta = {"label": "Invite bot", "href": invite_href, "variant": "blue"}
 
     nav_guild = str(selected_guild_id or "")
     is_pro = guild_plan == entitlements_service.PLAN_PRO
@@ -428,13 +430,13 @@ def _app_shell(
         "partials/app_shell.html",
         username=username,
         guild_selector=guild_selector,
-        plan_badge=safe_html(plan_badge) if plan_badge else "",
-        install_badge=safe_html(install_badge) if install_badge else "",
-        invite_cta=safe_html(invite_cta) if invite_cta else "",
+        plan_badge=plan_badge,
+        install_badge=install_badge,
+        invite_cta=invite_cta,
         nav_items=nav_items,
         nav_groups=nav_groups,
         breadcrumbs=breadcrumbs,
-        plan_notice=safe_html(plan_notice) if plan_notice else "",
+        plan_notice=plan_notice,
         content=safe_html(content),
     )
 
@@ -451,6 +453,8 @@ def _pro_locked_page(
     benefits: list[tuple[str, str]] | None = None,
     upgrade_href: str | None = None,
 ) -> web.Response:
+    from offside_bot.web_templates import render
+
     upgrade_href = upgrade_href or f"/app/upgrade?guild_id={guild_id}&from=locked&section={urllib.parse.quote(section)}"
     if benefits is None:
         benefits = [
@@ -460,34 +464,15 @@ def _pro_locked_page(
             ("Banlist integration", "Google Sheets-driven banlist checks and moderation tooling."),
             ("Tournament automation", "Automated brackets, fixtures, and match reporting workflows."),
         ]
-    benefits_html = "\n".join(
-        f"<li><strong>{_escape_html(name)}</strong> - {_escape_html(desc)}</li>"
-        for name, desc in benefits
+    benefit_items = [{"name": name, "desc": desc} for name, desc in benefits]
+    content = render(
+        "pages/dashboard/locked_pro.html",
+        title=title,
+        message=message,
+        benefits=benefit_items,
+        upgrade_href=upgrade_href,
+        guild_id=guild_id,
     )
-    body = f"""
-      <h1 class="mt-0">{_escape_html(title)}</h1>
-      <div class="card">
-        <div class="flex-between">
-          <div class="flex-start">
-            <span class="badge warn">PRO</span>
-            <strong>Locked</strong>
-          </div>
-          <span class="badge warn">LOCKED</span>
-        </div>
-        <p class="muted spacer-sm">{_escape_html(message)}</p>
-        <div class="btn-group spacer-sm">
-          <a class="btn blue" href="{_escape_html(upgrade_href)}">Upgrade to Pro</a>
-          <a class="btn secondary" href="/app/billing?guild_id={guild_id}">Billing</a>
-          <a class="btn secondary" href="/guild/{guild_id}/overview">Back to overview</a>
-        </div>
-      </div>
-      <div class="card">
-        <h2 class="mt-0">What you get with Pro</h2>
-        <ul class="list-reset">
-          {benefits_html}
-        </ul>
-      </div>
-    """
     return web.Response(
         text=_html_page(
             title=title,
@@ -497,7 +482,7 @@ def _pro_locked_page(
                 section=section,
                 selected_guild_id=guild_id,
                 installed=installed,
-                content=body,
+                content=content,
             ),
         ),
         content_type="text/html",
@@ -514,23 +499,14 @@ def _owner_locked_page(
     title: str,
     message: str,
 ) -> web.Response:
-    body = f"""
-      <h1 class="mt-0">{_escape_html(title)}</h1>
-      <div class="card">
-        <div class="flex-between">
-          <div class="flex-start">
-            <span class="badge warn">OWNER</span>
-            <strong>Restricted</strong>
-          </div>
-          <span class="badge warn">LOCKED</span>
-        </div>
-        <p class="muted spacer-sm">{_escape_html(message)}</p>
-        <div class="btn-group spacer-sm">
-          <a class="btn secondary" href="/guild/{guild_id}/overview">Back to overview</a>
-          <a class="btn secondary" href="/support">Support</a>
-        </div>
-      </div>
-    """
+    from offside_bot.web_templates import render
+
+    content = render(
+        "pages/dashboard/locked_owner.html",
+        title=title,
+        message=message,
+        guild_id=guild_id,
+    )
     return web.Response(
         text=_html_page(
             title=title,
@@ -540,7 +516,7 @@ def _owner_locked_page(
                 section=section,
                 selected_guild_id=guild_id,
                 installed=installed,
-                content=body,
+                content=content,
             ),
         ),
         content_type="text/html",
@@ -1164,13 +1140,8 @@ async def app_index(request: web.Request) -> web.Response:
     session = _require_session(request)
     settings: Settings = request.app["settings"]
 
-    guild_cards = []
-    search_box = """
-      <div class="card mb-16">
-        <label for="guild-search" class="muted">Search servers</label>
-        <input id="guild-search" class="w-full mt-6" type="text" placeholder="Search by name..." />
-      </div>
-    """
+    from offside_bot.web_templates import render
+
     eligible_ids = {str(g.get("id")) for g in session.owner_guilds}
     install_statuses: dict[int, dict[str, Any]] = {}
     if settings.mongodb_uri and eligible_ids:
@@ -1188,17 +1159,21 @@ async def app_index(request: web.Request) -> web.Response:
             return (is_last, name_value)
 
         guilds = sorted(guilds, key=_guild_sort_key)
+    cards: list[dict[str, Any]] = []
     for g in guilds:
         gid = g.get("id")
-        name = _escape_html(g.get("name") or gid)
+        name = str(g.get("name") or gid)
         gid_str = str(gid)
         eligible = gid_str in eligible_ids
         plan = None
-        plan_badge = ""
+        plan_label = ""
+        plan_class = ""
         if eligible and gid_str.isdigit():
             plan = entitlements_service.get_guild_plan(settings, guild_id=int(gid_str))
-            plan_badge = f"<span class='badge {plan}'>{_escape_html(plan.upper())}</span>"
-        install_badge = ""
+            plan_label = str(plan).upper()
+            plan_class = str(plan)
+        install_label = ""
+        install_class = ""
         install_status: bool | None = None
         if eligible and gid_str.isdigit():
             status_doc = install_statuses.get(int(gid_str))
@@ -1207,63 +1182,35 @@ async def app_index(request: web.Request) -> web.Response:
                 if isinstance(status_value, bool):
                     install_status = status_value
             if install_status is True:
-                install_badge = "<span class='badge ok'>INSTALLED</span>"
+                install_label = "INSTALLED"
+                install_class = "ok"
             elif install_status is False:
-                install_badge = "<span class='badge warn'>NOT INSTALLED</span>"
+                install_label = "NOT INSTALLED"
+                install_class = "warn"
             else:
-                install_badge = "<span class='badge warn'>UNKNOWN</span>"
+                install_label = "UNKNOWN"
+                install_class = "warn"
         icon_url = _guild_icon_url(g)
-        if icon_url:
-            icon_html = (
-                f"<img src='{_escape_html(icon_url)}' alt='' class='avatar-lg' />"
-            )
-        else:
-            fallback = _escape_html((name[:2] or "").upper())
-            icon_html = f"<div class='avatar-fallback'>{fallback}</div>"
-
-        actions = ""
-        if eligible:
-            upgrade_cta = ""
-            if plan and plan != entitlements_service.PLAN_PRO:
-                upgrade_cta = (
-                    f"<a class='btn blue' href='/app/upgrade?guild_id={gid_str}&from=server-card&section=overview'>Upgrade</a>"
-                )
-            invite_cta = ""
-            if install_status is not True:
-                invite_class = "blue" if install_status is False else "secondary"
-                invite_cta = f"<a class='btn {invite_class}' href='/install?guild_id={gid_str}'>Invite bot</a>"
-            actions = (
-                f"<div class='btn-group mt-10'>"
-                f"<a class='btn' href='/guild/{gid_str}/overview'>Open</a>"
-                f"<a class='btn secondary' href='/app/billing?guild_id={gid_str}'>Billing</a>"
-                f"{upgrade_cta}"
-                f"{invite_cta}"
-                f"</div>"
-            )
-        else:
-            actions = (
-                "<div class='card card-plain mt-10'>"
-                "<div class='muted'>Not eligible: requires <strong>Manage Server</strong> permission (or ownership).</div>"
-                "</div>"
-            )
-
-        guild_cards.append(
-            "".join(
-                [
-                    f"<div class='card guild-card' data-name='{name}'>",
-                    "<div class='flex gap-12 items-center justify-between flex-wrap'>",
-                    "<div class='flex gap-12 items-center'>",
-                    icon_html,
-                    f"<div><div class='font-600'>{name}</div><div class='muted'>Guild ID: <code>{gid}</code></div></div>",
-                    "</div>",
-                    f"<div class='flex gap-8 items-center'>{plan_badge}{install_badge}</div>",
-                    "</div>",
-                    actions,
-                    "</div>",
-                ]
-            )
+        fallback = (name[:2] or "").upper()
+        show_upgrade = bool(eligible and plan and plan != entitlements_service.PLAN_PRO)
+        show_invite = bool(eligible and install_status is not True)
+        invite_class = "blue" if install_status is False else "secondary"
+        cards.append(
+            {
+                "id": gid_str,
+                "name": name,
+                "icon_url": icon_url or "",
+                "fallback": fallback,
+                "eligible": eligible,
+                "plan_label": plan_label,
+                "plan_class": plan_class,
+                "install_label": install_label,
+                "install_class": install_class,
+                "show_upgrade": show_upgrade,
+                "show_invite": show_invite,
+                "invite_class": invite_class,
+            }
         )
-    cards_html = "\n".join(guild_cards) if guild_cards else "<p>No servers found.</p>"
     invite_href = _invite_url(settings)
     selected_guild_id = None
     if session.owner_guilds:
@@ -1280,14 +1227,11 @@ async def app_index(request: web.Request) -> web.Response:
         else (None, None)
     )
 
-    content = f"""
-      <h1 class="mt-0">Your servers</h1>
-      {search_box}
-      {cards_html}
-      <h2>Invite link</h2>
-      <p class="muted">Direct invite URL (shareable):</p>
-      <p><a href="{invite_href}">{invite_href}</a></p>
-    """
+    content = render(
+        "pages/dashboard/server_picker.html",
+        cards=cards,
+        invite_href=invite_href,
+    )
     body = _app_shell(
         settings=settings,
         session=session,
@@ -2092,24 +2036,20 @@ def _parse_bool(value: Any) -> bool:
 async def guild_settings_page(request: web.Request) -> web.Response:
     session = _require_session(request)
     settings: Settings = request.app["settings"]
+    from offside_bot.web_templates import render
 
     guild_id_str = request.match_info["guild_id"]
     guild_id = _require_owned_guild(session, settings=settings, path=request.path_qs, guild_id=guild_id_str)
 
     installed, install_error = await _detect_bot_installed(request, guild_id=guild_id)
+    invite_href = _invite_url(settings, guild_id=str(guild_id), disable_guild_select=True)
     if installed is False:
-        invite_href = _invite_url(settings, guild_id=str(guild_id), disable_guild_select=True)
-        body = f"""
-          <p><a href="/app">&larr; Back</a></p>
-          <h1>Settings</h1>
-          <div class="card">
-            <h2 class="mt-0">Invite bot to this server</h2>
-            <p class="muted">This server is in your Discord list, but the bot is not installed yet.</p>
-            <p><a class="btn blue" href="/install?guild_id={guild_id}">Invite bot to server</a></p>
-            <p class="muted">Direct invite URL:</p>
-            <p><a href="{invite_href}">{invite_href}</a></p>
-          </div>
-        """
+        content = render(
+            "pages/dashboard/guild_settings.html",
+            installed=installed,
+            guild_id=guild_id,
+            invite_href=invite_href,
+        )
         return web.Response(
             text=_html_page(
                 title="Guild Settings",
@@ -2119,7 +2059,7 @@ async def guild_settings_page(request: web.Request) -> web.Response:
                     section="settings",
                     selected_guild_id=guild_id,
                     installed=installed,
-                    content=body,
+                    content=content,
                 ),
             ),
             content_type="text/html",
@@ -2160,8 +2100,8 @@ async def guild_settings_page(request: web.Request) -> web.Response:
         else:
             metadata_error = install_error
 
+    staff_role_options: list[dict[str, Any]] = []
     if roles:
-        role_options: list[str] = []
         for role in roles:
             role_id = role.get("id")
             if role_id is None:
@@ -2170,100 +2110,126 @@ async def guild_settings_page(request: web.Request) -> web.Response:
                 role_id_int = int(role_id)
             except (TypeError, ValueError):
                 continue
-            name = _escape_html(role.get("name") or role_id_int)
-            selected = "selected" if role_id_int in staff_role_ids else ""
-            role_options.append(f"<option value=\"{role_id_int}\" {selected}>{name}</option>")
-        options_html = "\n".join(role_options) or "<option disabled>(no roles found)</option>"
-        staff_roles_control_html = f"""
-            <label>Staff roles</label><br/>
-            <select multiple name="staff_role_ids" size="10" class="w-full mt-6">
-              {options_html}
-            </select>
-            <p class="muted">Select one or more roles. Leave empty to require Manage Server (or env <code>STAFF_ROLE_IDS</code>).</p>
-        """
-    else:
-        warning = (
-            f"<p class='muted'>Unable to load roles from Discord: <code>{_escape_html(metadata_error)}</code></p>"
-            if metadata_error
-            else ""
-        )
-        staff_roles_control_html = f"""
-            {warning}
-            <label>Staff role IDs (comma-separated)</label><br/>
-            <input name="staff_role_ids_csv" class="w-full mt-6" value="{_escape_html(staff_role_ids_value)}" />
-            <p class="muted">Leave blank to require Manage Server (or env <code>STAFF_ROLE_IDS</code>).</p>
-        """
-
-    metadata_warning_html = (
-        f"<p class='muted'>Discord metadata unavailable: <code>{_escape_html(metadata_error)}</code>. Dropdowns may fall back to manual IDs.</p>"
-        if metadata_error
-        else ""
-    )
+            name = str(role.get("name") or role_id_int)
+            staff_role_options.append(
+                {
+                    "value": role_id_int,
+                    "label": name,
+                    "selected": role_id_int in staff_role_ids,
+                    "disabled": False,
+                }
+            )
+    roles_available = bool(roles)
 
     coach_role_id = _parse_int(cfg.get("role_coach_id"))
     premium_role_id = _parse_int(cfg.get("role_coach_premium_id"))
     premium_plus_role_id = _parse_int(cfg.get("role_coach_premium_plus_id"))
-    premium_tiers_disabled_attr = "disabled" if not premium_tiers_enabled else ""
-    premium_tiers_note = (
-        f"<p class='muted'><span class=\"badge warn\">LOCKED</span> Premium coach tiers require Pro. <a href=\"{_escape_html(upgrade_href)}\">Upgrade</a></p>"
-        if not premium_tiers_enabled
-        else ""
-    )
     premium_badge_class = "pro" if premium_tiers_enabled else "warn"
-    premium_badge_html = f"<span class='badge {premium_badge_class} inline'>PRO</span>"
 
+    coach_role_fields: list[dict[str, Any]] = []
     if roles:
         valid_role_ids = {_parse_int(r.get("id")) for r in roles}
         valid_role_ids.discard(None)
 
-        def _role_options(selected_id: int | None) -> str:
-            default_selected = "selected" if selected_id is None else ""
-            option_lines = [f"<option value=\"\" {default_selected}>(Use default)</option>"]
+        def _role_options(selected_id: int | None) -> list[dict[str, Any]]:
+            default_selected = selected_id is None
+            option_lines = [
+                {
+                    "value": "",
+                    "label": "(Use default)",
+                    "selected": default_selected,
+                    "disabled": False,
+                }
+            ]
             if selected_id is not None and selected_id not in valid_role_ids:
                 option_lines.append(
-                    f"<option value=\"{selected_id}\" selected>(missing id: {selected_id})</option>"
+                    {
+                        "value": selected_id,
+                        "label": f"(missing id: {selected_id})",
+                        "selected": True,
+                        "disabled": False,
+                    }
                 )
             for role in roles:
                 rid = _parse_int(role.get("id"))
                 if rid is None or rid == guild_id:
                     continue
-                name = _escape_html(role.get("name") or rid)
-                selected = "selected" if rid == selected_id else ""
-                option_lines.append(f"<option value=\"{rid}\" {selected}>{name}</option>")
-            return "\n".join(option_lines)
+                name = str(role.get("name") or rid)
+                option_lines.append(
+                    {
+                        "value": rid,
+                        "label": name,
+                        "selected": rid == selected_id,
+                        "disabled": False,
+                    }
+                )
+            return option_lines
 
-        coach_roles_control_html = f"""
-            <h3 class="mt-14">Coach tiers</h3>
-            <label>Coach role</label><br/>
-            <select name="role_coach_id" class="w-full mt-6">
-              {_role_options(coach_role_id)}
-            </select>
-            <label class="mt-10 block">Coach Premium role {premium_badge_html}</label>
-            <select name="role_coach_premium_id" {premium_tiers_disabled_attr} class="w-full mt-6">
-              {_role_options(premium_role_id)}
-            </select>
-            <label class="mt-10 block">Coach Premium+ role {premium_badge_html}</label>
-            <select name="role_coach_premium_plus_id" {premium_tiers_disabled_attr} class="w-full mt-6">
-              {_role_options(premium_plus_role_id)}
-            </select>
-            {premium_tiers_note}
-        """
+        coach_role_fields = [
+            {
+                "label": "Coach role",
+                "name": "role_coach_id",
+                "options": _role_options(coach_role_id),
+                "value": str(coach_role_id or ""),
+                "disabled": False,
+                "show_pro_badge": False,
+                "pro_badge_class": premium_badge_class,
+            },
+            {
+                "label": "Coach Premium role",
+                "name": "role_coach_premium_id",
+                "options": _role_options(premium_role_id),
+                "value": str(premium_role_id or ""),
+                "disabled": not premium_tiers_enabled,
+                "show_pro_badge": True,
+                "pro_badge_class": premium_badge_class,
+            },
+            {
+                "label": "Coach Premium+ role",
+                "name": "role_coach_premium_plus_id",
+                "options": _role_options(premium_plus_role_id),
+                "value": str(premium_plus_role_id or ""),
+                "disabled": not premium_tiers_enabled,
+                "show_pro_badge": True,
+                "pro_badge_class": premium_badge_class,
+            },
+        ]
     else:
-        coach_roles_control_html = f"""
-            <h3 class="mt-14">Coach tiers</h3>
-            <label>Coach role ID</label><br/>
-            <input name="role_coach_id" class="w-full mt-6" value="{_escape_html(coach_role_id or '')}" />
-            <label class="mt-10 block">Coach Premium role ID {premium_badge_html}</label>
-            <input name="role_coach_premium_id" {premium_tiers_disabled_attr} class="w-full mt-6" value="{_escape_html(premium_role_id or '')}" />
-            <label class="mt-10 block">Coach Premium+ role ID {premium_badge_html}</label>
-            <input name="role_coach_premium_plus_id" {premium_tiers_disabled_attr} class="w-full mt-6" value="{_escape_html(premium_plus_role_id or '')}" />
-            {premium_tiers_note}
-        """
+        coach_role_fields = [
+            {
+                "label": "Coach role",
+                "name": "role_coach_id",
+                "options": [],
+                "value": str(coach_role_id or ""),
+                "disabled": False,
+                "show_pro_badge": False,
+                "pro_badge_class": premium_badge_class,
+            },
+            {
+                "label": "Coach Premium role",
+                "name": "role_coach_premium_id",
+                "options": [],
+                "value": str(premium_role_id or ""),
+                "disabled": not premium_tiers_enabled,
+                "show_pro_badge": True,
+                "pro_badge_class": premium_badge_class,
+            },
+            {
+                "label": "Coach Premium+ role",
+                "name": "role_coach_premium_plus_id",
+                "options": [],
+                "value": str(premium_plus_role_id or ""),
+                "disabled": not premium_tiers_enabled,
+                "show_pro_badge": True,
+                "pro_badge_class": premium_badge_class,
+            },
+        ]
 
     selected_channels: dict[str, int | None] = {
         field: _parse_int(cfg.get(field)) for field, _label in GUILD_CHANNEL_FIELDS
     }
 
+    channel_fields: list[dict[str, Any]] = []
     if channels:
         categories: dict[int, str] = {}
         channel_labels: dict[int, str] = {}
@@ -2288,54 +2254,62 @@ async def guild_settings_page(request: web.Request) -> web.Response:
             valid_channel_ids.add(cid)
             channel_labels[cid] = display
 
-        def _channel_options(selected_id: int | None) -> str:
-            default_selected = "selected" if selected_id is None else ""
-            option_lines = [f"<option value=\"\" {default_selected}>(Use default)</option>"]
+        def _channel_options(selected_id: int | None) -> list[dict[str, Any]]:
+            default_selected = selected_id is None
+            option_lines = [
+                {
+                    "value": "",
+                    "label": "(Use default)",
+                    "selected": default_selected,
+                    "disabled": False,
+                }
+            ]
             if selected_id is not None and selected_id not in valid_channel_ids:
                 option_lines.append(
-                    f"<option value=\"{selected_id}\" selected>(missing id: {selected_id})</option>"
+                    {
+                        "value": selected_id,
+                        "label": f"(missing id: {selected_id})",
+                        "selected": True,
+                        "disabled": False,
+                    }
                 )
             for cid, label in sorted(channel_labels.items(), key=lambda kv: kv[1].lower()):
-                selected = "selected" if cid == selected_id else ""
                 option_lines.append(
-                    f"<option value=\"{cid}\" {selected}>{_escape_html(label)}</option>"
+                    {
+                        "value": cid,
+                        "label": label,
+                        "selected": cid == selected_id,
+                        "disabled": False,
+                    }
                 )
-            return "\n".join(option_lines)
+            return option_lines
 
-        channel_controls: list[str] = ['<h3 class="mt-14">Channels</h3>']
         for field, label in GUILD_CHANNEL_FIELDS:
             selected_id = selected_channels.get(field)
-            channel_controls.append(f"<label>{_escape_html(label)}</label><br/>")
-            channel_controls.append(
-                f"<select name=\"{field}\" class=\"w-full mt-6\">{_channel_options(selected_id)}</select>"
+            channel_fields.append(
+                {
+                    "label": label,
+                    "name": field,
+                    "options": _channel_options(selected_id),
+                    "value": str(selected_id or ""),
+                }
             )
-        channels_control_html = "\n".join(channel_controls)
     else:
-        channel_controls = ['<h3 class="mt-14">Channels</h3>']
         for field, label in GUILD_CHANNEL_FIELDS:
             selected_id = selected_channels.get(field)
-            channel_controls.append(f"<label>{_escape_html(label)} ID</label><br/>")
-            channel_controls.append(
-                f"<input name=\"{field}\" class=\"w-full mt-6\" value=\"{_escape_html(selected_id or '')}\" />"
+            channel_fields.append(
+                {
+                    "label": label,
+                    "name": field,
+                    "options": [],
+                    "value": str(selected_id or ""),
+                }
             )
-        channels_control_html = "\n".join(channel_controls)
+
+    channels_available = bool(channels)
 
     premium_pin_enabled = _parse_bool(cfg.get(PREMIUM_COACHES_PIN_ENABLED_KEY))
-    premium_pin_checked = "checked" if premium_pin_enabled else ""
-    premium_report_disabled_attr = "disabled" if not premium_report_enabled else ""
-    premium_report_note = (
-        f"<p class='muted'><span class=\"badge warn\">LOCKED</span> Premium Coaches report controls require Pro. <a href=\"{_escape_html(upgrade_href)}\">Upgrade</a></p>"
-        if not premium_report_enabled
-        else ""
-    )
     premium_report_badge_class = "pro" if premium_report_enabled else "warn"
-    premium_report_badge_html = f"<span class='badge {premium_report_badge_class} inline'>PRO</span>"
-    premium_pin_control_html = f"""
-            <h3 class="mt-14">Premium Coaches {premium_report_badge_html}</h3>
-            <label><input type="checkbox" name="{PREMIUM_COACHES_PIN_ENABLED_KEY}" value="1" {premium_pin_checked} {premium_report_disabled_attr} /> Pin listing message</label>
-            <p class="muted">Pins the bot's Premium Coaches listing message in the Premium Coaches channel (requires Manage Messages).</p>
-            {premium_report_note}
-        """
 
     fc25_value = cfg.get(FC25_STATS_ENABLED_KEY)
     if fc25_value is True:
@@ -2345,87 +2319,48 @@ async def guild_settings_page(request: web.Request) -> web.Response:
     else:
         fc25_selected = "default"
 
-    selected_default = "selected" if fc25_selected == "default" else ""
-    selected_true = "selected" if fc25_selected == "true" else ""
-    selected_false = "selected" if fc25_selected == "false" else ""
-    fc25_disabled_attr = "disabled" if not fc25_stats_enabled else ""
-    fc25_note = (
-        f"<p class='muted'><span class=\"badge warn\">LOCKED</span> FC25 stats controls require Pro. <a href=\"{_escape_html(upgrade_href)}\">Upgrade</a></p>"
-        if not fc25_stats_enabled
-        else ""
-    )
+    fc25_options = [
+        {"value": "default", "label": "Default", "selected": fc25_selected == "default"},
+        {"value": "true", "label": "Enabled", "selected": fc25_selected == "true"},
+        {"value": "false", "label": "Disabled", "selected": fc25_selected == "false"},
+    ]
     fc25_badge_class = "pro" if fc25_stats_enabled else "warn"
-    fc25_badge_html = f"<span class='badge {fc25_badge_class} inline'>PRO</span>"
 
-    pro_callout_html = ""
-    if not is_pro:
-        pro_callout_html = f"""
-      <div class="card callout">
-        <div>
-          <div class="title-row">
-            <span class="badge warn">PRO</span>
-            <strong>Premium features locked</strong>
-          </div>
-          <p class="muted spacer-sm">Premium coach tiers, Premium Coaches report, and FC25 stats are available on the Pro plan.</p>
-        </div>
-        <div class="btn-group">
-          <a class="btn blue" href="{_escape_html(upgrade_href)}">Upgrade</a>
-          <a class="btn secondary" href="/app/billing?guild_id={guild_id}">Billing</a>
-        </div>
-      </div>
-    """
+    saved = bool(request.query.get("saved", "").strip())
+    config_rows = [
+        {"key": str(k), "value": str(v)}
+        for k, v in sorted(cfg.items(), key=lambda item: str(item[0]))
+    ]
 
-    invite_href = _invite_url(settings, guild_id=str(guild_id), disable_guild_select=True)
-    saved = request.query.get("saved", "").strip()
-    message_html = "<p class='muted'>Saved.</p>" if saved else ""
+    content = render(
+        "pages/dashboard/guild_settings.html",
+        installed=installed,
+        guild_id=guild_id,
+        invite_href=invite_href,
+        csrf_token=session.csrf_token,
+        metadata_error=metadata_error,
+        roles_available=roles_available,
+        channels_available=channels_available,
+        staff_role_options=staff_role_options,
+        staff_role_ids_csv=staff_role_ids_value,
+        coach_role_fields=coach_role_fields,
+        channel_fields=channel_fields,
+        premium_tiers_enabled=premium_tiers_enabled,
+        premium_badge_class=premium_badge_class,
+        premium_report_enabled=premium_report_enabled,
+        premium_report_badge_class=premium_report_badge_class,
+        premium_pin_enabled=premium_pin_enabled,
+        premium_pin_disabled=not premium_report_enabled,
+        premium_pin_key=PREMIUM_COACHES_PIN_ENABLED_KEY,
+        fc25_options=fc25_options,
+        fc25_disabled=not fc25_stats_enabled,
+        fc25_badge_class=fc25_badge_class,
+        upgrade_href=upgrade_href,
+        saved=saved,
+        show_pro_callout=not is_pro,
+        config_rows=config_rows,
+    )
 
-    rows = "\n".join(
-        f"<tr><td><code>{_escape_html(k)}</code></td><td><code>{_escape_html(v)}</code></td></tr>"
-        for k, v in sorted(cfg.items())
-    ) or "<tr><td colspan='2' class='muted'>No config found yet (bot may not be installed).</td></tr>"
-
-    body = f"""
-      <p><a href="/app">&larr; Back</a></p>
-      <h1>Guild Settings</h1>
-      <div class="row">
-        <div class="card">
-          <div><strong>Guild</strong></div>
-          <div class="muted">ID: <code>{guild_id}</code></div>
-          <div class="mt-10">
-            <a class="btn blue" href="{invite_href}">Invite bot to this server</a>
-          </div>
-        </div>
-      </div>
-      {message_html}
-      {pro_callout_html}
-      <div class="row">
-         <div class="card">
-        <h2 class="mt-0">Access</h2>
-           <form method="post" action="/guild/{guild_id}/settings">
-             <input type="hidden" name="csrf" value="{session.csrf_token}" />
-             {metadata_warning_html}
-              {staff_roles_control_html}
-              {coach_roles_control_html}
-               {channels_control_html}
-               {premium_pin_control_html}
-               <label>FC25 stats override {fc25_badge_html}</label><br/>
-               <select name="fc25_stats_enabled" {fc25_disabled_attr} class="w-full mt-6">
-                 <option value="default" {selected_default}>Default</option>
-                 <option value="true" {selected_true}>Enabled</option>
-                <option value="false" {selected_false}>Disabled</option>
-             </select>
-             {fc25_note}
-              <div class="mt-12">
-               <button class="btn" type="submit">Save</button>
-             </div>
-           </form>
-        </div>
-        <div class="card">
-          <h2 class="mt-0">Current Config</h2>
-          <table><thead><tr><th>key</th><th>value</th></tr></thead><tbody>{rows}</tbody></table>
-        </div>
-      </div>
-    """
     return web.Response(
         text=_html_page(
             title="Guild Settings",
@@ -2435,7 +2370,7 @@ async def guild_settings_page(request: web.Request) -> web.Response:
                 section="settings",
                 selected_guild_id=guild_id,
                 installed=installed,
-                content=body,
+                content=content,
             ),
         ),
         content_type="text/html",
@@ -2601,6 +2536,7 @@ async def guild_settings_save(request: web.Request) -> web.Response:
 async def guild_page(request: web.Request) -> web.Response:
     session = _require_session(request)
     settings: Settings = request.app["settings"]
+    from offside_bot.web_templates import render
 
     guild_id_str = request.match_info["guild_id"]
     guild_id = _require_owned_guild(session, settings=settings, path=request.path_qs, guild_id=guild_id_str)
@@ -2608,43 +2544,30 @@ async def guild_page(request: web.Request) -> web.Response:
     installed, _install_error = await _detect_bot_installed(request, guild_id=guild_id)
     analytics = get_guild_analytics(settings, guild_id=guild_id)
     plan = entitlements_service.get_guild_plan(settings, guild_id=guild_id)
-    plan_badge = f"<span class='badge {plan}'>{_escape_html(plan.upper())}</span>"
 
-    count_rows = "\n".join(
-        f"<tr><td><code>{rt}</code></td><td>{count}</td></tr>"
+    record_counts = [
+        {"record_type": rt, "count": count}
         for rt, count in sorted(analytics.record_type_counts.items())
-    )
-    collection_rows = "\n".join(
-        f"<tr><td><code>{name}</code></td><td>{info.get('count')}</td></tr>"
+    ]
+    collection_counts = [
+        {"collection": name, "count": info.get("count")}
         for name, info in sorted(analytics.collections.items())
-    )
+    ]
 
-    body = f"""
-      <p><a href="/app">&larr; Back</a></p>
-      <h1>Guild Analytics</h1>
-      <div class="row">
-        <div class="card">
-          <div><strong>Guild</strong></div>
-          <div class="muted">ID: <code>{guild_id}</code> &bull; Plan: {plan_badge}</div>
-          <div class="muted">MongoDB DB: <code>{analytics.db_name}</code></div>
-          <div class="muted">Generated: {analytics.generated_at.isoformat()}</div>
-          <div class="mt-10"><a href="/api/guild/{guild_id}/analytics.json">Download JSON</a></div>
-          <div class="mt-10"><a class="btn secondary" href="/guild/{guild_id}/settings">Settings</a></div>
-          <div class="mt-10"><a class="btn secondary" href="/guild/{guild_id}/permissions">Permissions</a></div>
-          <div class="mt-10"><a class="btn secondary" href="/guild/{guild_id}/audit">Audit Log</a></div>
-        </div>
-      </div>
-      <div class="row">
-        <div class="card">
-          <h2 class="mt-0">Record Types</h2>
-          <table><thead><tr><th>record_type</th><th>count</th></tr></thead><tbody>{count_rows}</tbody></table>
-        </div>
-        <div class="card">
-          <h2 class="mt-0">Collections</h2>
-          <table><thead><tr><th>collection</th><th>count</th></tr></thead><tbody>{collection_rows}</tbody></table>
-        </div>
-      </div>
-    """
+    content = render(
+        "pages/dashboard/guild_analytics.html",
+        guild_id=guild_id,
+        plan_label=str(plan).upper(),
+        plan_class=str(plan),
+        db_name=analytics.db_name,
+        generated_at=analytics.generated_at.isoformat(),
+        analytics_json_href=f"/api/guild/{guild_id}/analytics.json",
+        settings_href=f"/guild/{guild_id}/settings",
+        permissions_href=f"/guild/{guild_id}/permissions",
+        audit_href=f"/guild/{guild_id}/audit",
+        record_counts=record_counts,
+        collection_counts=collection_counts,
+    )
     return web.Response(
         text=_html_page(
             title="Guild Analytics",
@@ -2654,7 +2577,7 @@ async def guild_page(request: web.Request) -> web.Response:
                 section="analytics",
                 selected_guild_id=guild_id,
                 installed=installed,
-                content=body,
+                content=content,
             ),
         ),
         content_type="text/html",
@@ -2697,6 +2620,7 @@ async def _channel_has_recent_bot_message(
 async def guild_overview_page(request: web.Request) -> web.Response:
     session = _require_session(request)
     settings: Settings = request.app["settings"]
+    from offside_bot.web_templates import render
 
     guild_id_str = request.match_info["guild_id"]
     guild_id = _require_owned_guild(session, settings=settings, path=request.path_qs, guild_id=guild_id_str)
@@ -2738,27 +2662,17 @@ async def guild_overview_page(request: web.Request) -> web.Response:
         if cid is not None:
             channel_ids.add(cid)
 
-    def _badge(label: str, kind: str) -> str:
-        return f"<span class='badge {kind}'>{_escape_html(label)}</span>"
+    def _status(label: str, kind: str) -> dict[str, str]:
+        return {"label": label, "kind": kind}
 
-    def _check_row(*, name: str, status: str, details: str, href: str) -> str:
-        return (
-            "<tr>"
-            f"<td><strong>{_escape_html(name)}</strong></td>"
-            f"<td>{status}</td>"
-            f"<td class='muted'>{_escape_html(details)}</td>"
-            f"<td><a href=\"{_escape_html(href)}\">Fix</a></td>"
-            "</tr>"
-        )
-
-    install_status = _badge("OK", "ok") if installed is True else _badge("WARN", "warn")
+    install_status = _status("OK", "ok") if installed is True else _status("WARN", "warn")
     install_details = "Installed and reachable via bot token."
     install_fix = f"/guild/{guild_id}/settings"
     if installed is False:
         install_details = install_error or "Bot is not installed in this server yet."
         install_fix = invite_href
     elif installed is None:
-        install_status = _badge("UNKNOWN", "warn")
+        install_status = _status("UNKNOWN", "warn")
         install_details = install_error or "Unable to verify install status."
         install_fix = f"/guild/{guild_id}/permissions"
 
@@ -2771,25 +2685,25 @@ async def guild_overview_page(request: web.Request) -> web.Response:
         elif roles and value not in roles_by_id:
             missing_roles_in_discord.append(field)
 
-    roles_status = _badge("OK", "ok")
+    roles_status = _status("OK", "ok")
     roles_details = "All required coach roles are configured."
     if config_error:
-        roles_status = _badge("UNKNOWN", "warn")
+        roles_status = _status("UNKNOWN", "warn")
         roles_details = f"Settings unavailable: {config_error}"
     elif installed is not True:
-        roles_status = _badge("WARN", "warn")
+        roles_status = _status("WARN", "warn")
         roles_details = "Install the bot to validate roles."
     elif metadata_error:
-        roles_status = _badge("UNKNOWN", "warn")
+        roles_status = _status("UNKNOWN", "warn")
         roles_details = f"Unable to load Discord roles: {metadata_error}"
     elif missing_role_fields or missing_roles_in_discord:
-        roles_status = _badge("WARN", "warn")
+        roles_status = _status("WARN", "warn")
         parts: list[str] = []
         if missing_role_fields:
             parts.append(f"Missing in settings: {', '.join(missing_role_fields)}")
         if missing_roles_in_discord:
             parts.append(f"Not found in Discord: {', '.join(missing_roles_in_discord)}")
-        roles_details = " · ".join(parts) or "Roles are not fully configured."
+        roles_details = " / ".join(parts) or "Roles are not fully configured."
 
     required_channel_fields = [
         (field, label)
@@ -2805,38 +2719,38 @@ async def guild_overview_page(request: web.Request) -> web.Response:
         elif channels and value not in channel_ids:
             missing_channels_in_discord.append(field)
 
-    channels_status = _badge("OK", "ok")
+    channels_status = _status("OK", "ok")
     channels_details = "All required channels are configured."
     if config_error:
-        channels_status = _badge("UNKNOWN", "warn")
+        channels_status = _status("UNKNOWN", "warn")
         channels_details = f"Settings unavailable: {config_error}"
     elif installed is not True:
-        channels_status = _badge("WARN", "warn")
+        channels_status = _status("WARN", "warn")
         channels_details = "Install the bot to validate channels."
     elif metadata_error:
-        channels_status = _badge("UNKNOWN", "warn")
+        channels_status = _status("UNKNOWN", "warn")
         channels_details = f"Unable to load Discord channels: {metadata_error}"
     elif missing_channel_fields or missing_channels_in_discord:
-        channels_status = _badge("WARN", "warn")
+        channels_status = _status("WARN", "warn")
         parts = []
         if missing_channel_fields:
             parts.append(f"Missing in settings: {', '.join(missing_channel_fields)}")
         if missing_channels_in_discord:
             parts.append(f"Not found in Discord: {', '.join(missing_channels_in_discord)}")
-        channels_details = " · ".join(parts) or "Channels are not fully configured."
+        channels_details = " / ".join(parts) or "Channels are not fully configured."
 
-    posts_status = _badge("OK", "ok")
+    posts_status = _status("OK", "ok")
     posts_details = "Dashboard and listing embeds detected."
     if config_error:
-        posts_status = _badge("UNKNOWN", "warn")
+        posts_status = _status("UNKNOWN", "warn")
         posts_details = f"Settings unavailable: {config_error}"
     elif installed is not True:
-        posts_status = _badge("WARN", "warn")
+        posts_status = _status("WARN", "warn")
         posts_details = "Install the bot to validate posted embeds."
     else:
         http = request.app.get("http")
         if not isinstance(http, ClientSession):
-            posts_status = _badge("UNKNOWN", "warn")
+            posts_status = _status("UNKNOWN", "warn")
             posts_details = "Dashboard HTTP client is not ready yet."
         else:
             bot_user_id = int(settings.discord_application_id)
@@ -2876,43 +2790,41 @@ async def guild_overview_page(request: web.Request) -> web.Response:
                         posts_details = f"Unable to read messages in some channels: {err}"
 
             if missing_config:
-                posts_status = _badge("WARN", "warn")
+                posts_status = _status("WARN", "warn")
                 posts_details = f"Missing channel settings: {', '.join(missing_config)}"
             elif unknown_posts:
-                posts_status = _badge("UNKNOWN", "warn")
+                posts_status = _status("UNKNOWN", "warn")
                 posts_details = "Unable to verify some channels (missing Read Message History?)."
             elif missing_posts:
-                posts_status = _badge("WARN", "warn")
+                posts_status = _status("WARN", "warn")
                 posts_details = f"Missing embeds in: {', '.join(missing_posts)}"
 
-    checks = "\n".join(
-        [
-            _check_row(
-                name="Bot installed",
-                status=install_status,
-                details=install_details,
-                href=install_fix,
-            ),
-            _check_row(
-                name="Coach roles",
-                status=roles_status,
-                details=roles_details,
-                href=f"/guild/{guild_id}/settings",
-            ),
-            _check_row(
-                name="Channels",
-                status=channels_status,
-                details=channels_details,
-                href=f"/guild/{guild_id}/settings",
-            ),
-            _check_row(
-                name="Portals posted",
-                status=posts_status,
-                details=posts_details,
-                href=f"/guild/{guild_id}/ops",
-            ),
-        ]
-    )
+    checks = [
+        {
+            "name": "Bot installed",
+            "status": install_status,
+            "details": install_details,
+            "fix_href": install_fix,
+        },
+        {
+            "name": "Coach roles",
+            "status": roles_status,
+            "details": roles_details,
+            "fix_href": f"/guild/{guild_id}/settings",
+        },
+        {
+            "name": "Channels",
+            "status": channels_status,
+            "details": channels_details,
+            "fix_href": f"/guild/{guild_id}/settings",
+        },
+        {
+            "name": "Portals posted",
+            "status": posts_status,
+            "details": posts_details,
+            "fix_href": f"/guild/{guild_id}/ops",
+        },
+    ]
 
     db_name = "not_configured"
     submissions_display = "—"
@@ -2931,63 +2843,24 @@ async def guild_overview_page(request: web.Request) -> web.Response:
         except Exception:
             approvals_display = "0"
 
-    disabled_attr = "disabled" if installed is False else ""
-    actions_block = ""
-    if not settings.mongodb_uri:
-        actions_block = "<div class='card'><p class='muted'>MongoDB is not configured; ops actions are unavailable.</p></div>"
-    else:
-        actions_block = f"""
-          <div class="card">
-            <div><strong>Quick actions</strong></div>
-            <div class="muted mt-8">Run setup and repost portals from the bot worker.</div>
-            <div class="flex gap-10 flex-wrap mt-10">
-              <form method="post" action="/api/guild/{guild_id}/ops/run_setup">
-                <input type="hidden" name="csrf" value="{_escape_html(session.csrf_token)}" />
-                <button class="btn" type="submit" {disabled_attr}>Run setup now</button>
-              </form>
-              <form method="post" action="/api/guild/{guild_id}/ops/repost_portals">
-                <input type="hidden" name="csrf" value="{_escape_html(session.csrf_token)}" />
-                <button class="btn secondary" type="submit" {disabled_attr}>Repost portals</button>
-              </form>
-              <a class="btn secondary" href="/guild/{guild_id}/settings">Open settings</a>
-            </div>
-          </div>
-        """
+    metrics = [
+        {"label": "Roster submissions", "value": submissions_display},
+        {"label": "Approvals", "value": approvals_display},
+        {"label": "Tournaments created", "value": tournaments_display},
+    ]
 
-    body = f"""
-      <h1 class="mt-0">Overview</h1>
-      <div class="row">
-        <div class="card">
-          <div><strong>Guild</strong></div>
-          <div class="muted">ID: <code>{guild_id}</code></div>
-          <div class="muted">MongoDB DB: <code>{_escape_html(db_name)}</code></div>
-          <div class="muted">Test mode: <code>{'true' if settings.test_mode else 'false'}</code></div>
-        </div>
-        {actions_block}
-      </div>
-      <div class="card">
-        <h2 class="mt-0">Setup checklist</h2>
-        <table>
-          <thead><tr><th>item</th><th>status</th><th>details</th><th></th></tr></thead>
-          <tbody>{checks}</tbody>
-        </table>
-      </div>
-      <div class="row">
-        <div class="card">
-          <div class="muted">Roster submissions</div>
-          <div class="text-xxl font-800">{_escape_html(submissions_display)}</div>
-        </div>
-        <div class="card">
-          <div class="muted">Approvals</div>
-          <div class="text-xxl font-800">{_escape_html(approvals_display)}</div>
-        </div>
-        <div class="card">
-          <div class="muted">Tournaments created</div>
-          <div class="text-xxl font-800">{_escape_html(tournaments_display)}</div>
-        </div>
-      </div>
-      <p class="muted">Need help? Use the Permissions and Ops pages to troubleshoot setup.</p>
-    """
+    content = render(
+        "pages/dashboard/guild_overview.html",
+        guild_id=guild_id,
+        db_name=db_name,
+        test_mode="true" if settings.test_mode else "false",
+        checks=checks,
+        metrics=metrics,
+        mongodb_configured=bool(settings.mongodb_uri),
+        actions_disabled=installed is False,
+        csrf_token=session.csrf_token,
+        settings_href=f"/guild/{guild_id}/settings",
+    )
 
     return web.Response(
         text=_html_page(
@@ -2998,7 +2871,7 @@ async def guild_overview_page(request: web.Request) -> web.Response:
                 section="overview",
                 selected_guild_id=guild_id,
                 installed=installed,
-                content=body,
+                content=content,
             ),
         ),
         content_type="text/html",
@@ -3008,6 +2881,7 @@ async def guild_overview_page(request: web.Request) -> web.Response:
 async def guild_setup_wizard_page(request: web.Request) -> web.Response:
     session = _require_session(request)
     settings: Settings = request.app["settings"]
+    from offside_bot.web_templates import render
 
     guild_id_str = request.match_info["guild_id"]
     guild_id = _require_owned_guild(session, settings=settings, path=request.path_qs, guild_id=guild_id_str)
@@ -3051,25 +2925,15 @@ async def guild_setup_wizard_page(request: web.Request) -> web.Response:
         if cid is not None:
             channel_ids.add(cid)
 
-    def _badge(label: str, kind: str) -> str:
-        return f"<span class='badge {kind}'>{_escape_html(label)}</span>"
-
-    def _step_row(*, step: str, status: str, details: str, action_html: str) -> str:
-        return (
-            "<tr>"
-            f"<td><strong>{_escape_html(step)}</strong></td>"
-            f"<td>{status}</td>"
-            f"<td class='muted'>{_escape_html(details)}</td>"
-            f"<td>{action_html}</td>"
-            "</tr>"
-        )
+    def _status(label: str, kind: str) -> dict[str, str]:
+        return {"label": label, "kind": kind}
 
     # Step 1: Permissions (quick summary; full details on /permissions)
-    perms_status = _badge("UNKNOWN", "warn")
+    perms_status = _status("UNKNOWN", "warn")
     perms_details = "Unable to verify bot permissions."
     perms_ok = False
     if installed is False:
-        perms_status = _badge("WARN", "warn")
+        perms_status = _status("WARN", "warn")
         perms_details = install_error or "Bot is not installed in this server yet."
     elif installed is True:
         http = request.app.get("http")
@@ -3102,14 +2966,14 @@ async def guild_setup_wizard_page(request: web.Request) -> web.Response:
 
                 if is_admin or not missing_required:
                     perms_ok = True
-                    perms_status = _badge("OK", "ok")
+                    perms_status = _status("OK", "ok")
                     perms_details = (
                         "Required permissions are present."
                         if not missing_optional
                         else f"Missing optional: {', '.join(missing_optional)}"
                     )
                 else:
-                    perms_status = _badge("WARN", "warn")
+                    perms_status = _status("WARN", "warn")
                     perms_details = f"Missing: {', '.join(missing_required)}"
 
     # Step 2: Channels + categories
@@ -3130,25 +2994,25 @@ async def guild_setup_wizard_page(request: web.Request) -> web.Response:
 
     channels_ok = False
     if config_error:
-        channels_status = _badge("UNKNOWN", "warn")
+        channels_status = _status("UNKNOWN", "warn")
         channels_details = f"Settings unavailable: {config_error}"
     elif installed is not True:
-        channels_status = _badge("WARN", "warn")
+        channels_status = _status("WARN", "warn")
         channels_details = "Install the bot to validate channels."
     elif metadata_error:
-        channels_status = _badge("UNKNOWN", "warn")
+        channels_status = _status("UNKNOWN", "warn")
         channels_details = f"Unable to load Discord channels: {metadata_error}"
     elif channels_missing_settings or channels_missing_discord:
-        channels_status = _badge("WARN", "warn")
+        channels_status = _status("WARN", "warn")
         parts: list[str] = []
         if channels_missing_settings:
             parts.append(f"Missing in settings: {', '.join(channels_missing_settings)}")
         if channels_missing_discord:
             parts.append(f"Not found in Discord: {', '.join(channels_missing_discord)}")
-        channels_details = " · ".join(parts) or "Channels are not ready."
+        channels_details = " / ".join(parts) or "Channels are not ready."
     else:
         channels_ok = True
-        channels_status = _badge("OK", "ok")
+        channels_status = _status("OK", "ok")
         channels_details = "Channels are configured."
 
     # Step 3: Roles
@@ -3171,35 +3035,35 @@ async def guild_setup_wizard_page(request: web.Request) -> web.Response:
 
     roles_ok = False
     if config_error:
-        roles_status = _badge("UNKNOWN", "warn")
+        roles_status = _status("UNKNOWN", "warn")
         roles_details = f"Settings unavailable: {config_error}"
     elif installed is not True:
-        roles_status = _badge("WARN", "warn")
+        roles_status = _status("WARN", "warn")
         roles_details = "Install the bot to validate roles."
     elif metadata_error:
-        roles_status = _badge("UNKNOWN", "warn")
+        roles_status = _status("UNKNOWN", "warn")
         roles_details = f"Unable to load Discord roles: {metadata_error}"
     elif roles_missing_settings or roles_missing_discord:
-        roles_status = _badge("WARN", "warn")
+        roles_status = _status("WARN", "warn")
         parts = []
         if roles_missing_settings:
             parts.append(f"Missing in settings: {', '.join(roles_missing_settings)}")
         if roles_missing_discord:
             parts.append(f"Not found in Discord: {', '.join(roles_missing_discord)}")
-        roles_details = " · ".join(parts) or "Roles are not ready."
+        roles_details = " / ".join(parts) or "Roles are not ready."
     else:
         roles_ok = True
-        roles_status = _badge("OK", "ok")
+        roles_status = _status("OK", "ok")
         roles_details = "Roles are configured."
 
     # Step 4: Portals posted
     portals_ok = False
-    portals_status = _badge("UNKNOWN", "warn")
+    portals_status = _status("UNKNOWN", "warn")
     portals_details = "Unable to verify posted portals."
     if config_error:
         portals_details = f"Settings unavailable: {config_error}"
     elif installed is not True:
-        portals_status = _badge("WARN", "warn")
+        portals_status = _status("WARN", "warn")
         portals_details = "Install the bot to validate posted portals."
     else:
         http = request.app.get("http")
@@ -3243,141 +3107,98 @@ async def guild_setup_wizard_page(request: web.Request) -> web.Response:
                     unknown_posts.append(field)
 
             if missing_config:
-                portals_status = _badge("WARN", "warn")
+                portals_status = _status("WARN", "warn")
                 portals_details = f"Missing channel settings: {', '.join(missing_config)}"
             elif unknown_posts:
-                portals_status = _badge("UNKNOWN", "warn")
+                portals_status = _status("UNKNOWN", "warn")
                 portals_details = "Unable to verify some channels (missing Read Message History?)."
             elif missing_posts:
-                portals_status = _badge("WARN", "warn")
+                portals_status = _status("WARN", "warn")
                 portals_details = f"Missing embeds in: {', '.join(missing_posts)}"
             else:
                 portals_ok = True
-                portals_status = _badge("OK", "ok")
+                portals_status = _status("OK", "ok")
                 portals_details = "Portals/instructions detected."
 
     ready = bool(installed is True and perms_ok and channels_ok and roles_ok and portals_ok)
-    ready_badge = _badge("READY", "ok") if ready else _badge("NOT READY", "warn")
+    ready_status = _status("READY", "ok") if ready else _status("NOT READY", "warn")
     ready_details = "This server looks ready to use." if ready else "Complete the steps below to finish setup."
 
-    disabled_attr = "disabled" if installed is False or not settings.mongodb_uri else ""
+    actions_disabled = bool(installed is False or not settings.mongodb_uri)
 
-    tasks: list[dict[str, Any]] = []
+    tasks: list[dict[str, str]] = []
     tasks_error: str | None = None
     if settings.mongodb_uri:
         try:
-            tasks = list_ops_tasks(settings, guild_id=guild_id, limit=10)
+            raw_tasks = list_ops_tasks(settings, guild_id=guild_id, limit=10)
         except Exception as exc:
             tasks_error = str(exc)
-            tasks = []
+            raw_tasks = []
+        for task in raw_tasks:
+            created_at = task.get("created_at")
+            created = created_at.isoformat() if isinstance(created_at, datetime) else str(created_at or "")
+            tasks.append(
+                {
+                    "created": created,
+                    "action": str(task.get("action") or ""),
+                    "status": str(task.get("status") or ""),
+                }
+            )
 
-    task_rows: list[str] = []
-    for task in tasks:
-        created_at = task.get("created_at")
-        created = created_at.isoformat() if isinstance(created_at, datetime) else str(created_at or "")
-        action = str(task.get("action") or "")
-        status = str(task.get("status") or "")
-        task_rows.append(
-            "<tr>"
-            f"<td><code>{_escape_html(created)}</code></td>"
-            f"<td><code>{_escape_html(action)}</code></td>"
-            f"<td><code>{_escape_html(status)}</code></td>"
-            "</tr>"
-        )
-    tasks_table = (
-        "\n".join(task_rows)
-        if task_rows
-        else "<tr><td colspan='3' class='muted'>No recent ops tasks yet.</td></tr>"
+    steps = [
+        {
+            "title": "Step 1: Permissions",
+            "status": perms_status,
+            "details": perms_details,
+            "action_label": "Open",
+            "action_href": f"/guild/{guild_id}/permissions",
+        },
+        {
+            "title": "Step 2: Channels",
+            "status": channels_status,
+            "details": channels_details,
+            "action_label": "Review",
+            "action_href": f"/guild/{guild_id}/settings",
+        },
+        {
+            "title": "Step 3: Roles",
+            "status": roles_status,
+            "details": roles_details,
+            "action_label": "Review",
+            "action_href": f"/guild/{guild_id}/settings",
+        },
+        {
+            "title": "Step 4: Post portals",
+            "status": portals_status,
+            "details": portals_details,
+            "action_label": "Ops",
+            "action_href": f"/guild/{guild_id}/ops",
+        },
+        {
+            "title": "Step 5: Verify",
+            "status": _status("OK", "ok") if ready else _status("PENDING", "warn"),
+            "details": "Setup wizard complete." if ready else "Run setup and repost portals, then refresh.",
+            "action_label": "Overview",
+            "action_href": f"/guild/{guild_id}/overview",
+        },
+    ]
+
+    queued = bool(request.query.get("queued", "").strip())
+
+    content = render(
+        "pages/dashboard/guild_setup_wizard.html",
+        guild_id=guild_id,
+        plan_label=str(plan).upper(),
+        plan_class=str(plan),
+        ready_status=ready_status,
+        ready_details=ready_details,
+        actions_disabled=actions_disabled,
+        csrf_token=session.csrf_token,
+        steps=steps,
+        tasks=tasks,
+        tasks_error=tasks_error,
+        queued=queued,
     )
-    tasks_note = (
-        f"<p class='muted'>Tasks unavailable: <code>{_escape_html(tasks_error)}</code></p>" if tasks_error else ""
-    )
-
-    steps_table = "\n".join(
-        [
-            _step_row(
-                step="Step 1: Permissions",
-                status=perms_status,
-                details=perms_details,
-                action_html=f"<a href=\"/guild/{guild_id}/permissions\">Open</a>",
-            ),
-            _step_row(
-                step="Step 2: Channels",
-                status=channels_status,
-                details=channels_details,
-                action_html=f"<a href=\"/guild/{guild_id}/settings\">Review</a>",
-            ),
-            _step_row(
-                step="Step 3: Roles",
-                status=roles_status,
-                details=roles_details,
-                action_html=f"<a href=\"/guild/{guild_id}/settings\">Review</a>",
-            ),
-            _step_row(
-                step="Step 4: Post portals",
-                status=portals_status,
-                details=portals_details,
-                action_html=f"<a href=\"/guild/{guild_id}/ops\">Ops</a>",
-            ),
-            _step_row(
-                step="Step 5: Verify",
-                status=_badge("OK", "ok") if ready else _badge("PENDING", "warn"),
-                details="Setup wizard complete." if ready else "Run setup and repost portals, then refresh.",
-                action_html=f"<a href=\"/guild/{guild_id}/overview\">Overview</a>",
-            ),
-        ]
-    )
-
-    queued = request.query.get("queued", "").strip()
-    queued_msg = "<div class='card'><strong>Setup queued.</strong> Refresh this page in a few seconds.</div>" if queued else ""
-
-    body = f"""
-      <h1 class="mt-0">Setup Wizard</h1>
-      {queued_msg}
-      <div class="row">
-        <div class="card">
-          <div><strong>Status</strong></div>
-          <div class="mt-6">{ready_badge}</div>
-          <p class="muted mt-10">{_escape_html(ready_details)}</p>
-          <p class="muted">Plan: <span class="badge {plan}">{_escape_html(plan.upper())}</span></p>
-        </div>
-        <div class="card">
-          <div><strong>One-click setup</strong></div>
-          <p class="muted mt-8">Queues <code>run_setup</code> then <code>repost_portals</code> on the bot worker.</p>
-          <div class="flex gap-10 flex-wrap mt-10">
-            <form method="post" action="/api/guild/{guild_id}/ops/run_full_setup">
-              <input type="hidden" name="csrf" value="{_escape_html(session.csrf_token)}" />
-              <button class="btn blue" type="submit" {disabled_attr}>Run full setup</button>
-            </form>
-            <form method="post" action="/api/guild/{guild_id}/ops/run_setup">
-              <input type="hidden" name="csrf" value="{_escape_html(session.csrf_token)}" />
-              <button class="btn" type="submit" {disabled_attr}>Run setup</button>
-            </form>
-            <form method="post" action="/api/guild/{guild_id}/ops/repost_portals">
-              <input type="hidden" name="csrf" value="{_escape_html(session.csrf_token)}" />
-              <button class="btn secondary" type="submit" {disabled_attr}>Repost portals</button>
-            </form>
-          </div>
-          <p class="muted mt-10">If tasks don't run, check worker heartbeat on the Ops page.</p>
-        </div>
-      </div>
-      <div class="card">
-        <h2 class="mt-0">Steps</h2>
-        <table>
-          <thead><tr><th>step</th><th>status</th><th>details</th><th></th></tr></thead>
-          <tbody>{steps_table}</tbody>
-        </table>
-      </div>
-      <div class="card">
-        <h2 class="mt-0">Recent ops tasks</h2>
-        {tasks_note}
-        <table>
-          <thead><tr><th>created</th><th>action</th><th>status</th></tr></thead>
-          <tbody>{tasks_table}</tbody>
-        </table>
-        <p class="muted mt-10"><a href="/guild/{guild_id}/ops">Open Ops</a></p>
-      </div>
-    """
     return web.Response(
         text=_html_page(
             title="Setup Wizard",
@@ -3387,7 +3208,7 @@ async def guild_setup_wizard_page(request: web.Request) -> web.Response:
                 section="setup",
                 selected_guild_id=guild_id,
                 installed=installed,
-                content=body,
+                content=content,
             ),
         ),
         content_type="text/html",
@@ -3397,279 +3218,223 @@ async def guild_setup_wizard_page(request: web.Request) -> web.Response:
 async def guild_permissions_page(request: web.Request) -> web.Response:
     session = _require_session(request)
     settings: Settings = request.app["settings"]
+    from offside_bot.web_templates import render
 
     guild_id_str = request.match_info["guild_id"]
     guild_id = _require_owned_guild(session, settings=settings, path=request.path_qs, guild_id=guild_id_str)
 
     invite_href = _invite_url(settings, guild_id=str(guild_id), disable_guild_select=True)
     installed, install_error = await _detect_bot_installed(request, guild_id=guild_id)
-    if installed is False:
-        body = f"""
-          <p><a href="/guild/{guild_id}">&larr; Back</a></p>
-          <h1>Permissions Check</h1>
-          <div class="card">
-            <p class="muted">{_escape_html(install_error or 'Bot is not installed in this server yet.')}</p>
-            <div class="mt-10">
-              <a class="btn blue" href="{invite_href}">Invite bot to this server</a>
-            </div>
-          </div>
-        """
-        return web.Response(
-            text=_html_page(
-                title="Permissions",
-                body=_app_shell(
-                    settings=settings,
-                    session=session,
-                    section="permissions",
-                    selected_guild_id=guild_id,
-                    installed=installed,
-                    content=body,
-                ),
-            ),
-            content_type="text/html",
-        )
 
     roles: list[dict[str, Any]] = []
     channels: list[dict[str, Any]] = []
     metadata_error: str | None = None
-    try:
-        roles, channels = await _get_guild_discord_metadata(request, guild_id=guild_id)
-    except web.HTTPException as exc:
-        metadata_error = exc.text or str(exc)
-    except Exception as exc:
-        metadata_error = str(exc)
+    if installed is not False:
+        try:
+            roles, channels = await _get_guild_discord_metadata(request, guild_id=guild_id)
+        except web.HTTPException as exc:
+            metadata_error = exc.text or str(exc)
+        except Exception as exc:
+            metadata_error = str(exc)
 
-    http = request.app.get("http")
-    if not isinstance(http, ClientSession):
-        raise web.HTTPInternalServerError(text="Dashboard HTTP client is not ready yet.")
+    blocked_message: str | None = None
+    if installed is False:
+        blocked_message = install_error or "Bot is not installed in this server yet."
+    else:
+        http = request.app.get("http")
+        if not isinstance(http, ClientSession):
+            raise web.HTTPInternalServerError(text="Dashboard HTTP client is not ready yet.")
 
-    bot_user_id = int(settings.discord_application_id)
-    bot_member = await _fetch_guild_member(
-        http,
-        bot_token=settings.discord_token,
-        guild_id=guild_id,
-        user_id=bot_user_id,
-    )
-
-    if bot_member is None or not roles:
-        message = metadata_error or install_error or "Unable to load bot membership details."
-        body = f"""
-          <p><a href="/guild/{guild_id}">&larr; Back</a></p>
-          <h1>Permissions Check</h1>
-          <div class="card">
-            <p class="muted">{_escape_html(message)}</p>
-            <div class="mt-10">
-              <a class="btn blue" href="{invite_href}">Invite bot to this server</a>
-            </div>
-          </div>
-        """
-        return web.Response(
-            text=_html_page(
-                title="Permissions",
-                body=_app_shell(
-                    settings=settings,
-                    session=session,
-                    section="permissions",
-                    selected_guild_id=guild_id,
-                    installed=installed,
-                    content=body,
-                ),
-            ),
-            content_type="text/html",
+        bot_user_id = int(settings.discord_application_id)
+        bot_member = await _fetch_guild_member(
+            http,
+            bot_token=settings.discord_token,
+            guild_id=guild_id,
+            user_id=bot_user_id,
         )
 
-    roles_by_id: dict[int, dict[str, Any]] = {}
-    for role_doc in roles:
-        rid = _parse_int(role_doc.get("id"))
-        if rid is not None:
-            roles_by_id[rid] = role_doc
+        if bot_member is None or not roles:
+            blocked_message = metadata_error or install_error or "Unable to load bot membership details."
 
-    member_role_ids: set[int] = {guild_id}
-    member_roles_raw = bot_member.get("roles")
-    if isinstance(member_roles_raw, list):
-        for rid in member_roles_raw:
-            rid_int = _parse_int(rid)
-            if rid_int is not None:
-                member_role_ids.add(rid_int)
-
-    base_perms = _compute_base_permissions(roles_by_id=roles_by_id, role_ids=member_role_ids)
-    is_admin = bool(base_perms & PERM_ADMINISTRATOR)
-
-    required_guild_perms = [
-        ("Manage Channels", PERM_MANAGE_CHANNELS, "Create/repair Offside channels and categories."),
-        ("Manage Roles", PERM_MANAGE_ROLES, "Create/assign Coach tier roles."),
-        ("Manage Messages", PERM_MANAGE_MESSAGES, "Pin/unpin listings and clean up bot messages."),
-    ]
-    guild_rows = []
-    for name, bit, why in required_guild_perms:
-        ok = is_admin or bool(base_perms & bit)
-        status = "OK" if ok else "Missing"
-        guild_rows.append(
-            "<tr>"
-            f"<td>{_escape_html(name)}</td>"
-            f"<td><code>{status}</code></td>"
-            f"<td class='muted'>{_escape_html(why)}</td>"
-            "</tr>"
-        )
-    guild_table = "\n".join(guild_rows)
-
+    guild_permissions: list[dict[str, str]] = []
+    role_hierarchy: list[dict[str, str]] = []
+    channel_access: list[dict[str, str]] = []
     top_role_name = ""
     top_role_pos = 0
-    for rid in member_role_ids:
-        if rid == guild_id:
-            continue
-        role_doc = roles_by_id.get(rid) or {}
-        if not isinstance(role_doc, dict):
-            continue
-        pos = _parse_int(role_doc.get("position")) or 0
-        if pos > top_role_pos:
-            top_role_pos = pos
-            top_role_name = str(role_doc.get("name") or rid)
+    is_admin = False
 
-    cfg: dict[str, Any]
-    try:
-        cfg = get_guild_config(guild_id)
-    except Exception:
-        cfg = {}
-
-    def _best_role_id_by_name(name: str) -> int | None:
-        best_id = None
-        best_pos = -1
-        target = name.casefold()
+    if blocked_message is None:
+        roles_by_id: dict[int, dict[str, Any]] = {}
         for role_doc in roles:
-            if str(role_doc.get("name") or "").casefold() != target:
-                continue
             rid = _parse_int(role_doc.get("id"))
+            if rid is not None:
+                roles_by_id[rid] = role_doc
+
+        member_role_ids: set[int] = {guild_id}
+        member_roles_raw = bot_member.get("roles") if isinstance(bot_member, dict) else None
+        if isinstance(member_roles_raw, list):
+            for rid in member_roles_raw:
+                rid_int = _parse_int(rid)
+                if rid_int is not None:
+                    member_role_ids.add(rid_int)
+
+        base_perms = _compute_base_permissions(roles_by_id=roles_by_id, role_ids=member_role_ids)
+        is_admin = bool(base_perms & PERM_ADMINISTRATOR)
+
+        required_guild_perms = [
+            ("Manage Channels", PERM_MANAGE_CHANNELS, "Create/repair Offside channels and categories."),
+            ("Manage Roles", PERM_MANAGE_ROLES, "Create/assign Coach tier roles."),
+            ("Manage Messages", PERM_MANAGE_MESSAGES, "Pin/unpin listings and clean up bot messages."),
+        ]
+        for name, bit, why in required_guild_perms:
+            ok = is_admin or bool(base_perms & bit)
+            status = "OK" if ok else "Missing"
+            guild_permissions.append(
+                {
+                    "permission": name,
+                    "status": status,
+                    "why": why,
+                }
+            )
+
+        for rid in member_role_ids:
+            if rid == guild_id:
+                continue
+            role_doc = roles_by_id.get(rid) or {}
+            if not isinstance(role_doc, dict):
+                continue
             pos = _parse_int(role_doc.get("position")) or 0
-            if rid is not None and pos > best_pos:
-                best_id = rid
-                best_pos = pos
-        return best_id
+            if pos > top_role_pos:
+                top_role_pos = pos
+                top_role_name = str(role_doc.get("name") or rid)
 
-    coach_role_ids = [
-        ("Coach", _parse_int(cfg.get("role_coach_id")) or _best_role_id_by_name("Coach")),
-        ("Coach Premium", _parse_int(cfg.get("role_coach_premium_id")) or _best_role_id_by_name("Coach Premium")),
-        (
-            "Coach Premium+",
-            _parse_int(cfg.get("role_coach_premium_plus_id")) or _best_role_id_by_name("Coach Premium+"),
-        ),
-    ]
+        cfg: dict[str, Any]
+        try:
+            cfg = get_guild_config(guild_id)
+        except Exception:
+            cfg = {}
 
-    hierarchy_rows: list[str] = []
-    for label, rid in coach_role_ids:
-        if rid is None:
-            hierarchy_rows.append(
-                f"<tr><td>{_escape_html(label)}</td><td><code>Not configured</code></td><td class='muted'>Run setup to create roles.</td></tr>"
+        def _best_role_id_by_name(name: str) -> int | None:
+            best_id = None
+            best_pos = -1
+            target = name.casefold()
+            for role_doc in roles:
+                if str(role_doc.get("name") or "").casefold() != target:
+                    continue
+                rid = _parse_int(role_doc.get("id"))
+                pos = _parse_int(role_doc.get("position")) or 0
+                if rid is not None and pos > best_pos:
+                    best_id = rid
+                    best_pos = pos
+            return best_id
+
+        coach_role_ids = [
+            ("Coach", _parse_int(cfg.get("role_coach_id")) or _best_role_id_by_name("Coach")),
+            (
+                "Coach Premium",
+                _parse_int(cfg.get("role_coach_premium_id")) or _best_role_id_by_name("Coach Premium"),
+            ),
+            (
+                "Coach Premium+",
+                _parse_int(cfg.get("role_coach_premium_plus_id")) or _best_role_id_by_name("Coach Premium+"),
+            ),
+        ]
+
+        for label, rid in coach_role_ids:
+            if rid is None:
+                role_hierarchy.append(
+                    {
+                        "role": label,
+                        "status": "Not configured",
+                        "details": "Run setup to create roles.",
+                    }
+                )
+                continue
+            target_role = roles_by_id.get(rid)
+            if target_role is None:
+                role_hierarchy.append(
+                    {
+                        "role": label,
+                        "status": "Missing role",
+                        "details": f"Role ID {rid} not found.",
+                    }
+                )
+                continue
+            role_pos = _parse_int(target_role.get("position")) or 0
+            ok = top_role_pos > role_pos
+            status = "OK" if ok else "Bot role too low"
+            if not ok:
+                details = "Move the bot's role above the Coach roles in Server Settings -> Roles."
+            else:
+                details = (
+                    f"Bot top role: {top_role_name or 'unknown'} (pos {top_role_pos}); "
+                    f"Target: {str(target_role.get('name') or rid)} (pos {role_pos})"
+                )
+            role_hierarchy.append(
+                {
+                    "role": label,
+                    "status": status,
+                    "details": details,
+                }
             )
-            continue
-        target_role = roles_by_id.get(rid)
-        if target_role is None:
-            hierarchy_rows.append(
-                f"<tr><td>{_escape_html(label)}</td><td><code>Missing role</code></td><td class='muted'>Role ID <code>{rid}</code> not found.</td></tr>"
+
+        channels_by_id: dict[int, dict[str, Any]] = {}
+        for ch in channels:
+            cid = _parse_int(ch.get("id"))
+            if cid is not None:
+                channels_by_id[cid] = ch
+
+        required_channel_bits = [
+            ("View Channel", PERM_VIEW_CHANNEL),
+            ("Send Messages", PERM_SEND_MESSAGES),
+            ("Embed Links", PERM_EMBED_LINKS),
+            ("Read History", PERM_READ_MESSAGE_HISTORY),
+        ]
+        for field, label in GUILD_CHANNEL_FIELDS:
+            channel_id = _parse_int(cfg.get(field))
+            if channel_id is None:
+                continue
+            channel = channels_by_id.get(channel_id)
+            if channel is None:
+                channel_access.append(
+                    {
+                        "channel": label,
+                        "status": "Missing channel",
+                        "details": f"Channel ID {channel_id} not found.",
+                    }
+                )
+                continue
+            perms = _compute_channel_permissions(
+                base_perms=base_perms,
+                channel=channel,
+                guild_id=guild_id,
+                member_role_ids=member_role_ids,
+                member_id=bot_user_id,
             )
-            continue
-        role_pos = _parse_int(target_role.get("position")) or 0
-        ok = top_role_pos > role_pos
-        status = "OK" if ok else "Bot role too low"
-        details = (
-            f"Bot top role: <code>{_escape_html(top_role_name or 'unknown')}</code> (pos {top_role_pos}); "
-            f"Target: <code>{_escape_html(target_role.get('name') or rid)}</code> (pos {role_pos})"
-        )
-        hint = (
-            "Move the bot's role above the Coach roles in Server Settings &rarr; Roles."
-            if not ok
-            else details
-        )
-        hierarchy_rows.append(
-            "<tr>"
-            f"<td>{_escape_html(label)}</td>"
-            f"<td><code>{status}</code></td>"
-            f"<td class='muted'>{hint}</td>"
-            "</tr>"
-        )
-    hierarchy_table = "\n".join(hierarchy_rows)
-
-    channels_by_id: dict[int, dict[str, Any]] = {}
-    for ch in channels:
-        cid = _parse_int(ch.get("id"))
-        if cid is not None:
-            channels_by_id[cid] = ch
-
-    required_channel_bits = [
-        ("View Channel", PERM_VIEW_CHANNEL),
-        ("Send Messages", PERM_SEND_MESSAGES),
-        ("Embed Links", PERM_EMBED_LINKS),
-        ("Read History", PERM_READ_MESSAGE_HISTORY),
-    ]
-    channel_rows: list[str] = []
-    for field, label in GUILD_CHANNEL_FIELDS:
-        channel_id = _parse_int(cfg.get(field))
-        if channel_id is None:
-            continue
-        channel = channels_by_id.get(channel_id)
-        if channel is None:
-            channel_rows.append(
-                f"<tr><td>{_escape_html(label)}</td><td><code>Missing channel</code></td><td class='muted'>Channel ID <code>{channel_id}</code> not found.</td></tr>"
+            missing = [name for name, bit in required_channel_bits if not (is_admin or bool(perms & bit))]
+            status = "OK" if not missing else "Missing: " + ", ".join(missing)
+            channel_name = str(channel.get("name") or channel_id)
+            channel_access.append(
+                {
+                    "channel": label,
+                    "status": status,
+                    "details": f"#{channel_name} (ID {channel_id})",
+                }
             )
-            continue
-        perms = _compute_channel_permissions(
-            base_perms=base_perms,
-            channel=channel,
-            guild_id=guild_id,
-            member_role_ids=member_role_ids,
-            member_id=bot_user_id,
-        )
-        missing = [name for name, bit in required_channel_bits if not (is_admin or bool(perms & bit))]
-        status = "OK" if not missing else "Missing: " + ", ".join(missing)
-        channel_name = str(channel.get("name") or channel_id)
-        channel_rows.append(
-            "<tr>"
-            f"<td>{_escape_html(label)}</td>"
-            f"<td><code>{_escape_html(status)}</code></td>"
-            f"<td class='muted'>#{_escape_html(channel_name)} (<code>{channel_id}</code>)</td>"
-            "</tr>"
-        )
-    channel_table = "\n".join(channel_rows) or "<tr><td colspan='3' class='muted'>No channels configured yet.</td></tr>"
 
-    admin_badge = "<span class='badge pro'>ADMIN</span>" if is_admin else ""
-    body = f"""
-      <p><a href="/guild/{guild_id}">&larr; Back</a></p>
-      <h1>Permissions Check {admin_badge}</h1>
-      <div class="row">
-        <div class="card">
-          <div><strong>Guild</strong></div>
-          <div class="muted">ID: <code>{guild_id}</code></div>
-          <div class="muted">Bot top role: <code>{_escape_html(top_role_name or 'unknown')}</code> (pos {top_role_pos})</div>
-          <div class="mt-10">
-            <a class="btn secondary" href="/guild/{guild_id}/settings">Open settings</a>
-          </div>
-        </div>
-        <div class="card">
-          <div><strong>Fix steps</strong></div>
-          <div class="muted mt-8">
-            1) Server Settings &rarr; Roles: ensure the bot role has Manage Channels/Roles/Messages.<br/>
-            2) Drag the bot role above Coach roles (role hierarchy).<br/>
-            3) Channel settings: ensure the bot can View/Send/Embed/Read in Offside channels.
-          </div>
-          <div class="mt-10">
-            <a class="btn blue" href="{invite_href}">Re-invite with permissions</a>
-          </div>
-        </div>
-      </div>
-      <div class="card">
-        <h2 class="mt-0">Guild-level permissions</h2>
-        <table><thead><tr><th>permission</th><th>status</th><th>why</th></tr></thead><tbody>{guild_table}</tbody></table>
-      </div>
-      <div class="card">
-        <h2 class="mt-0">Role hierarchy</h2>
-        <table><thead><tr><th>role</th><th>status</th><th>details</th></tr></thead><tbody>{hierarchy_table}</tbody></table>
-      </div>
-      <div class="card">
-        <h2 class="mt-0">Configured channels access</h2>
-        <table><thead><tr><th>channel</th><th>status</th><th>details</th></tr></thead><tbody>{channel_table}</tbody></table>
-        <p class="muted mt-10">Only checks channels currently saved in guild settings.</p>
-      </div>
-    """
+    content = render(
+        "pages/dashboard/guild_permissions.html",
+        guild_id=guild_id,
+        invite_href=invite_href,
+        blocked_message=blocked_message,
+        is_admin=is_admin,
+        top_role_name=top_role_name,
+        top_role_pos=str(top_role_pos),
+        settings_href=f"/guild/{guild_id}/settings",
+        guild_permissions=guild_permissions,
+        role_hierarchy=role_hierarchy,
+        channel_access=channel_access,
+    )
     return web.Response(
         text=_html_page(
             title="Permissions",
@@ -3679,7 +3444,7 @@ async def guild_permissions_page(request: web.Request) -> web.Response:
                 section="permissions",
                 selected_guild_id=guild_id,
                 installed=installed,
-                content=body,
+                content=content,
             ),
         ),
         content_type="text/html",
@@ -3689,6 +3454,7 @@ async def guild_permissions_page(request: web.Request) -> web.Response:
 async def guild_audit_page(request: web.Request) -> web.Response:
     session = _require_session(request)
     settings: Settings = request.app["settings"]
+    from offside_bot.web_templates import render
 
     guild_id_str = request.match_info["guild_id"]
     guild_id = _require_owned_guild(session, settings=settings, path=request.path_qs, guild_id=guild_id_str)
@@ -3714,7 +3480,7 @@ async def guild_audit_page(request: web.Request) -> web.Response:
     except Exception as exc:
         raise web.HTTPInternalServerError(text=f"Failed to load audit events: {exc}") from exc
 
-    rows: list[str] = []
+    rows: list[dict[str, str]] = []
     for ev in events:
         created = ev.get("created_at")
         created_text = created.isoformat() if isinstance(created, datetime) else str(created or "")
@@ -3726,6 +3492,8 @@ async def guild_audit_page(request: web.Request) -> web.Response:
         actor_id = ev.get("actor_discord_id")
         if not actor and isinstance(actor_id, int):
             actor = str(actor_id)
+        if not actor:
+            actor = "?"
 
         details_raw = ev.get("details")
         details_text = ""
@@ -3739,36 +3507,24 @@ async def guild_audit_page(request: web.Request) -> web.Response:
             details_short = details_short[:237] + "..."
 
         rows.append(
-            "<tr>"
-            f"<td><code>{_escape_html(created_text)}</code></td>"
-            f"<td><code>{_escape_html(category)}</code></td>"
-            f"<td><code>{_escape_html(action)}</code></td>"
-            f"<td>{_escape_html(actor) or '&mdash;'}</td>"
-            f"<td><code>{_escape_html(source)}</code></td>"
-            f"<td title=\"{_escape_html(details_text)}\"><code>{_escape_html(details_short)}</code></td>"
-            "</tr>"
+            {
+                "created": created_text,
+                "category": category,
+                "action": action,
+                "actor": actor,
+                "source": source,
+                "details": details_short,
+                "details_full": details_text,
+            }
         )
 
-    table_body = "\n".join(rows) if rows else "<tr><td colspan='6' class='muted'>No events yet.</td></tr>"
-
-    body = f"""
-      <p><a href="/guild/{guild_id}">&larr; Back</a></p>
-      <h1>Audit Log</h1>
-      <div class="row">
-        <div class="card">
-          <div><strong>Guild</strong></div>
-          <div class="muted">ID: <code>{guild_id}</code></div>
-          <div class="muted">Showing latest: <code>{limit}</code></div>
-          <div class="mt-10"><a href="/guild/{guild_id}/audit.csv?limit={limit}">Download CSV</a></div>
-        </div>
-      </div>
-      <div class="card">
-        <table>
-          <thead><tr><th>created_at</th><th>category</th><th>action</th><th>actor</th><th>source</th><th>details</th></tr></thead>
-          <tbody>{table_body}</tbody>
-        </table>
-      </div>
-    """
+    content = render(
+        "pages/dashboard/guild_audit.html",
+        guild_id=guild_id,
+        limit=limit,
+        rows=rows,
+        download_href=f"/guild/{guild_id}/audit.csv?limit={limit}",
+    )
     return web.Response(
         text=_html_page(
             title="Audit Log",
@@ -3778,7 +3534,7 @@ async def guild_audit_page(request: web.Request) -> web.Response:
                 section="audit",
                 selected_guild_id=guild_id,
                 installed=installed,
-                content=body,
+                content=content,
             ),
         ),
         content_type="text/html",
@@ -3867,6 +3623,7 @@ async def guild_audit_csv(request: web.Request) -> web.Response:
 async def guild_ops_page(request: web.Request) -> web.Response:
     session = _require_session(request)
     settings: Settings = request.app["settings"]
+    from offside_bot.web_templates import render
 
     guild_id_str = request.match_info["guild_id"]
     guild_id = _require_owned_guild(session, settings=settings, path=request.path_qs, guild_id=guild_id_str)
@@ -3889,183 +3646,114 @@ async def guild_ops_page(request: web.Request) -> web.Response:
         )
 
     installed, install_error = await _detect_bot_installed(request, guild_id=guild_id)
-    if not settings.mongodb_uri:
-        body = """
-          <h1 class="mt-0">Ops</h1>
-          <div class="card"><p class="muted">MongoDB is not configured; ops tasks cannot be queued.</p></div>
-        """
-        return web.Response(
-            text=_html_page(
-                title="Ops",
-                body=_app_shell(
-                    settings=settings,
-                    session=session,
-                    section="ops",
-                    selected_guild_id=guild_id,
-                    installed=installed,
-                    content=body,
-                ),
-            ),
-            content_type="text/html",
-        )
+    mongodb_configured = bool(settings.mongodb_uri)
+    notices: list[dict[str, str]] = []
+    if installed is False and install_error:
+        notices.append({"title": "Install check", "text": install_error, "kind": "warn"})
 
-    heartbeat = get_worker_heartbeat(settings, worker="bot") or {}
-    updated_at = heartbeat.get("updated_at")
     heartbeat_text = "missing"
-    if isinstance(updated_at, datetime):
-        if updated_at.tzinfo is None:
-            updated_at = updated_at.replace(tzinfo=timezone.utc)
-        age = (datetime.now(timezone.utc) - updated_at).total_seconds()
-        heartbeat_text = f"{updated_at.isoformat()} (age={int(age)}s)"
+    if mongodb_configured:
+        heartbeat = get_worker_heartbeat(settings, worker="bot") or {}
+        updated_at = heartbeat.get("updated_at")
+        if isinstance(updated_at, datetime):
+            if updated_at.tzinfo is None:
+                updated_at = updated_at.replace(tzinfo=timezone.utc)
+            age = (datetime.now(timezone.utc) - updated_at).total_seconds()
+            heartbeat_text = f"{updated_at.isoformat()} (age={int(age)}s)"
 
-    tasks: list[dict[str, Any]] = []
+    tasks: list[dict[str, str]] = []
     tasks_error: str | None = None
-    try:
-        tasks = list_ops_tasks(settings, guild_id=guild_id, limit=25)
-    except Exception as exc:
-        tasks_error = str(exc)
-        tasks = []
-
-    task_rows: list[str] = []
-    for task in tasks:
-        created_at = task.get("created_at")
-        created = created_at.isoformat() if isinstance(created_at, datetime) else str(created_at or "")
-        started_at = task.get("started_at")
-        started = started_at.isoformat() if isinstance(started_at, datetime) else str(started_at or "")
-        finished_at = task.get("finished_at")
-        finished = finished_at.isoformat() if isinstance(finished_at, datetime) else str(finished_at or "")
-        action = str(task.get("action") or "")
-        status = str(task.get("status") or "")
-        requested_by = str(task.get("requested_by_username") or task.get("requested_by_discord_id") or "")
-        error = str(task.get("error") or "")
-        task_rows.append(
-            "<tr>"
-            f"<td><code>{_escape_html(created)}</code></td>"
-            f"<td><code>{_escape_html(action)}</code></td>"
-            f"<td><code>{_escape_html(status)}</code></td>"
-            f"<td>{_escape_html(requested_by)}</td>"
-            f"<td><code>{_escape_html(started)}</code></td>"
-            f"<td><code>{_escape_html(finished)}</code></td>"
-            f"<td class='muted'>{_escape_html(error)[:200]}</td>"
-            "</tr>"
-        )
-    tasks_table = (
-        "\n".join(task_rows)
-        if task_rows
-        else "<tr><td colspan='7' class='muted'>No ops tasks yet.</td></tr>"
-    )
+    if mongodb_configured:
+        try:
+            raw_tasks = list_ops_tasks(settings, guild_id=guild_id, limit=25)
+        except Exception as exc:
+            tasks_error = str(exc)
+            raw_tasks = []
+        for task in raw_tasks:
+            created_at = task.get("created_at")
+            created = created_at.isoformat() if isinstance(created_at, datetime) else str(created_at or "")
+            started_at = task.get("started_at")
+            started = started_at.isoformat() if isinstance(started_at, datetime) else str(started_at or "")
+            finished_at = task.get("finished_at")
+            finished = finished_at.isoformat() if isinstance(finished_at, datetime) else str(finished_at or "")
+            tasks.append(
+                {
+                    "created": created,
+                    "action": str(task.get("action") or ""),
+                    "status": str(task.get("status") or ""),
+                    "requested_by": str(task.get("requested_by_username") or task.get("requested_by_discord_id") or ""),
+                    "started": started,
+                    "finished": finished,
+                    "error": str(task.get("error") or ""),
+                }
+            )
+    if tasks_error:
+        notices.append({"title": "Tasks unavailable", "text": tasks_error, "kind": "warn"})
 
     grace_hours = max(0, int(GUILD_DATA_DELETE_GRACE_HOURS))
-    deletion_task: dict[str, Any] | None = None
-    deletion_task_error: str | None = None
-    try:
-        deletion_task = get_active_ops_task(
-            settings, guild_id=guild_id, action=OPS_TASK_ACTION_DELETE_GUILD_DATA
-        )
-    except Exception as exc:
-        deletion_task_error = str(exc)
-        deletion_task = None
-
-    deletion_note = ""
-    if deletion_task_error:
-        deletion_note = (
-            f"<p class='muted mt-8'>"
-            f"Deletion status unavailable: <code>{_escape_html(deletion_task_error)}</code>"
-            "</p>"
-        )
-
-    delete_card_body = ""
-    if not settings.mongodb_per_guild_db:
-        delete_card_body = (
-            "<p class='muted mt-8'>"
-            "<strong>Unavailable:</strong> Data deletion requires per-guild databases "
-            "(set <code>MONGODB_PER_GUILD_DB=true</code>).</p>"
-        )
-    elif deletion_task is not None:
-        status = str(deletion_task.get("status") or "").strip().lower()
-        run_after = deletion_task.get("run_after")
-        run_after_text = run_after.isoformat() if isinstance(run_after, datetime) else str(run_after or "")
-        if status == "queued":
-            when = f"<code>{_escape_html(run_after_text)}</code>" if run_after_text else "soon"
-            delete_card_body = (
-                "<p class='muted mt-8'>"
-                f"<strong>Deletion scheduled.</strong> This guild's stored data will be deleted {when}."
-                "</p>"
-                f"<form method='post' action='/api/guild/{guild_id}/ops/cancel_delete_data' class='mt-10'>"
-                f"<input type='hidden' name='csrf' value='{_escape_html(session.csrf_token)}' />"
-                "<button class='btn secondary' type='submit'>Cancel deletion</button>"
-                "</form>"
-            )
-        else:
-            delete_card_body = (
-                "<p class='muted mt-8'>"
-                f"<strong>Deletion task active.</strong> Status: <code>{_escape_html(status)}</code>."
-                "</p>"
-            )
+    deletion_state: dict[str, str] = {"mode": "disabled", "reason": ""}
+    deletion_note: str | None = None
+    if not mongodb_configured:
+        deletion_state = {
+            "mode": "disabled",
+            "reason": "MongoDB is not configured; ops tasks cannot be queued.",
+        }
+    elif not settings.mongodb_per_guild_db:
+        deletion_state = {
+            "mode": "disabled",
+            "reason": "Data deletion requires per-guild databases (set MONGODB_PER_GUILD_DB=true).",
+        }
     else:
-        run_after = datetime.now(timezone.utc) + timedelta(hours=grace_hours)
-        confirm_phrase = f"DELETE {guild_id}"
-        delete_card_body = (
-            "<p class='muted mt-8'>"
-            "<strong>Danger:</strong> Schedule an irreversible delete of this guild's stored data. "
-            f"Deletion runs after a {grace_hours}h grace period "
-            f"(scheduled for <code>{_escape_html(run_after.isoformat())}</code>)."
-            "</p>"
-            f"<form method='post' action='/api/guild/{guild_id}/ops/schedule_delete_data' class='mt-10'>"
-            f"<input type='hidden' name='csrf' value='{_escape_html(session.csrf_token)}' />"
-            f"<label class='muted' for='confirm_delete_{guild_id}'>Type <code>{_escape_html(confirm_phrase)}</code> to confirm</label>"
-            f"<input id='confirm_delete_{guild_id}' name='confirm' type='text' placeholder='{_escape_html(confirm_phrase)}' class='w-full mt-6' />"
-            "<button class='btn red mt-10' type='submit'>Schedule deletion</button>"
-            "</form>"
-        )
+        deletion_task: dict[str, Any] | None = None
+        deletion_task_error: str | None = None
+        try:
+            deletion_task = get_active_ops_task(
+                settings, guild_id=guild_id, action=OPS_TASK_ACTION_DELETE_GUILD_DATA
+            )
+        except Exception as exc:
+            deletion_task_error = str(exc)
+            deletion_task = None
 
-    disabled_attr = "disabled" if installed is False else ""
-    install_note = (
-        f"<div class='card'><p class='muted'>{_escape_html(install_error or '')}</p></div>"
-        if installed is False and install_error
-        else ""
+        if deletion_task_error:
+            deletion_note = deletion_task_error
+
+        if deletion_task is not None:
+            status = str(deletion_task.get("status") or "").strip().lower()
+            run_after = deletion_task.get("run_after")
+            run_after_text = run_after.isoformat() if isinstance(run_after, datetime) else str(run_after or "")
+            if status == "queued":
+                deletion_state = {
+                    "mode": "scheduled",
+                    "run_after_text": run_after_text,
+                }
+            else:
+                deletion_state = {
+                    "mode": "active",
+                    "status": status,
+                }
+        else:
+            run_after = datetime.now(timezone.utc) + timedelta(hours=grace_hours)
+            confirm_phrase = f"DELETE {guild_id}"
+            deletion_state = {
+                "mode": "ready",
+                "run_after_text": run_after.isoformat(),
+                "confirm_phrase": confirm_phrase,
+                "confirm_id": f"confirm_delete_{guild_id}",
+                "grace_hours": str(grace_hours),
+            }
+
+    content = render(
+        "pages/dashboard/guild_ops.html",
+        guild_id=guild_id,
+        notices=notices,
+        mongodb_configured=mongodb_configured,
+        heartbeat_text=heartbeat_text,
+        actions_disabled=installed is False,
+        csrf_token=session.csrf_token,
+        tasks=tasks,
+        deletion_state=deletion_state,
+        deletion_note=deletion_note,
     )
-    if tasks_error:
-        install_note += f"<div class='card'><p class='muted'>Tasks unavailable: <code>{_escape_html(tasks_error)}</code></p></div>"
-
-    body = f"""
-      <h1 class="mt-0">Ops</h1>
-      {install_note}
-      <div class="row">
-        <div class="card">
-          <div><strong>Worker heartbeat</strong></div>
-          <div class="muted">{_escape_html(heartbeat_text)}</div>
-          <p class="muted mt-10">If the worker is missing/stale, queued tasks will not run.</p>
-        </div>
-        <div class="card">
-          <div><strong>Actions</strong></div>
-          <div class="muted mt-8">These actions run on the bot worker dyno.</div>
-          <div class="mt-10 flex gap-10 flex-wrap">
-            <form method="post" action="/api/guild/{guild_id}/ops/run_setup">
-              <input type="hidden" name="csrf" value="{_escape_html(session.csrf_token)}" />
-              <button class="btn" type="submit" {disabled_attr}>Run setup now</button>
-            </form>
-            <form method="post" action="/api/guild/{guild_id}/ops/repost_portals">
-              <input type="hidden" name="csrf" value="{_escape_html(session.csrf_token)}" />
-              <button class="btn secondary" type="submit" {disabled_attr}>Repost portals</button>
-            </form>
-          </div>
-        </div>
-        <div class="card">
-          <div><strong>Data deletion</strong></div>
-          {delete_card_body}
-          {deletion_note}
-        </div>
-      </div>
-      <div class="card">
-        <h2 class="mt-0">Recent tasks</h2>
-        <table>
-          <thead><tr><th>created</th><th>action</th><th>status</th><th>requested by</th><th>started</th><th>finished</th><th>error</th></tr></thead>
-          <tbody>{tasks_table}</tbody>
-        </table>
-        <p class="muted mt-10">All actions are also recorded in the audit log.</p>
-      </div>
-    """
     return web.Response(
         text=_html_page(
             title="Ops",
@@ -4075,69 +3763,11 @@ async def guild_ops_page(request: web.Request) -> web.Response:
                 section="ops",
                 selected_guild_id=guild_id,
                 installed=installed,
-                content=body,
+                content=content,
             ),
         ),
         content_type="text/html",
     )
-
-
-async def _enqueue_ops_from_dashboard(
-    request: web.Request,
-    *,
-    action: str,
-) -> web.Response:
-    session = _require_session(request)
-    settings: Settings = request.app["settings"]
-    if not settings.mongodb_uri:
-        raise web.HTTPInternalServerError(text="MongoDB is not configured.")
-
-    guild_id_str = request.match_info["guild_id"]
-    guild_id = _require_owned_guild(session, settings=settings, path=request.path_qs, guild_id=guild_id_str)
-
-    _require_pro_plan_for_ops(settings, guild_id)
-
-    installed, _install_error = await _detect_bot_installed(request, guild_id=guild_id)
-    if installed is False:
-        raise web.HTTPBadRequest(text="Bot is not installed in this server yet. Invite it first.")
-
-    data = await request.post()
-    if str(data.get("csrf", "")) != session.csrf_token:
-        raise web.HTTPBadRequest(text="Invalid CSRF token.")
-
-    actor_id = _parse_int(session.user.get("id"))
-    actor_username = f"{session.user.get('username','')}#{session.user.get('discriminator','')}".strip("#")
-
-    task = enqueue_ops_task(
-        settings,
-        guild_id=guild_id,
-        action=action,
-        requested_by_discord_id=actor_id,
-        requested_by_username=actor_username or None,
-        source="dashboard",
-    )
-
-    try:
-        audit_col = get_collection(settings, record_type="audit_event", guild_id=guild_id)
-        record_audit_event(
-            guild_id=guild_id,
-            category="ops",
-            action="ops_task.enqueued",
-            source="dashboard",
-            actor_discord_id=actor_id,
-            actor_display_name=str(session.user.get("username") or "") or None,
-            actor_username=actor_username or None,
-            details={
-                "task_id": str(task.get("_id") or ""),
-                "task_action": str(task.get("action") or ""),
-                "task_status": str(task.get("status") or ""),
-            },
-            collection=audit_col,
-        )
-    except Exception:
-        pass
-
-    raise web.HTTPFound(f"/guild/{guild_id}/ops")
 
 
 async def guild_ops_run_setup(request: web.Request) -> web.Response:
@@ -4372,21 +4002,26 @@ async def billing_webhook(request: web.Request) -> web.Response:
 async def billing_page(request: web.Request) -> web.Response:
     session = _require_session(request)
     settings: Settings = request.app["settings"]
+    from offside_bot.web_templates import render
 
     selected_guild_id = request.query.get("guild_id", "").strip()
     if selected_guild_id:
         guild_id = _require_owned_guild(session, settings=settings, path=request.path_qs, guild_id=selected_guild_id)
     elif session.owner_guilds:
-        guild_id = _require_owned_guild(session, settings=settings, path=request.path_qs, guild_id=str(session.owner_guilds[0].get("id") or ""))
+        guild_id = _require_owned_guild(
+            session,
+            settings=settings,
+            path=request.path_qs,
+            guild_id=str(session.owner_guilds[0].get("id") or ""),
+        )
     else:
         guild_id = 0
 
     if not guild_id:
-        body = """
-          <p><a href="/app">&larr; Back</a></p>
-          <h1>Billing</h1>
-          <p class="muted">No owned guilds found.</p>
-        """
+        content = render(
+            "pages/dashboard/billing.html",
+            has_guild=False,
+        )
         return web.Response(
             text=_html_page(
                 title="Billing",
@@ -4396,7 +4031,7 @@ async def billing_page(request: web.Request) -> web.Response:
                     section="billing",
                     selected_guild_id=None,
                     installed=None,
-                    content=body,
+                    content=content,
                 ),
             ),
             content_type="text/html",
@@ -4406,67 +4041,42 @@ async def billing_page(request: web.Request) -> web.Response:
     current_plan = entitlements_service.get_guild_plan(settings, guild_id=guild_id)
     subscription = get_guild_subscription(settings, guild_id=guild_id) if settings.mongodb_uri else None
     customer_id = str(subscription.get("customer_id") or "") if subscription else ""
-    options = "\n".join(
-        f"<option value=\"{_escape_html(g.get('id'))}\""
-        f"{' selected' if str(g.get('id')) == str(guild_id) else ''}>"
-        f"{_escape_html(g.get('name') or g.get('id'))}</option>"
+    guild_options = [
+        {
+            "value": str(g.get("id") or ""),
+            "label": str(g.get("name") or g.get("id") or ""),
+            "selected": str(g.get("id")) == str(guild_id),
+        }
         for g in session.owner_guilds
-    )
+        if isinstance(g, dict)
+    ]
 
     status = request.query.get("status", "").strip()
-    status_msg = ""
+    status_message = ""
     if status == "cancelled":
-        status_msg = "<div class='card'><strong>Checkout cancelled.</strong></div>"
+        status_message = "Checkout cancelled."
     elif status == "success":
         if current_plan == entitlements_service.PLAN_PRO:
-            status_msg = "<div class='card'><strong>Checkout complete.</strong> Pro is enabled.</div>"
+            status_message = "Checkout complete. Pro is enabled."
         else:
-            status_msg = (
-                "<div class='card'><strong>Checkout complete.</strong> Activation may take a few seconds.</div>"
-            )
+            status_message = "Checkout complete. Activation may take a few seconds."
 
-    upgrade_disabled = "disabled" if current_plan == entitlements_service.PLAN_PRO else ""
-    upgrade_text = "Already Pro" if current_plan == entitlements_service.PLAN_PRO else "Upgrade to Pro"
+    upgrade_disabled = current_plan == entitlements_service.PLAN_PRO
+    upgrade_text = "Already Pro" if upgrade_disabled else "Upgrade to Pro"
 
-    manage_card = ""
-    if customer_id:
-        manage_card = f"""
-          <div class="card">
-            <h2 class="mt-0">Manage subscription</h2>
-            <p class="muted">Update payment method, view invoices, or cancel your subscription.</p>
-            <form method="post" action="/app/billing/portal">
-              <input type="hidden" name="csrf" value="{_escape_html(session.csrf_token)}" />
-              <input type="hidden" name="guild_id" value="{guild_id}" />
-              <button class="btn secondary" type="submit">Open Stripe Billing Portal</button>
-            </form>
-          </div>
-        """
-
-    body = f"""
-      <p><a href="/app">&larr; Back</a></p>
-      <h1>Billing</h1>
-      {status_msg}
-      <div class="card">
-        <div><strong>Current plan</strong></div>
-        <div class="mt-6"><span class="badge {current_plan}">{_escape_html(current_plan.upper())}</span></div>
-      </div>
-      {manage_card}
-      <div class="card">
-        <h2 class="mt-0">Upgrade this server</h2>
-        <form method="post" action="/app/billing/checkout">
-          <input type="hidden" name="csrf" value="{_escape_html(session.csrf_token)}" />
-          <label><strong>Guild</strong></label>
-          <select name="guild_id" class="w-full mt-6">{options}</select>
-          <label class="block mt-12"><strong>Plan</strong></label>
-          <select name="plan" class="w-full mt-6">
-            <option value="pro">Pro</option>
-          </select>
-          <div class="mt-12">
-            <button class="btn blue" type="submit" {upgrade_disabled}>{_escape_html(upgrade_text)}</button>
-          </div>
-        </form>
-      </div>
-    """
+    content = render(
+        "pages/dashboard/billing.html",
+        has_guild=True,
+        guild_id=guild_id,
+        status_message=status_message,
+        current_plan_label=str(current_plan).upper(),
+        current_plan_class=str(current_plan),
+        manage_portal=bool(customer_id),
+        guild_options=guild_options,
+        upgrade_disabled=upgrade_disabled,
+        upgrade_text=upgrade_text,
+        csrf_token=session.csrf_token,
+    )
     return web.Response(
         text=_html_page(
             title="Billing",
@@ -4476,7 +4086,7 @@ async def billing_page(request: web.Request) -> web.Response:
                 section="billing",
                 selected_guild_id=guild_id,
                 installed=installed,
-                content=body,
+                content=content,
             ),
         ),
         content_type="text/html",
@@ -4572,6 +4182,8 @@ async def billing_checkout(request: web.Request) -> web.Response:
 async def billing_success(request: web.Request) -> web.Response:
     session = _require_session(request)
     settings: Settings = request.app["settings"]
+    from offside_bot.web_templates import render
+
     gid = request.query.get("guild_id", "").strip()
     checkout_session_id = request.query.get("session_id", "").strip()
     guild_id = _require_owned_guild(session, settings=settings, path=request.path_qs, guild_id=gid) if gid else 0
@@ -4671,20 +4283,17 @@ async def billing_success(request: web.Request) -> web.Response:
         message = "Checkout confirmed. Waiting for activation. Refresh in a moment."
     if sync_error and plan != entitlements_service.PLAN_PRO:
         message = f"Checkout complete. Activation pending ({sync_error})."
-    body = f"""
-      <p><a href="/app/billing?guild_id={guild_id}&status=success">&larr; Billing</a></p>
-      <h1>Checkout Success</h1>
-      <div class="card">
-        <div><strong>{_escape_html(message)}</strong></div>
-        <div class="mt-8">Plan: <span class="badge {plan}">{_escape_html(plan.upper())}</span></div>
-        <div class="mt-10 flex gap-10 flex-wrap">
-          <a class="btn secondary" href="/app/billing?guild_id={guild_id}">View billing</a>
-          <a class="btn" href="/guild/{guild_id}">Analytics</a>
-          <a class="btn secondary" href="/guild/{guild_id}/settings">Settings</a>
-        </div>
-      </div>
-    """
-    return web.Response(text=_html_page(title="Checkout Success", body=body), content_type="text/html")
+    content = render(
+        "pages/dashboard/billing_success.html",
+        guild_id=guild_id,
+        message=message,
+        plan_label=str(plan).upper(),
+        plan_class=str(plan),
+        billing_href=f"/app/billing?guild_id={guild_id}",
+        analytics_href=f"/guild/{guild_id}",
+        settings_href=f"/guild/{guild_id}/settings",
+    )
+    return web.Response(text=_html_page(title="Checkout Success", body=content), content_type="text/html")
 
 
 async def billing_cancel(request: web.Request) -> web.Response:

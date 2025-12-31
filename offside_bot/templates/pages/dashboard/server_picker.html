@@ -1,0 +1,55 @@
+<h1 class="mt-0">Your servers</h1>
+<div class="card mb-16">
+  <label for="guild-search" class="muted">Search servers</label>
+  <input id="guild-search" class="w-full mt-6" type="text" placeholder="Search by name..." />
+</div>
+
+{% if cards %}
+  {% for card in cards %}
+    <div class="card guild-card" data-name="{{ card.name }}">
+      <div class="flex gap-12 items-center justify-between flex-wrap">
+        <div class="flex gap-12 items-center">
+          {% if card.icon_url %}
+            <img src="{{ card.icon_url }}" alt="" class="avatar-lg" />
+          {% else %}
+            <div class="avatar-fallback">{{ card.fallback }}</div>
+          {% endif %}
+          <div>
+            <div class="font-600">{{ card.name }}</div>
+            <div class="muted">Guild ID: <code>{{ card.id }}</code></div>
+          </div>
+        </div>
+        <div class="flex gap-8 items-center">
+          {% if card.plan_label %}
+            <span class="badge {{ card.plan_class }}">{{ card.plan_label }}</span>
+          {% endif %}
+          {% if card.install_label %}
+            <span class="badge {{ card.install_class }}">{{ card.install_label }}</span>
+          {% endif %}
+        </div>
+      </div>
+      {% if card.eligible %}
+        <div class="btn-group mt-10">
+          <a class="btn" href="/guild/{{ card.id }}/overview">Open</a>
+          <a class="btn secondary" href="/app/billing?guild_id={{ card.id }}">Billing</a>
+          {% if card.show_upgrade %}
+            <a class="btn blue" href="/app/upgrade?guild_id={{ card.id }}&from=server-card&section=overview">Upgrade</a>
+          {% endif %}
+          {% if card.show_invite %}
+            <a class="btn {{ card.invite_class }}" href="/install?guild_id={{ card.id }}">Invite bot</a>
+          {% endif %}
+        </div>
+      {% else %}
+        <div class="card card-plain mt-10">
+          <div class="muted">Not eligible: requires <strong>Manage Server</strong> permission (or ownership).</div>
+        </div>
+      {% endif %}
+    </div>
+  {% endfor %}
+{% else %}
+  <p>No servers found.</p>
+{% endif %}
+
+<h2>Invite link</h2>
+<p class="muted">Direct invite URL (shareable):</p>
+<p><a href="{{ invite_href }}">{{ invite_href }}</a></p>

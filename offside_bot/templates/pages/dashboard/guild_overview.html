@@ -1,0 +1,59 @@
+{% from "macros/ui.html" import badge, button %}
+
+<h1 class="mt-0">Overview</h1>
+<div class="row">
+  <div class="card">
+    <div><strong>Guild</strong></div>
+    <div class="muted">ID: <code>{{ guild_id }}</code></div>
+    <div class="muted">MongoDB DB: <code>{{ db_name }}</code></div>
+    <div class="muted">Test mode: <code>{{ test_mode }}</code></div>
+  </div>
+  {% if mongodb_configured %}
+    <div class="card">
+      <div><strong>Quick actions</strong></div>
+      <div class="muted mt-8">Run setup and repost portals from the bot worker.</div>
+      <div class="flex gap-10 flex-wrap mt-10">
+        <form method="post" action="/api/guild/{{ guild_id }}/ops/run_setup">
+          <input type="hidden" name="csrf" value="{{ csrf_token }}" />
+          <button class="btn" type="submit" {% if actions_disabled %}disabled{% endif %}>Run setup now</button>
+        </form>
+        <form method="post" action="/api/guild/{{ guild_id }}/ops/repost_portals">
+          <input type="hidden" name="csrf" value="{{ csrf_token }}" />
+          <button class="btn secondary" type="submit" {% if actions_disabled %}disabled{% endif %}>Repost portals</button>
+        </form>
+        {{ button("Open settings", settings_href, "secondary") }}
+      </div>
+    </div>
+  {% else %}
+    <div class="card">
+      <p class="muted">MongoDB is not configured; ops actions are unavailable.</p>
+    </div>
+  {% endif %}
+</div>
+<div class="card">
+  <h2 class="mt-0">Setup checklist</h2>
+  <table>
+    <thead>
+      <tr><th>item</th><th>status</th><th>details</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for check in checks %}
+        <tr>
+          <td><strong>{{ check.name }}</strong></td>
+          <td>{{ badge(check.status.label, check.status.kind) }}</td>
+          <td class="muted">{{ check.details }}</td>
+          <td><a href="{{ check.fix_href }}">Fix</a></td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+<div class="row">
+  {% for metric in metrics %}
+    <div class="card">
+      <div class="muted">{{ metric.label }}</div>
+      <div class="text-xxl font-800">{{ metric.value }}</div>
+    </div>
+  {% endfor %}
+</div>
+<p class="muted">Need help? Use the Permissions and Ops pages to troubleshoot setup.</p>

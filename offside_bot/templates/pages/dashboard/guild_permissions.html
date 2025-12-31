@@ -1,0 +1,92 @@
+{% from "macros/ui.html" import badge, button %}
+
+<p><a href="/guild/{{ guild_id }}">&larr; Back</a></p>
+<h1>Permissions Check{% if is_admin %} {{ badge("ADMIN", "pro") }}{% endif %}</h1>
+{% if blocked_message %}
+  <div class="card">
+    <p class="muted">{{ blocked_message }}</p>
+    <div class="mt-10">
+      {{ button("Invite bot to this server", invite_href, "blue") }}
+    </div>
+  </div>
+{% else %}
+  <div class="row">
+    <div class="card">
+      <div><strong>Guild</strong></div>
+      <div class="muted">ID: <code>{{ guild_id }}</code></div>
+      <div class="muted">Bot top role: <code>{{ top_role_name or "unknown" }}</code> (pos {{ top_role_pos }})</div>
+      <div class="mt-10">
+        {{ button("Open settings", settings_href, "secondary") }}
+      </div>
+    </div>
+    <div class="card">
+      <div><strong>Fix steps</strong></div>
+      <div class="muted mt-8">
+        1) Server Settings &rarr; Roles: ensure the bot role has Manage Channels/Roles/Messages.<br/>
+        2) Drag the bot role above Coach roles (role hierarchy).<br/>
+        3) Channel settings: ensure the bot can View/Send/Embed/Read in Offside channels.
+      </div>
+      <div class="mt-10">
+        {{ button("Re-invite with permissions", invite_href, "blue") }}
+      </div>
+    </div>
+  </div>
+  <div class="card">
+    <h2 class="mt-0">Guild-level permissions</h2>
+    <table>
+      <thead><tr><th>permission</th><th>status</th><th>why</th></tr></thead>
+      <tbody>
+        {% if guild_permissions %}
+          {% for row in guild_permissions %}
+            <tr>
+              <td>{{ row.permission }}</td>
+              <td><code>{{ row.status }}</code></td>
+              <td class="muted">{{ row.why }}</td>
+            </tr>
+          {% endfor %}
+        {% else %}
+          <tr><td colspan="3" class="muted">No permissions to check.</td></tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+  <div class="card">
+    <h2 class="mt-0">Role hierarchy</h2>
+    <table>
+      <thead><tr><th>role</th><th>status</th><th>details</th></tr></thead>
+      <tbody>
+        {% if role_hierarchy %}
+          {% for row in role_hierarchy %}
+            <tr>
+              <td>{{ row.role }}</td>
+              <td><code>{{ row.status }}</code></td>
+              <td class="muted">{{ row.details }}</td>
+            </tr>
+          {% endfor %}
+        {% else %}
+          <tr><td colspan="3" class="muted">No role hierarchy data yet.</td></tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+  <div class="card">
+    <h2 class="mt-0">Configured channels access</h2>
+    <table>
+      <thead><tr><th>channel</th><th>status</th><th>details</th></tr></thead>
+      <tbody>
+        {% if channel_access %}
+          {% for row in channel_access %}
+            <tr>
+              <td>{{ row.channel }}</td>
+              <td><code>{{ row.status }}</code></td>
+              <td class="muted">{{ row.details }}</td>
+            </tr>
+          {% endfor %}
+        {% else %}
+          <tr><td colspan="3" class="muted">No channels configured yet.</td></tr>
+        {% endif %}
+      </tbody>
+    </table>
+    <p class="muted mt-10">Only checks channels currently saved in guild settings.</p>
+  </div>
+{% endif %}

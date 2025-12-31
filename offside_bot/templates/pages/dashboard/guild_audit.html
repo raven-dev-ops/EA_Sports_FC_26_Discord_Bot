@@ -1,0 +1,33 @@
+<p><a href="/guild/{{ guild_id }}">&larr; Back</a></p>
+<h1>Audit Log</h1>
+<div class="row">
+  <div class="card">
+    <div><strong>Guild</strong></div>
+    <div class="muted">ID: <code>{{ guild_id }}</code></div>
+    <div class="muted">Showing latest: <code>{{ limit }}</code></div>
+    <div class="mt-10"><a href="{{ download_href }}">Download CSV</a></div>
+  </div>
+</div>
+<div class="card">
+  <table>
+    <thead>
+      <tr><th>created_at</th><th>category</th><th>action</th><th>actor</th><th>source</th><th>details</th></tr>
+    </thead>
+    <tbody>
+      {% if rows %}
+        {% for row in rows %}
+          <tr>
+            <td><code>{{ row.created }}</code></td>
+            <td><code>{{ row.category }}</code></td>
+            <td><code>{{ row.action }}</code></td>
+            <td>{{ row.actor }}</td>
+            <td><code>{{ row.source }}</code></td>
+            <td title="{{ row.details_full }}"><code>{{ row.details }}</code></td>
+          </tr>
+        {% endfor %}
+      {% else %}
+        <tr><td colspan="6" class="muted">No events yet.</td></tr>
+      {% endif %}
+    </tbody>
+  </table>
+</div>

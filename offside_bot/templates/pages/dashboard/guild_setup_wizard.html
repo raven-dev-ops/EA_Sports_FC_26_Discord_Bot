@@ -1,0 +1,76 @@
+{% from "macros/ui.html" import badge %}
+
+<h1 class="mt-0">Setup Wizard</h1>
+{% if queued %}
+  <div class="card"><strong>Setup queued.</strong> Refresh this page in a few seconds.</div>
+{% endif %}
+<div class="row">
+  <div class="card">
+    <div><strong>Status</strong></div>
+    <div class="mt-6">{{ badge(ready_status.label, ready_status.kind) }}</div>
+    <p class="muted mt-10">{{ ready_details }}</p>
+    <p class="muted">Plan: {{ badge(plan_label, plan_class) }}</p>
+  </div>
+  <div class="card">
+    <div><strong>One-click setup</strong></div>
+    <p class="muted mt-8">Queues <code>run_setup</code> then <code>repost_portals</code> on the bot worker.</p>
+    <div class="flex gap-10 flex-wrap mt-10">
+      <form method="post" action="/api/guild/{{ guild_id }}/ops/run_full_setup">
+        <input type="hidden" name="csrf" value="{{ csrf_token }}" />
+        <button class="btn blue" type="submit" {% if actions_disabled %}disabled{% endif %}>Run full setup</button>
+      </form>
+      <form method="post" action="/api/guild/{{ guild_id }}/ops/run_setup">
+        <input type="hidden" name="csrf" value="{{ csrf_token }}" />
+        <button class="btn" type="submit" {% if actions_disabled %}disabled{% endif %}>Run setup</button>
+      </form>
+      <form method="post" action="/api/guild/{{ guild_id }}/ops/repost_portals">
+        <input type="hidden" name="csrf" value="{{ csrf_token }}" />
+        <button class="btn secondary" type="submit" {% if actions_disabled %}disabled{% endif %}>Repost portals</button>
+      </form>
+    </div>
+    <p class="muted mt-10">If tasks don't run, check worker heartbeat on the Ops page.</p>
+  </div>
+</div>
+<div class="card">
+  <h2 class="mt-0">Steps</h2>
+  <table>
+    <thead>
+      <tr><th>step</th><th>status</th><th>details</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for step in steps %}
+        <tr>
+          <td><strong>{{ step.title }}</strong></td>
+          <td>{{ badge(step.status.label, step.status.kind) }}</td>
+          <td class="muted">{{ step.details }}</td>
+          <td><a href="{{ step.action_href }}">{{ step.action_label }}</a></td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+<div class="card">
+  <h2 class="mt-0">Recent ops tasks</h2>
+  {% if tasks_error %}
+    <p class="muted">Tasks unavailable: <code>{{ tasks_error }}</code></p>
+  {% endif %}
+  <table>
+    <thead>
+      <tr><th>created</th><th>action</th><th>status</th></tr>
+    </thead>
+    <tbody>
+      {% if tasks %}
+        {% for task in tasks %}
+          <tr>
+            <td><code>{{ task.created }}</code></td>
+            <td><code>{{ task.action }}</code></td>
+            <td><code>{{ task.status }}</code></td>
+          </tr>
+        {% endfor %}
+      {% else %}
+        <tr><td colspan="3" class="muted">No recent ops tasks yet.</td></tr>
+      {% endif %}
+    </tbody>
+  </table>
+  <p class="muted mt-10"><a href="/guild/{{ guild_id }}/ops">Open Ops</a></p>
+</div>

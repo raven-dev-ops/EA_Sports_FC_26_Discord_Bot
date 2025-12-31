@@ -1,0 +1,26 @@
+{% from "macros/ui.html" import button %}
+
+<h1 class="mt-0">{{ title }}</h1>
+<div class="card">
+  <div class="flex-between">
+    <div class="flex-start">
+      <span class="badge warn">PRO</span>
+      <strong>Locked</strong>
+    </div>
+    <span class="badge warn">LOCKED</span>
+  </div>
+  <p class="muted spacer-sm">{{ message }}</p>
+  <div class="btn-group spacer-sm">
+    {{ button("Upgrade to Pro", upgrade_href, "blue") }}
+    {{ button("Billing", "/app/billing?guild_id=" ~ guild_id, "secondary") }}
+    {{ button("Back to overview", "/guild/" ~ guild_id ~ "/overview", "secondary") }}
+  </div>
+</div>
+<div class="card">
+  <h2 class="mt-0">What you get with Pro</h2>
+  <ul class="list-reset">
+    {% for benefit in benefits %}
+      <li><strong>{{ benefit.name }}</strong> - {{ benefit.desc }}</li>
+    {% endfor %}
+  </ul>
+</div>

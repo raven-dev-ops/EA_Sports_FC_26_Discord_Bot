@@ -22,3 +22,68 @@
   <p class="muted mt-14">Direct invite URL:</p>
   <p><a href="{{ invite_href }}">{{ invite_href }}</a></p>
 {%- endmacro %}
+
+{% macro table(headers, rows, empty_text="No data", table_class="") -%}
+  <table class="{{ table_class }}">
+    <thead>
+      <tr>
+        {% for header in headers %}
+          <th>{{ header }}</th>
+        {% endfor %}
+      </tr>
+    </thead>
+    <tbody>
+      {% if rows %}
+        {% for row in rows %}
+          <tr>
+            {% for cell in row %}
+              <td>{{ cell }}</td>
+            {% endfor %}
+          </tr>
+        {% endfor %}
+      {% else %}
+        <tr>
+          <td colspan="{{ headers|length }}" class="muted">{{ empty_text }}</td>
+        </tr>
+      {% endif %}
+    </tbody>
+  </table>
+{%- endmacro %}
+
+{% macro form_row(label, help_text="") -%}
+  <div class="form-row">
+    <label>{{ label }}</label>
+    <div class="form-row-body">
+      {{ caller() }}
+      {% if help_text %}
+        <p class="muted">{{ help_text }}</p>
+      {% endif %}
+    </div>
+  </div>
+{%- endmacro %}
+
+{% macro notice(title, text, kind="info") -%}
+  <div class="notice {{ kind }}">
+    <strong>{{ title }}</strong>
+    <div class="muted mt-6">{{ text }}</div>
+  </div>
+{%- endmacro %}
+
+{% macro empty_state(text) -%}
+  <div class="empty-state muted">{{ text }}</div>
+{%- endmacro %}
+
+{% macro breadcrumb(items) -%}
+  <div class="breadcrumbs">
+    {% for item in items %}
+      {% if item.href %}
+        <a href="{{ item.href }}">{{ item.label }}</a>
+      {% else %}
+        <span>{{ item.label }}</span>
+      {% endif %}
+      {% if not loop.last %}
+        <span class="muted">/</span>
+      {% endif %}
+    {% endfor %}
+  </div>
+{%- endmacro %}

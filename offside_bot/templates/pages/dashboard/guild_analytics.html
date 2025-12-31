@@ -1,0 +1,60 @@
+{% from "macros/ui.html" import badge, button %}
+
+<p><a href="/app">&larr; Back</a></p>
+<h1>Guild Analytics</h1>
+<div class="row">
+  <div class="card">
+    <div><strong>Guild</strong></div>
+    <div class="muted">
+      ID: <code>{{ guild_id }}</code> &bull; Plan: {{ badge(plan_label, plan_class) }}
+    </div>
+    <div class="muted">MongoDB DB: <code>{{ db_name }}</code></div>
+    <div class="muted">Generated: {{ generated_at }}</div>
+    <div class="mt-10"><a href="{{ analytics_json_href }}">Download JSON</a></div>
+    <div class="mt-10">{{ button("Settings", settings_href, "secondary") }}</div>
+    <div class="mt-10">{{ button("Permissions", permissions_href, "secondary") }}</div>
+    <div class="mt-10">{{ button("Audit Log", audit_href, "secondary") }}</div>
+  </div>
+</div>
+<div class="row">
+  <div class="card">
+    <h2 class="mt-0">Record Types</h2>
+    <table>
+      <thead>
+        <tr><th>record_type</th><th>count</th></tr>
+      </thead>
+      <tbody>
+        {% if record_counts %}
+          {% for row in record_counts %}
+            <tr>
+              <td><code>{{ row.record_type }}</code></td>
+              <td>{{ row.count }}</td>
+            </tr>
+          {% endfor %}
+        {% else %}
+          <tr><td colspan="2" class="muted">No records found.</td></tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+  <div class="card">
+    <h2 class="mt-0">Collections</h2>
+    <table>
+      <thead>
+        <tr><th>collection</th><th>count</th></tr>
+      </thead>
+      <tbody>
+        {% if collection_counts %}
+          {% for row in collection_counts %}
+            <tr>
+              <td><code>{{ row.collection }}</code></td>
+              <td>{{ row.count }}</td>
+            </tr>
+          {% endfor %}
+        {% else %}
+          <tr><td colspan="2" class="muted">No collections found.</td></tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+</div>

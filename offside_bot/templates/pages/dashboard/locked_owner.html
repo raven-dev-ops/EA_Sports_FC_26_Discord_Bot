@@ -1,0 +1,17 @@
+{% from "macros/ui.html" import button %}
+
+<h1 class="mt-0">{{ title }}</h1>
+<div class="card">
+  <div class="flex-between">
+    <div class="flex-start">
+      <span class="badge warn">OWNER</span>
+      <strong>Restricted</strong>
+    </div>
+    <span class="badge warn">LOCKED</span>
+  </div>
+  <p class="muted spacer-sm">{{ message }}</p>
+  <div class="btn-group spacer-sm">
+    {{ button("Back to overview", "/guild/" ~ guild_id ~ "/overview", "secondary") }}
+    {{ button("Support", "/support", "secondary") }}
+  </div>
+</div>

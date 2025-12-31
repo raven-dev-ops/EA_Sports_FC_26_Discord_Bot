@@ -121,6 +121,34 @@ a:hover {
   color: #dbffe9;
 }
 
+.notice {
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 12px 14px;
+  margin: 12px 0;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.notice.info {
+  background: rgba(88, 101, 242, 0.12);
+  border-color: rgba(88, 101, 242, 0.3);
+}
+
+.notice.warn {
+  background: rgba(240, 178, 50, 0.14);
+  border-color: rgba(240, 178, 50, 0.35);
+}
+
+.notice.error {
+  background: rgba(237, 66, 69, 0.12);
+  border-color: rgba(237, 66, 69, 0.35);
+}
+
+.notice.success {
+  background: rgba(59, 165, 92, 0.12);
+  border-color: rgba(59, 165, 92, 0.35);
+}
+
 table {
   border-collapse: collapse;
   width: 100%;
@@ -153,6 +181,29 @@ code {
 
 .row > .card {
   flex: 1 1 320px;
+}
+
+.form-row {
+  margin-top: 12px;
+}
+
+.form-row label {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.form-row-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.empty-state {
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+  padding: 12px 14px;
+  text-align: center;
 }
 
 .btn {

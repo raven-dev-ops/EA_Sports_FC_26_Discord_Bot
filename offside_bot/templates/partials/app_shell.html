@@ -1,3 +1,5 @@
+{% from "macros/ui.html" import badge, button, breadcrumb %}
+
 <div class="topbar">
   <div class="flex gap-10 items-center">
     <button
@@ -23,11 +25,11 @@
         {% endfor %}
       </select>
     {% endif %}
-    {% if plan_badge %}{{ plan_badge|safe }}{% endif %}
-    {% if install_badge %}{{ install_badge|safe }}{% endif %}
+    {% if plan_badge %}{{ badge(plan_badge.label, plan_badge.kind) }}{% endif %}
+    {% if install_badge %}{{ badge(install_badge.label, install_badge.kind) }}{% endif %}
   </div>
   <div class="flex gap-10 items-center">
-    {% if invite_cta %}{{ invite_cta|safe }}{% endif %}
+    {% if invite_cta %}{{ button(invite_cta.label, invite_cta.href, invite_cta.variant) }}{% endif %}
     <span class="muted">{{ username }}</span>
     <a class="btn secondary" href="/logout">Logout</a>
   </div>
@@ -68,20 +70,24 @@
     </div>
   </aside>
   <main class="content">
-    {% if plan_notice %}{{ plan_notice|safe }}{% endif %}
-    {% if breadcrumbs %}
-      <div class="breadcrumbs">
-        {% for crumb in breadcrumbs %}
-          {% if crumb.href %}
-            <a href="{{ crumb.href }}">{{ crumb.label }}</a>
-          {% else %}
-            <span>{{ crumb.label }}</span>
-          {% endif %}
-          {% if not loop.last %}
-            <span class="muted">/</span>
-          {% endif %}
-        {% endfor %}
+    {% if plan_notice %}
+      <div class="card">
+        <div class="flex-between gap-12">
+          <div>
+            <div>{{ badge(plan_notice.status_label, plan_notice.status_kind) }}</div>
+            <div class="mt-6"><strong>{{ plan_notice.title }}</strong></div>
+            <div class="muted mt-6">{{ plan_notice.detail }}</div>
+          </div>
+          <div class="btn-group">
+            {% for cta in plan_notice.ctas %}
+              {{ button(cta.label, cta.href, cta.variant) }}
+            {% endfor %}
+          </div>
+        </div>
       </div>
+    {% endif %}
+    {% if breadcrumbs %}
+      {{ breadcrumb(breadcrumbs) }}
     {% endif %}
     {{ content|safe }}
   </main>

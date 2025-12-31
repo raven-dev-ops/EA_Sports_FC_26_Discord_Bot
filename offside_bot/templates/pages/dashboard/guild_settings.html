@@ -1,0 +1,180 @@
+{% from "macros/ui.html" import badge, button, form_row %}
+
+<p><a href="/app">&larr; Back</a></p>
+{% if installed is false %}
+  <h1>Settings</h1>
+  <div class="card">
+    <h2 class="mt-0">Invite bot to this server</h2>
+    <p class="muted">This server is in your Discord list, but the bot is not installed yet.</p>
+    <p>{{ button("Invite bot to server", "/install?guild_id=" ~ guild_id, "blue") }}</p>
+    <p class="muted">Direct invite URL:</p>
+    <p><a href="{{ invite_href }}">{{ invite_href }}</a></p>
+  </div>
+{% else %}
+  <h1>Guild Settings</h1>
+  <div class="row">
+    <div class="card">
+      <div><strong>Guild</strong></div>
+      <div class="muted">ID: <code>{{ guild_id }}</code></div>
+      <div class="mt-10">
+        {{ button("Invite bot to this server", invite_href, "blue") }}
+      </div>
+    </div>
+  </div>
+  {% if saved %}
+    <p class="muted">Saved.</p>
+  {% endif %}
+  {% if show_pro_callout %}
+    <div class="card callout">
+      <div>
+        <div class="title-row">
+          <span class="badge warn">PRO</span>
+          <strong>Premium features locked</strong>
+        </div>
+        <p class="muted spacer-sm">
+          Premium coach tiers, Premium Coaches report, and FC25 stats are available on the Pro plan.
+        </p>
+      </div>
+      <div class="btn-group">
+        {{ button("Upgrade", upgrade_href, "blue") }}
+        {{ button("Billing", "/app/billing?guild_id=" ~ guild_id, "secondary") }}
+      </div>
+    </div>
+  {% endif %}
+  <div class="row">
+    <div class="card">
+      <h2 class="mt-0">Access</h2>
+      <form method="post" action="/guild/{{ guild_id }}/settings">
+        <input type="hidden" name="csrf" value="{{ csrf_token }}" />
+        {% if metadata_error %}
+          <p class="muted">
+            Discord metadata unavailable: <code>{{ metadata_error }}</code>. Dropdowns may fall back to manual IDs.
+          </p>
+        {% endif %}
+
+        {% if roles_available %}
+          {% call form_row("Staff roles", "Select one or more roles. Leave empty to require Manage Server (or env STAFF_ROLE_IDS).") %}
+            <select multiple name="staff_role_ids" size="10" class="w-full mt-6">
+              {% if staff_role_options %}
+                {% for opt in staff_role_options %}
+                  <option value="{{ opt.value }}" {% if opt.selected %}selected{% endif %} {% if opt.disabled %}disabled{% endif %}>
+                    {{ opt.label }}
+                  </option>
+                {% endfor %}
+              {% else %}
+                <option disabled>(no roles found)</option>
+              {% endif %}
+            </select>
+          {% endcall %}
+        {% else %}
+          {% if metadata_error %}
+            <p class="muted">Unable to load roles from Discord: <code>{{ metadata_error }}</code></p>
+          {% endif %}
+          {% call form_row("Staff role IDs (comma-separated)", "Leave blank to require Manage Server (or env STAFF_ROLE_IDS).") %}
+            <input name="staff_role_ids_csv" class="w-full mt-6" value="{{ staff_role_ids_csv }}" />
+          {% endcall %}
+        {% endif %}
+
+        <h3 class="mt-14">Coach tiers</h3>
+        {% for field in coach_role_fields %}
+          <label class="{% if loop.index > 1 %}mt-10 block{% else %}block{% endif %}">
+            {{ field.label }}
+            {% if field.show_pro_badge %}
+              {{ badge("PRO", field.pro_badge_class ~ " inline") }}
+            {% endif %}
+          </label>
+          {% if roles_available %}
+            <select name="{{ field.name }}" class="w-full mt-6" {% if field.disabled %}disabled{% endif %}>
+              {% for opt in field.options %}
+                <option value="{{ opt.value }}" {% if opt.selected %}selected{% endif %} {% if opt.disabled %}disabled{% endif %}>
+                  {{ opt.label }}
+                </option>
+              {% endfor %}
+            </select>
+          {% else %}
+            <input name="{{ field.name }}" class="w-full mt-6" value="{{ field.value }}" {% if field.disabled %}disabled{% endif %} />
+          {% endif %}
+        {% endfor %}
+        {% if not premium_tiers_enabled %}
+          <p class="muted">
+            <span class="badge warn">LOCKED</span>
+            Premium coach tiers require Pro. <a href="{{ upgrade_href }}">Upgrade</a>
+          </p>
+        {% endif %}
+
+        <h3 class="mt-14">Channels</h3>
+        {% for field in channel_fields %}
+          <label>{{ field.label }}{% if not channels_available %} ID{% endif %}</label><br/>
+          {% if channels_available %}
+            <select name="{{ field.name }}" class="w-full mt-6">
+              {% for opt in field.options %}
+                <option value="{{ opt.value }}" {% if opt.selected %}selected{% endif %} {% if opt.disabled %}disabled{% endif %}>
+                  {{ opt.label }}
+                </option>
+              {% endfor %}
+            </select>
+          {% else %}
+            <input name="{{ field.name }}" class="w-full mt-6" value="{{ field.value }}" />
+          {% endif %}
+        {% endfor %}
+
+        <h3 class="mt-14">Premium Coaches {{ badge("PRO", premium_report_badge_class ~ " inline") }}</h3>
+        <label>
+          <input
+            type="checkbox"
+            name="{{ premium_pin_key }}"
+            value="1"
+            {% if premium_pin_enabled %}checked{% endif %}
+            {% if premium_pin_disabled %}disabled{% endif %}
+          />
+          Pin listing message
+        </label>
+        <p class="muted">
+          Pins the bot's Premium Coaches listing message in the Premium Coaches channel (requires Manage Messages).
+        </p>
+        {% if not premium_report_enabled %}
+          <p class="muted">
+            <span class="badge warn">LOCKED</span>
+            Premium Coaches report controls require Pro. <a href="{{ upgrade_href }}">Upgrade</a>
+          </p>
+        {% endif %}
+
+        <label>FC25 stats override {{ badge("PRO", fc25_badge_class ~ " inline") }}</label><br/>
+        <select name="fc25_stats_enabled" class="w-full mt-6" {% if fc25_disabled %}disabled{% endif %}>
+          {% for opt in fc25_options %}
+            <option value="{{ opt.value }}" {% if opt.selected %}selected{% endif %}>{{ opt.label }}</option>
+          {% endfor %}
+        </select>
+        {% if fc25_disabled %}
+          <p class="muted">
+            <span class="badge warn">LOCKED</span>
+            FC25 stats controls require Pro. <a href="{{ upgrade_href }}">Upgrade</a>
+          </p>
+        {% endif %}
+        <div class="mt-12">
+          <button class="btn" type="submit">Save</button>
+        </div>
+      </form>
+    </div>
+    <div class="card">
+      <h2 class="mt-0">Current Config</h2>
+      <table>
+        <thead>
+          <tr><th>key</th><th>value</th></tr>
+        </thead>
+        <tbody>
+          {% if config_rows %}
+            {% for row in config_rows %}
+              <tr>
+                <td><code>{{ row.key }}</code></td>
+                <td><code>{{ row.value }}</code></td>
+              </tr>
+            {% endfor %}
+          {% else %}
+            <tr><td colspan="2" class="muted">No config found yet (bot may not be installed).</td></tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+{% endif %}
