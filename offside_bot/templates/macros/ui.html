@@ -15,11 +15,10 @@
 {%- endmacro %}
 
 {% macro cta_block(invite_href) -%}
-  <div style="display:flex; gap:10px; flex-wrap:wrap;">
+  <div class="flex gap-10 flex-wrap">
     {{ button("Login with Discord", "/login", "") }}
     {{ button("Invite bot", "/install", "blue") }}
   </div>
-  <p class="muted" style="margin-top:14px;">Direct invite URL:</p>
+  <p class="muted mt-14">Direct invite URL:</p>
   <p><a href="{{ invite_href }}">{{ invite_href }}</a></p>
 {%- endmacro %}
-

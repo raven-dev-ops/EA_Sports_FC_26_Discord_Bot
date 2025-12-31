@@ -236,6 +236,10 @@ code {
   gap: 12px;
 }
 
+.gap-14 {
+  gap: 14px;
+}
+
 .w-full {
   width: 100%;
 }
