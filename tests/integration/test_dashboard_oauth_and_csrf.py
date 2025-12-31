@@ -72,6 +72,30 @@ async def test_protected_routes_redirect_to_login_with_next(monkeypatch) -> None
 
 
 @pytest.mark.asyncio
+async def test_app_requires_login_redirects_with_next(monkeypatch) -> None:
+    from urllib.parse import parse_qs, urlparse
+
+    from aiohttp.test_utils import TestClient, TestServer
+
+    monkeypatch.setattr(database, "MongoClient", mongomock.MongoClient)
+    monkeypatch.setattr(database, "_CLIENT", None)
+
+    app = dashboard.create_app(settings=_settings())
+    client = TestClient(TestServer(app))
+    await client.start_server()
+    try:
+        resp = await client.get("/app", allow_redirects=False)
+        assert resp.status == 302
+        location = resp.headers.get("Location")
+        assert location is not None
+        parsed = urlparse(location)
+        assert parsed.path == "/login"
+        assert parse_qs(parsed.query).get("next") == ["/app"]
+    finally:
+        await client.close()
+
+
+@pytest.mark.asyncio
 async def test_oauth_callback_access_denied_renders_friendly_page(monkeypatch) -> None:
     from aiohttp.test_utils import TestClient, TestServer
 

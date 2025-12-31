@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.47] - 2025-12-31
+
+### Changed
+- Web: `/` is always the public landing page; dashboard home moved to `/app` (requires login, supports `next=` redirects).
+
 ## [0.2.46] - 2025-12-31
 
 ### Added

@@ -841,13 +841,16 @@ def _guild_is_eligible(guild: dict[str, Any]) -> bool:
 
 async def index(request: web.Request) -> web.Response:
     settings: Settings = request.app["settings"]
-    session = request.get("session")
-    if session is None:
-        invite_href = _invite_url(settings)
-        from offside_bot.web_templates import render
+    invite_href = _invite_url(settings)
+    from offside_bot.web_templates import render
 
-        html = render("pages/index_public.html", title="Offside Dashboard", invite_href=invite_href)
-        return web.Response(text=html, content_type="text/html")
+    html = render("pages/index_public.html", title="Offside", invite_href=invite_href)
+    return web.Response(text=html, content_type="text/html")
+
+
+async def app_index(request: web.Request) -> web.Response:
+    session = _require_session(request)
+    settings: Settings = request.app["settings"]
 
     guild_cards = []
     eligible_ids = {str(g.get("id")) for g in session.owner_guilds}
@@ -1536,7 +1539,7 @@ async def guild_settings_page(request: web.Request) -> web.Response:
     if installed is False:
         invite_href = _invite_url(settings, guild_id=str(guild_id), disable_guild_select=True)
         body = f"""
-          <p><a href="/">&larr; Back</a></p>
+          <p><a href="/app">&larr; Back</a></p>
           <h1>Settings</h1>
           <div class="card">
             <h2 style="margin-top:0;">Invite bot to this server</h2>
@@ -1797,7 +1800,7 @@ async def guild_settings_page(request: web.Request) -> web.Response:
     ) or "<tr><td colspan='2' class='muted'>No config found yet (bot may not be installed).</td></tr>"
 
     body = f"""
-      <p><a href="/">&larr; Back</a></p>
+      <p><a href="/app">&larr; Back</a></p>
       <h1>Guild Settings</h1>
       <div class="row">
         <div class="card">
@@ -2019,7 +2022,7 @@ async def guild_page(request: web.Request) -> web.Response:
     )
 
     body = f"""
-      <p><a href="/">&larr; Back</a></p>
+      <p><a href="/app">&larr; Back</a></p>
       <h1>Guild Analytics</h1>
       <div class="row">
         <div class="card">
@@ -3576,7 +3579,7 @@ async def billing_page(request: web.Request) -> web.Response:
 
     if not guild_id:
         body = """
-          <p><a href="/">&larr; Back</a></p>
+          <p><a href="/app">&larr; Back</a></p>
           <h1>Billing</h1>
           <p class="muted">No owned guilds found.</p>
         """
@@ -3636,7 +3639,7 @@ async def billing_page(request: web.Request) -> web.Response:
         """
 
     body = f"""
-      <p><a href="/">&larr; Back</a></p>
+      <p><a href="/app">&larr; Back</a></p>
       <h1>Billing</h1>
       {status_msg}
       <div class="card">
@@ -3927,6 +3930,7 @@ def create_app(*, settings: Settings | None = None) -> web.Application:
     app.router.add_get("/health", health)
     app.router.add_get("/ready", ready)
     app.router.add_get("/", index)
+    app.router.add_get("/app", app_index)
     app.router.add_get("/features", features_page)
     app.router.add_get("/pricing", pricing_page)
     app.router.add_get("/terms", terms_page)
