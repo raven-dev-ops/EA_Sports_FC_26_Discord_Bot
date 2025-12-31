@@ -6,7 +6,7 @@ on:
 
 jobs:
   secrets:
-    runs-on: self-hosted
+    runs-on: [self-hosted, Windows, X64, offside]
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -25,7 +25,7 @@ jobs:
         run: gitleaks detect --source . --redact --no-banner
 
   build:
-    runs-on: self-hosted
+    runs-on: [self-hosted, Windows, X64, offside]
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -37,24 +37,25 @@ jobs:
 
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
-          python -m pip install -r requirements.txt -r requirements-dev.txt
-          python -m pip install build pip-audit
+          python -m venv .venv
+          .\.venv\Scripts\python -m pip install --upgrade pip
+          .\.venv\Scripts\python -m pip install -r requirements.txt -r requirements-dev.txt
+          .\.venv\Scripts\python -m pip install build pip-audit
 
       - name: Generate docs (check)
-        run: python -m scripts.generate_docs --check
+        run: .\.venv\Scripts\python -m scripts.generate_docs --check
 
       - name: Dependency audit
-        run: python -m pip_audit -r requirements.txt
+        run: .\.venv\Scripts\python -m pip_audit -r requirements.txt
 
       - name: Lint (ruff)
-        run: ruff check .
+        run: .\.venv\Scripts\python -m ruff check .
 
       - name: Type check (mypy)
-        run: mypy .
+        run: .\.venv\Scripts\python -m mypy .
 
       - name: Test
-        run: pytest
+        run: .\.venv\Scripts\python -m pytest
 
       - name: Build package
-        run: python -m build --outdir dist
+        run: .\.venv\Scripts\python -m build --outdir dist
