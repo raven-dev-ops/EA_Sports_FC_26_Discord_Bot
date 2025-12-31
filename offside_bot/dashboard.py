@@ -340,7 +340,7 @@ def _pro_locked_page(
         for name, desc in benefits
     )
     body = f"""
-      <h1 style="margin-top:0;">{_escape_html(title)}</h1>
+      <h1 class="mt-0">{_escape_html(title)}</h1>
       <div class="card">
         <div class="flex-between">
           <div class="flex-start">
@@ -357,7 +357,7 @@ def _pro_locked_page(
         </div>
       </div>
       <div class="card">
-        <h2 style="margin-top:0;">What you get with Pro</h2>
+        <h2 class="mt-0">What you get with Pro</h2>
         <ul class="list-reset">
           {benefits_html}
         </ul>

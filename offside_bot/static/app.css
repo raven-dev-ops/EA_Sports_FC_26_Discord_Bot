@@ -299,6 +299,30 @@ code {
   margin-top: 10px;
 }
 
+.mt-0 {
+  margin-top: 0;
+}
+
+.mt-4 {
+  margin-top: 4px;
+}
+
+.mt-6 {
+  margin-top: 6px;
+}
+
+.mt-8 {
+  margin-top: 8px;
+}
+
+.mt-10 {
+  margin-top: 10px;
+}
+
+.mt-12 {
+  margin-top: 12px;
+}
+
 .sidebar {
   width: 240px;
   flex: 0 0 240px;
