@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import logging
 import time
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -130,6 +131,7 @@ def handle_stripe_webhook(
     sig_header: str,
     secret: str,
 ) -> StripeWebhookResult:
+    log = logging.getLogger(__name__)
     if not verify_stripe_signature(payload, sig_header=sig_header, secret=secret):
         raise ValueError("Invalid Stripe signature.")
 
@@ -150,6 +152,10 @@ def handle_stripe_webhook(
 
     existing = events.find_one({"_id": event_id}) or {}
     if isinstance(existing, dict) and existing.get("status") == "processed":
+        log.info(
+            "stripe_webhook_duplicate",
+            extra={"event_id": event_id, "event_type": event_type, "handled": existing.get("handled")},
+        )
         return StripeWebhookResult(event_id=event_id, event_type=event_type, status="duplicate")
 
     now = _utc_now()
@@ -175,6 +181,10 @@ def handle_stripe_webhook(
         return_document=ReturnDocument.AFTER,
     )
     if claimed is None:
+        log.info(
+            "stripe_webhook_in_progress",
+            extra={"event_id": event_id, "event_type": event_type, "status": "in_progress"},
+        )
         return StripeWebhookResult(event_id=event_id, event_type=event_type, status="in_progress")
 
     handled = "ignored"
@@ -285,6 +295,43 @@ def handle_stripe_webhook(
                     entitlements_service.invalidate_guild_plan(guild_id)
                     handled = "payment_failed"
 
+        elif event_type == "invoice.paid":
+            subscription_id = obj.get("subscription")
+            sub_id = str(subscription_id) if subscription_id else ""
+            sub = get_guild_subscription_by_subscription_id(settings, subscription_id=sub_id) if sub_id else None
+            if not sub:
+                _dead_letter(
+                    dead_letters,
+                    event_id=event_id,
+                    event_type=event_type,
+                    reason="unknown_subscription_id",
+                    payload=event,
+                )
+                handled = "dead_lettered"
+            else:
+                guild_id = _parse_guild_id(sub.get("guild_id")) or _parse_guild_id(sub.get("_id"))
+                if guild_id is None:
+                    _dead_letter(
+                        dead_letters,
+                        event_id=event_id,
+                        event_type=event_type,
+                        reason="missing_guild_id_in_subscription_doc",
+                        payload=event,
+                    )
+                    handled = "dead_lettered"
+                else:
+                    upsert_guild_subscription(
+                        settings,
+                        guild_id=guild_id,
+                        plan=str(sub.get("plan") or entitlements_service.PLAN_PRO),
+                        status="active",
+                        period_end=sub.get("period_end") if isinstance(sub.get("period_end"), datetime) else None,
+                        customer_id=str(sub.get("customer_id") or obj.get("customer") or "") or None,
+                        subscription_id=sub_id or None,
+                    )
+                    entitlements_service.invalidate_guild_plan(guild_id)
+                    handled = "invoice_paid"
+
         else:
             _dead_letter(
                 dead_letters,
@@ -300,6 +347,7 @@ def handle_stripe_webhook(
             {"_id": event_id},
             {"$set": {"status": "failed", "failed_at": _utc_now(), "error": str(exc)}},
         )
+        log.exception("stripe_webhook_failed", extra={"event_id": event_id, "event_type": event_type})
         raise
 
     events.update_one(
@@ -319,7 +367,7 @@ def handle_stripe_webhook(
             record_audit_event(
                 guild_id=guild_id,
                 category="billing",
-                action=event_type,
+                action=f"stripe.{handled or event_type}",
                 source="stripe_webhook",
                 details={
                     "event_id": event_id,
@@ -331,6 +379,10 @@ def handle_stripe_webhook(
         except Exception:
             pass
 
+    log.info(
+        "stripe_webhook_processed",
+        extra={"event_id": event_id, "event_type": event_type, "handled": handled, "guild_id": guild_id},
+    )
     return StripeWebhookResult(
         event_id=event_id,
         event_type=event_type,
