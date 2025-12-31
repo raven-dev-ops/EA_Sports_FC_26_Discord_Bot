@@ -163,6 +163,14 @@ def _upsert_user_record(settings: Settings, user: dict[str, Any]) -> None:
         logging.exception("event=upsert_user_record_failed")
 
 
+def _guild_icon_url(guild: dict[str, Any]) -> str | None:
+    gid = str(guild.get("id") or "").strip()
+    icon = str(guild.get("icon") or "").strip()
+    if gid and icon:
+        return f"https://cdn.discordapp.com/icons/{gid}/{icon}.png?size=64"
+    return None
+
+
 def _guild_section_url(guild_id: str, *, section: str) -> str:
     gid = urllib.parse.quote(str(guild_id))
     if section == "overview":
@@ -929,6 +937,25 @@ async def app_index(request: web.Request) -> web.Response:
     settings: Settings = request.app["settings"]
 
     guild_cards = []
+    search_box = """
+      <div class="card" style="margin-bottom:16px;">
+        <label for="guild-search" class="muted">Search servers</label>
+        <input id="guild-search" type="text" placeholder="Search by name..." style="width:100%; padding:8px; margin-top:6px;" />
+      </div>
+      <script>
+        (function(){
+          const input = document.getElementById('guild-search');
+          if (!input) return;
+          input.addEventListener('input', function() {
+            const term = (this.value || '').toLowerCase();
+            document.querySelectorAll('.guild-card').forEach(function(card){
+              const name = (card.getAttribute('data-name') || '').toLowerCase();
+              card.style.display = name.includes(term) ? '' : 'none';
+            });
+          });
+        })();
+      </script>
+    """
     eligible_ids = {str(g.get("id")) for g in session.owner_guilds}
     for g in session.all_guilds:
         gid = g.get("id")
@@ -939,6 +966,15 @@ async def app_index(request: web.Request) -> web.Response:
         if eligible and gid_str.isdigit():
             plan = entitlements_service.get_guild_plan(settings, guild_id=int(gid_str))
             plan_badge = f"<span class='badge {plan}'>{_escape_html(plan.upper())}</span>"
+        icon_url = _guild_icon_url(g)
+        if icon_url:
+            icon_html = (
+                f"<img src='{_escape_html(icon_url)}' alt='' "
+                "style='width:48px; height:48px; border-radius:50%; object-fit:cover;' />"
+            )
+        else:
+            fallback = _escape_html((name[:2] or "").upper())
+            icon_html = f"<div class='avatar-fallback'>{fallback}</div>"
 
         actions = ""
         if eligible:
@@ -959,11 +995,20 @@ async def app_index(request: web.Request) -> web.Response:
             )
 
         guild_cards.append(
-            f"<div class='card'><div style='display:flex; gap:10px; align-items:center; justify-content:space-between;'>"
-            f"<strong>{name}</strong>{plan_badge}</div>"
-            f"<div class='muted'>Guild ID: <code>{gid}</code></div>"
-            f"{actions}"
-            f"</div>"
+            "".join(
+                [
+                    f"<div class='card guild-card' data-name='{name}'>",
+                    "<div style='display:flex; gap:12px; align-items:center; justify-content:space-between; flex-wrap:wrap;'>",
+                    "<div style='display:flex; gap:12px; align-items:center;'>",
+                    icon_html,
+                    f"<div><div style='font-weight:600;'>{name}</div><div class='muted'>Guild ID: <code>{gid}</code></div></div>",
+                    "</div>",
+                    f"<div style='display:flex; gap:8px; align-items:center;'>{plan_badge}</div>",
+                    "</div>",
+                    actions,
+                    "</div>",
+                ]
+            )
         )
     cards_html = "\n".join(guild_cards) if guild_cards else "<p>No servers found.</p>"
     invite_href = _invite_url(settings)
@@ -980,6 +1025,7 @@ async def app_index(request: web.Request) -> web.Response:
 
     content = f"""
       <h1 style="margin-top:0;">Your servers</h1>
+      {search_box}
       {cards_html}
       <h2>Invite link</h2>
       <p class="muted">Direct invite URL (shareable):</p>
