@@ -45,6 +45,7 @@ from services.ops_tasks_service import (
 )
 from services.stripe_webhook_service import ensure_stripe_webhook_indexes, handle_stripe_webhook
 from services.subscription_service import get_guild_subscription
+from utils.redaction import redact_ip, redact_text
 
 DISCORD_API_BASE = "https://discord.com/api"
 AUTHORIZE_URL = "https://discord.com/oauth2/authorize"
@@ -53,6 +54,7 @@ ME_URL = f"{DISCORD_API_BASE}/users/@me"
 MY_GUILDS_URL = f"{DISCORD_API_BASE}/users/@me/guilds"
 
 COOKIE_NAME = "offside_dashboard_session"
+REQUEST_ID_HEADER = "X-Request-Id"
 SESSION_TTL_SECONDS = int(os.environ.get("DASHBOARD_SESSION_TTL_SECONDS", "21600").strip() or "21600")
 SESSION_IDLE_TIMEOUT_SECONDS = int(
     os.environ.get("DASHBOARD_SESSION_IDLE_TIMEOUT_SECONDS", "1800").strip() or "1800"
@@ -988,6 +990,16 @@ def _client_ip(request: web.Request) -> str:
     return str(request.remote or "")
 
 
+def _request_id(request: web.Request) -> str:
+    return str(request.get("request_id") or "")
+
+
+def _log_extra(request: web.Request, **extra: object) -> dict[str, object]:
+    data = {"request_id": _request_id(request)}
+    data.update(extra)
+    return data
+
+
 def _rate_limit_bucket_and_max(path: str) -> tuple[str, int]:
     if path in {"/health", "/ready"}:
         return "health", 10_000
@@ -1024,12 +1036,28 @@ def _sweep_rate_limit_state(*, window_seconds: int) -> None:
 
 
 @web.middleware
+async def request_id_middleware(request: web.Request, handler):
+    request_id = str(request.headers.get(REQUEST_ID_HEADER, "")).strip()
+    if not request_id:
+        request_id = secrets.token_urlsafe(8)
+    request["request_id"] = request_id
+    try:
+        response = await handler(request)
+    except web.HTTPException as exc:
+        exc.headers[REQUEST_ID_HEADER] = request_id
+        raise
+    response.headers[REQUEST_ID_HEADER] = request_id
+    return response
+
+
+@web.middleware
 async def rate_limit_middleware(request: web.Request, handler):
     bucket, max_requests = _rate_limit_bucket_and_max(request.path)
     window_seconds = max(1, int(RATE_LIMIT_WINDOW_SECONDS))
     _sweep_rate_limit_state(window_seconds=window_seconds)
 
-    ip = _client_ip(request)
+    ip = redact_ip(_client_ip(request))
+    request_id = _request_id(request)
     allowed, retry_after = _rate_limit_allowed(
         key=(bucket, ip),
         limit=max(1, int(max_requests)),
@@ -1037,11 +1065,19 @@ async def rate_limit_middleware(request: web.Request, handler):
     )
     if not allowed:
         logging.warning(
-            "event=rate_limited bucket=%s ip=%s path=%s retry_after=%s",
+            "event=rate_limited request_id=%s bucket=%s ip=%s path=%s retry_after=%s",
+            request_id,
             bucket,
             ip,
             request.path,
             retry_after,
+            extra=_log_extra(
+                request,
+                bucket=bucket,
+                client_ip=ip,
+                path=request.path,
+                retry_after=retry_after,
+            ),
         )
         resp = web.json_response(
             {"ok": False, "error": "rate_limited", "bucket": bucket},
@@ -1058,8 +1094,15 @@ async def timeout_middleware(request: web.Request, handler):
     try:
         return await asyncio.wait_for(handler(request), timeout=float(REQUEST_TIMEOUT_SECONDS))
     except asyncio.TimeoutError:
-        ip = _client_ip(request)
-        logging.warning("event=request_timeout ip=%s path=%s", ip, request.path)
+        ip = redact_ip(_client_ip(request))
+        request_id = _request_id(request)
+        logging.warning(
+            "event=request_timeout request_id=%s ip=%s path=%s",
+            request_id,
+            ip,
+            request.path,
+            extra=_log_extra(request, client_ip=ip, path=request.path),
+        )
         raise web.HTTPRequestTimeout(text="Request timed out.") from None
 
 
@@ -1751,6 +1794,7 @@ async def oauth_callback(request: web.Request) -> web.Response:
     settings: Settings = request.app["settings"]
     client_id, client_secret, redirect_uri = _oauth_config(settings)
     http: ClientSession = request.app["http"]
+    request_id = _request_id(request)
 
     code = str(request.query.get("code") or "").strip()
     state = str(request.query.get("state") or "").strip()
@@ -1813,7 +1857,14 @@ async def oauth_callback(request: web.Request) -> web.Response:
             code=code,
         )
     except web.HTTPException as exc:
-        logging.warning("event=oauth_exchange_failed status=%s detail=%s", exc.status, exc.text)
+        detail = redact_text(str(exc.text))
+        logging.warning(
+            "event=oauth_exchange_failed request_id=%s status=%s detail=%s",
+            request_id,
+            exc.status,
+            detail,
+            extra=_log_extra(request, status=exc.status),
+        )
         return _oauth_error_response(
             title="Login failed",
             message="Discord token exchange failed. Please try again.",
@@ -1821,7 +1872,11 @@ async def oauth_callback(request: web.Request) -> web.Response:
             status=502,
         )
     except Exception:
-        logging.exception("event=oauth_exchange_failed_unhandled")
+        logging.exception(
+            "event=oauth_exchange_failed_unhandled request_id=%s",
+            request_id,
+            extra=_log_extra(request),
+        )
         return _oauth_error_response(
             title="Login failed",
             message="Discord token exchange failed. Please try again.",
@@ -1841,7 +1896,14 @@ async def oauth_callback(request: web.Request) -> web.Response:
         user = await _discord_get_json(http, url=ME_URL, access_token=access_token)
         guilds = await _discord_get_json(http, url=MY_GUILDS_URL, access_token=access_token)
     except web.HTTPException as exc:
-        logging.warning("event=oauth_discord_api_failed status=%s detail=%s", exc.status, exc.text)
+        detail = redact_text(str(exc.text))
+        logging.warning(
+            "event=oauth_discord_api_failed request_id=%s status=%s detail=%s",
+            request_id,
+            exc.status,
+            detail,
+            extra=_log_extra(request, status=exc.status),
+        )
         return _oauth_error_response(
             title="Login failed",
             message="Discord API request failed. Please try again.",
@@ -1849,7 +1911,11 @@ async def oauth_callback(request: web.Request) -> web.Response:
             status=502,
         )
     except Exception:
-        logging.exception("event=oauth_discord_api_failed_unhandled")
+        logging.exception(
+            "event=oauth_discord_api_failed_unhandled request_id=%s",
+            request_id,
+            extra=_log_extra(request),
+        )
         return _oauth_error_response(
             title="Login failed",
             message="Discord API request failed. Please try again.",
@@ -1862,7 +1928,11 @@ async def oauth_callback(request: web.Request) -> web.Response:
     try:
         _upsert_user_record(settings, user)
     except Exception:
-        logging.exception("event=upsert_user_record_failed")
+        logging.exception(
+            "event=upsert_user_record_failed request_id=%s",
+            request_id,
+            extra=_log_extra(request),
+        )
 
     installed_guild_id = request.query.get("guild_id", "").strip()
     last_guild_id = int(installed_guild_id) if installed_guild_id.isdigit() else None
@@ -4329,6 +4399,7 @@ def create_app(*, settings: Settings | None = None) -> web.Application:
     app = web.Application(
         client_max_size=max(1, int(MAX_REQUEST_BYTES)),
         middlewares=[
+            request_id_middleware,
             security_headers_middleware,
             rate_limit_middleware,
             timeout_middleware,

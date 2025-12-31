@@ -6,43 +6,14 @@ from pathlib import Path
 from typing import Any
 
 from config import Settings
-
-_SENSITIVE_KEY_SUBSTRINGS = (
-    "token",
-    "secret",
-    "password",
-    "authorization",
-    "cookie",
-    "api_key",
-    "apikey",
-    "private_key",
-)
+from utils.redaction import scrub
 
 _INITIALIZED = False
 
 
-def _is_sensitive_key(key: str) -> bool:
-    lowered = key.lower()
-    return any(substr in lowered for substr in _SENSITIVE_KEY_SUBSTRINGS)
-
-
-def _scrub(value: Any) -> Any:
-    if isinstance(value, dict):
-        scrubbed: dict[Any, Any] = {}
-        for k, v in value.items():
-            if isinstance(k, str) and _is_sensitive_key(k):
-                scrubbed[k] = "[Filtered]"
-            else:
-                scrubbed[k] = _scrub(v)
-        return scrubbed
-    if isinstance(value, list):
-        return [_scrub(v) for v in value]
-    return value
-
-
 def _before_send(event: Any, hint: dict[str, Any]) -> Any | None:  # noqa: ARG001
     try:
-        return _scrub(event)
+        return scrub(event)
     except Exception:
         return event
 

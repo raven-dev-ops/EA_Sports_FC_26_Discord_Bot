@@ -31,4 +31,5 @@ def log_command_event(interaction: discord.Interaction, *, status: str) -> None:
         ctx["channel_id"],
         ctx["user_id"],
         ctx["command"],
+        extra=ctx,
     )

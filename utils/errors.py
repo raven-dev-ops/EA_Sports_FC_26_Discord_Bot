@@ -18,6 +18,12 @@ def log_interaction_error(
     guild_id = getattr(interaction.guild, "id", None) if interaction.guild else None
     channel_id = getattr(interaction.channel, "id", None) if interaction.channel else None
     user_id = getattr(interaction.user, "id", None)
+    extra = {
+        "guild_id": guild_id,
+        "channel_id": channel_id,
+        "user_id": user_id,
+        "command": command_name,
+    }
     logging.error(
         "%sInteraction error source=%s guild=%s channel=%s user=%s command=%s",
         prefix,
@@ -27,6 +33,7 @@ def log_interaction_error(
         user_id,
         command_name,
         exc_info=error,
+        extra=extra,
     )
 
 

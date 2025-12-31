@@ -29,3 +29,7 @@ CI runs `python -m scripts.check_release_metadata` to verify:
 - `VERSION` is valid SemVer.
 - The top `CHANGELOG.md` entry matches `VERSION`.
 - Tag releases use `vX.Y.Z` that matches `VERSION`.
+
+## Log hygiene checks
+
+CI runs `python -m scripts.check_log_hygiene` to flag logging calls that include sensitive variable names.
