@@ -189,6 +189,163 @@ async def test_oauth_callback_records_manage_guild_as_eligible(monkeypatch) -> N
 
 
 @pytest.mark.asyncio
+async def test_oauth_callback_with_expired_state_is_rejected(monkeypatch) -> None:
+    from aiohttp.test_utils import TestClient, TestServer
+
+    monkeypatch.setattr(database, "MongoClient", mongomock.MongoClient)
+    monkeypatch.setattr(database, "_CLIENT", None)
+    monkeypatch.setenv("DISCORD_CLIENT_SECRET", "secret")
+    monkeypatch.setenv("DASHBOARD_REDIRECT_URI", "http://localhost:8080/oauth/callback")
+
+    app = dashboard.create_app(settings=_settings())
+    states = app["state_collection"]
+    states.insert_one(
+        {
+            "_id": "state_expired",
+            "issued_at": time.time() - (dashboard.STATE_TTL_SECONDS + 5),
+            "next": "/app",
+            "expires_at": datetime.now(timezone.utc) + timedelta(seconds=600),
+        }
+    )
+
+    client = TestClient(TestServer(app))
+    await client.start_server()
+    try:
+        resp = await client.get("/oauth/callback?code=abc&state=state_expired", allow_redirects=False)
+        assert resp.status == 400
+        html = await resp.text()
+        assert "Login expired" in html
+    finally:
+        await client.close()
+
+
+@pytest.mark.asyncio
+async def test_session_idle_timeout_forces_relogin(monkeypatch) -> None:
+    from urllib.parse import parse_qs, urlparse
+
+    from aiohttp.test_utils import TestClient, TestServer
+
+    monkeypatch.setattr(database, "MongoClient", mongomock.MongoClient)
+    monkeypatch.setattr(database, "_CLIENT", None)
+
+    app = dashboard.create_app(settings=_settings())
+    sessions = app["session_collection"]
+    now = time.time()
+    sessions.insert_one(
+        {
+            "_id": "sess_idle",
+            "created_at": now - 120,
+            "last_seen_at": now - (dashboard.SESSION_IDLE_TIMEOUT_SECONDS + 5),
+            "expires_at": datetime.now(timezone.utc) + timedelta(seconds=dashboard.SESSION_TTL_SECONDS),
+            "user": {"id": "1", "username": "alice", "discriminator": "0001"},
+            "owner_guilds": [{"id": "123", "name": "Guild"}],
+            "all_guilds": [{"id": "123", "name": "Guild"}],
+            "csrf_token": "csrf_idle",
+        }
+    )
+
+    client = TestClient(TestServer(app))
+    await client.start_server()
+    try:
+        resp = await client.get("/app", allow_redirects=False, headers={"Cookie": f"{dashboard.COOKIE_NAME}=sess_idle"})
+        assert resp.status == 302
+        parsed = urlparse(resp.headers["Location"])
+        assert parsed.path == "/login"
+        assert parse_qs(parsed.query).get("next") == ["/app"]
+        assert sessions.find_one({"_id": "sess_idle"}) is None
+    finally:
+        await client.close()
+
+
+@pytest.mark.asyncio
+async def test_guild_list_cache_ttl_forces_relogin(monkeypatch) -> None:
+    from urllib.parse import parse_qs, urlparse
+
+    from aiohttp.test_utils import TestClient, TestServer
+
+    monkeypatch.setattr(database, "MongoClient", mongomock.MongoClient)
+    monkeypatch.setattr(database, "_CLIENT", None)
+
+    app = dashboard.create_app(settings=_settings())
+    sessions = app["session_collection"]
+    now = time.time()
+    stale = now - (dashboard.GUILD_METADATA_TTL_SECONDS + 5)
+    sessions.insert_one(
+        {
+            "_id": "sess_stale_guilds",
+            "created_at": now - 120,
+            "last_seen_at": now,
+            "guilds_fetched_at": stale,
+            "expires_at": datetime.now(timezone.utc) + timedelta(seconds=dashboard.SESSION_TTL_SECONDS),
+            "user": {"id": "1", "username": "alice", "discriminator": "0001"},
+            "owner_guilds": [{"id": "123", "name": "Guild"}],
+            "all_guilds": [{"id": "123", "name": "Guild"}],
+            "csrf_token": "csrf_stale",
+        }
+    )
+
+    client = TestClient(TestServer(app))
+    await client.start_server()
+    try:
+        resp = await client.get("/app", allow_redirects=False, headers={"Cookie": f"{dashboard.COOKIE_NAME}=sess_stale_guilds"})
+        assert resp.status == 302
+        parsed = urlparse(resp.headers["Location"])
+        assert parsed.path == "/login"
+        assert parse_qs(parsed.query).get("next") == ["/app"]
+        assert sessions.find_one({"_id": "sess_stale_guilds"}) is None
+    finally:
+        await client.close()
+
+
+@pytest.mark.asyncio
+async def test_oauth_callback_sets_secure_cookie_flags_when_https(monkeypatch) -> None:
+    from aiohttp.test_utils import TestClient, TestServer
+
+    monkeypatch.setattr(database, "MongoClient", mongomock.MongoClient)
+    monkeypatch.setattr(database, "_CLIENT", None)
+    monkeypatch.setenv("DISCORD_CLIENT_SECRET", "secret")
+    monkeypatch.setenv("DASHBOARD_REDIRECT_URI", "http://localhost:8080/oauth/callback")
+
+    async def fake_exchange_code(*_args, **_kwargs):
+        return {"access_token": "access_token"}
+
+    async def fake_discord_get_json(*_args, url: str, **_kwargs):
+        if url == dashboard.ME_URL:
+            return {"id": "1", "username": "alice", "discriminator": "0001"}
+        if url == dashboard.MY_GUILDS_URL:
+            return [{"id": "123", "name": "Managed", "owner": True, "permissions": "0"}]
+        raise AssertionError(f"Unexpected Discord URL: {url}")
+
+    monkeypatch.setattr(dashboard, "_exchange_code", fake_exchange_code)
+    monkeypatch.setattr(dashboard, "_discord_get_json", fake_discord_get_json)
+    monkeypatch.setattr(dashboard, "_is_https", lambda _req: True)
+
+    app = dashboard.create_app(settings=_settings())
+    states = app["state_collection"]
+    states.insert_one(
+        {
+            "_id": "state_secure",
+            "issued_at": time.time(),
+            "next": "/",
+            "expires_at": datetime.now(timezone.utc) + timedelta(seconds=600),
+        }
+    )
+
+    client = TestClient(TestServer(app))
+    await client.start_server()
+    try:
+        resp = await client.get("/oauth/callback?code=abc&state=state_secure", allow_redirects=False)
+        assert resp.status == 302
+        set_cookie = resp.headers.get("Set-Cookie", "")
+        assert dashboard.COOKIE_NAME in set_cookie
+        assert "HttpOnly" in set_cookie
+        assert "SameSite=Lax" in set_cookie or "SameSite=lax" in set_cookie
+        assert "Secure" in set_cookie
+    finally:
+        await client.close()
+
+
+@pytest.mark.asyncio
 async def test_billing_checkout_requires_csrf(monkeypatch) -> None:
     from aiohttp.test_utils import TestClient, TestServer
 
@@ -221,6 +378,47 @@ async def test_billing_checkout_requires_csrf(monkeypatch) -> None:
         assert resp.status == 400
         text = await resp.text()
         assert "CSRF" in text
+    finally:
+        await client.close()
+
+
+@pytest.mark.asyncio
+async def test_guild_access_denied_is_logged(monkeypatch) -> None:
+    from aiohttp.test_utils import TestClient, TestServer
+
+    monkeypatch.setattr(database, "MongoClient", mongomock.MongoClient)
+    monkeypatch.setattr(database, "_CLIENT", None)
+
+    app = dashboard.create_app(settings=_settings())
+    sessions = app["session_collection"]
+    now = time.time()
+    sessions.insert_one(
+        {
+            "_id": "sess_denied",
+            "created_at": now,
+            "last_seen_at": now,
+            "guilds_fetched_at": now,
+            "expires_at": datetime.now(timezone.utc) + timedelta(seconds=dashboard.SESSION_TTL_SECONDS),
+            "user": {"id": "1", "username": "alice", "discriminator": "0001"},
+            "owner_guilds": [{"id": "123", "name": "Guild"}],
+            "all_guilds": [{"id": "123", "name": "Guild"}],
+            "csrf_token": "csrf_good",
+        }
+    )
+
+    client = TestClient(TestServer(app))
+    await client.start_server()
+    try:
+        resp = await client.get(
+            "/guild/999/overview", allow_redirects=False, headers={"Cookie": f"{dashboard.COOKIE_NAME}=sess_denied"}
+        )
+        assert resp.status == 403
+        collection = database.get_collection(settings=_settings())
+        docs = list(collection.find({"record_type": "audit_event", "guild_id": 999}))
+        assert len(docs) == 1
+        doc = docs[0]
+        assert doc.get("action") == "dashboard.access_denied"
+        assert doc.get("category") == "auth"
     finally:
         await client.close()
 

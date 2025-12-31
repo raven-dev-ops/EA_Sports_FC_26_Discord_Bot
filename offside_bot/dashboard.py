@@ -53,6 +53,12 @@ MY_GUILDS_URL = f"{DISCORD_API_BASE}/users/@me/guilds"
 
 COOKIE_NAME = "offside_dashboard_session"
 SESSION_TTL_SECONDS = int(os.environ.get("DASHBOARD_SESSION_TTL_SECONDS", "21600").strip() or "21600")
+SESSION_IDLE_TIMEOUT_SECONDS = int(
+    os.environ.get("DASHBOARD_SESSION_IDLE_TIMEOUT_SECONDS", "1800").strip() or "1800"
+)
+SESSION_TOUCH_INTERVAL_SECONDS = int(
+    os.environ.get("DASHBOARD_SESSION_TOUCH_INTERVAL_SECONDS", "300").strip() or "300"
+)
 STATE_TTL_SECONDS = 600
 GUILD_METADATA_TTL_SECONDS = int(os.environ.get("DASHBOARD_GUILD_METADATA_TTL_SECONDS", "60").strip() or "60")
 
@@ -72,6 +78,7 @@ DEFAULT_BOT_PERMISSIONS = 268520464
 
 DASHBOARD_SESSIONS_COLLECTION = "dashboard_sessions"
 DASHBOARD_OAUTH_STATES_COLLECTION = "dashboard_oauth_states"
+DASHBOARD_USERS_COLLECTION = "dashboard_users"
 
 
 @dataclass
@@ -81,6 +88,8 @@ class SessionData:
     owner_guilds: list[dict[str, Any]]
     all_guilds: list[dict[str, Any]]
     csrf_token: str
+    last_seen_at: float
+    guilds_fetched_at: float
 
 
 _RATE_LIMIT_STATE: dict[tuple[str, str], tuple[int, float]] = {}
@@ -91,12 +100,15 @@ def _utc_now() -> datetime:
     return datetime.utcnow()
 
 
-def _ensure_dashboard_collections(settings: Settings) -> tuple[Collection, Collection]:
+def _ensure_dashboard_collections(settings: Settings) -> tuple[Collection, Collection, Collection]:
     sessions = get_global_collection(settings, name=DASHBOARD_SESSIONS_COLLECTION)
     states = get_global_collection(settings, name=DASHBOARD_OAUTH_STATES_COLLECTION)
+    users = get_global_collection(settings, name=DASHBOARD_USERS_COLLECTION)
     sessions.create_index("expires_at", expireAfterSeconds=0, name="ttl_expires_at")
     states.create_index("expires_at", expireAfterSeconds=0, name="ttl_expires_at")
-    return sessions, states
+    users.create_index("discord_user_id", unique=True, name="uniq_discord_user_id")
+    users.create_index("updated_at", name="idx_updated_at")
+    return sessions, states, users
 
 
 def _insert_unique(col: Collection, doc_factory) -> str:
@@ -120,6 +132,35 @@ def _html_page(*, title: str, body: str) -> str:
     from offside_bot.web_templates import render, safe_html
 
     return render("base.html", title=title, body=safe_html(body))
+
+
+def _upsert_user_record(settings: Settings, user: dict[str, Any]) -> None:
+    """
+    Persist the Discord user profile so we have a server-side audit trail of logins.
+    """
+    try:
+        discord_user_id = str(user.get("id") or "").strip()
+        if not discord_user_id:
+            return
+        now = datetime.now(timezone.utc)
+        users = get_global_collection(settings, name=DASHBOARD_USERS_COLLECTION)
+        users.update_one(
+            {"discord_user_id": discord_user_id},
+            {
+                "$set": {
+                    "discord_user_id": discord_user_id,
+                    "username": user.get("username"),
+                    "discriminator": user.get("discriminator"),
+                    "global_name": user.get("global_name"),
+                    "avatar": user.get("avatar"),
+                    "updated_at": now,
+                },
+                "$setOnInsert": {"created_at": now},
+            },
+            upsert=True,
+        )
+    except Exception:
+        logging.exception("event=upsert_user_record_failed")
 
 
 def _guild_section_url(guild_id: str, *, section: str) -> str:
@@ -318,7 +359,7 @@ async def upgrade_redirect(request: web.Request) -> web.Response:
     settings: Settings = request.app["settings"]
 
     gid = request.query.get("guild_id", "").strip()
-    guild_id = _require_owned_guild(session, guild_id=gid) if gid else 0
+    guild_id = _require_owned_guild(session, settings=settings, path=request.path_qs, guild_id=gid) if gid else 0
     if not guild_id:
         raise web.HTTPBadRequest(text="Missing guild_id.")
 
@@ -614,11 +655,30 @@ async def session_middleware(request: web.Request, handler):
     session_id = request.cookies.get(COOKIE_NAME)
     request["session_id"] = session_id
     session: SessionData | None = None
+    now = time.time()
     if session_id:
         sessions: Collection = request.app["session_collection"]
         doc = sessions.find_one({"_id": session_id}) or {}
         created_at = doc.get("created_at")
-        if isinstance(created_at, (int, float)) and time.time() - float(created_at) <= SESSION_TTL_SECONDS:
+        expires_at_dt = doc.get("expires_at")
+        expires_at_ts = expires_at_dt.timestamp() if isinstance(expires_at_dt, datetime) else None
+        last_seen_at = doc.get("last_seen_at", created_at)
+        guilds_fetched_at = doc.get("guilds_fetched_at", created_at)
+
+        within_absolute_ttl = isinstance(created_at, (int, float)) and now - float(created_at) <= SESSION_TTL_SECONDS
+        within_expires_at = expires_at_ts is None or now <= expires_at_ts
+        idle_timeout = max(1, int(SESSION_IDLE_TIMEOUT_SECONDS)) if SESSION_IDLE_TIMEOUT_SECONDS > 0 else None
+        within_idle = (
+            idle_timeout is None
+            or (isinstance(last_seen_at, (int, float)) and now - float(last_seen_at) <= idle_timeout)
+        )
+        guild_cache_ttl = max(1, int(GUILD_METADATA_TTL_SECONDS)) if GUILD_METADATA_TTL_SECONDS > 0 else None
+        within_guild_cache = (
+            guild_cache_ttl is None
+            or (isinstance(guilds_fetched_at, (int, float)) and now - float(guilds_fetched_at) <= guild_cache_ttl)
+        )
+
+        if within_absolute_ttl and within_expires_at and within_idle and within_guild_cache:
             user = doc.get("user")
             owner_guilds = doc.get("owner_guilds")
             all_guilds = doc.get("all_guilds")
@@ -637,9 +697,19 @@ async def session_middleware(request: web.Request, handler):
                     owner_guilds=[g for g in owner_guilds if isinstance(g, dict)],
                     all_guilds=[g for g in all_guilds if isinstance(g, dict)],
                     csrf_token=csrf_token,
+                    last_seen_at=float(last_seen_at) if isinstance(last_seen_at, (int, float)) else float(created_at),
+                    guilds_fetched_at=float(guilds_fetched_at)
+                    if isinstance(guilds_fetched_at, (int, float))
+                    else float(created_at),
                 )
         if session is None:
             sessions.delete_one({"_id": session_id})
+        else:
+            touch_interval = max(1, int(SESSION_TOUCH_INTERVAL_SECONDS))
+            should_touch = now - session.last_seen_at >= touch_interval
+            if should_touch:
+                sessions.update_one({"_id": session_id}, {"$set": {"last_seen_at": now}})
+                session.last_seen_at = now
     request["session"] = session
     return await handler(request)
 
@@ -1446,6 +1516,11 @@ async def oauth_callback(request: web.Request) -> web.Response:
     all_guilds = [g for g in guilds if isinstance(g, dict)]
     owner_guilds = [g for g in all_guilds if _guild_is_eligible(g)]
 
+    try:
+        _upsert_user_record(settings, user)
+    except Exception:
+        logging.exception("event=upsert_user_record_failed")
+
     installed_guild_id = request.query.get("guild_id", "").strip()
     if installed_guild_id.isdigit():
         for g in owner_guilds:
@@ -1456,11 +1531,14 @@ async def oauth_callback(request: web.Request) -> web.Response:
     sessions: Collection = request.app["session_collection"]
     expires_at = _utc_now() + timedelta(seconds=SESSION_TTL_SECONDS)
     csrf_token = secrets.token_urlsafe(24)
+    now_ts = time.time()
     session_id = _insert_unique(
         sessions,
         lambda: {
             "_id": secrets.token_urlsafe(32),
-            "created_at": time.time(),
+            "created_at": now_ts,
+            "last_seen_at": now_ts,
+            "guilds_fetched_at": now_ts,
             "expires_at": expires_at,
             "user": user,
             "owner_guilds": owner_guilds,
@@ -1491,7 +1569,13 @@ async def logout(request: web.Request) -> web.Response:
     raise resp
 
 
-def _require_owned_guild(session: SessionData, *, guild_id: str) -> int:
+def _require_owned_guild(
+    session: SessionData,
+    *,
+    guild_id: str,
+    settings: Settings | None = None,
+    path: str | None = None,
+) -> int:
     try:
         gid_int = int(guild_id)
     except ValueError as exc:
@@ -1500,6 +1584,30 @@ def _require_owned_guild(session: SessionData, *, guild_id: str) -> int:
         if str(g.get("id")) == str(guild_id):
             set_guild_tag(gid_int)
             return gid_int
+    try:
+        user = session.user
+        actor_id = int(user.get("id")) if isinstance(user, dict) and str(user.get("id")).isdigit() else None
+        actor_username = None
+        if isinstance(user, dict):
+            username = user.get("username")
+            discriminator = user.get("discriminator")
+            if username:
+                actor_username = f"{username}#{discriminator or ''}".strip("#")
+        audit_collection = None
+        if settings is not None:
+            audit_collection = get_collection(settings, record_type="audit_event", guild_id=gid_int)
+        record_audit_event(
+            guild_id=gid_int,
+            category="auth",
+            action="dashboard.access_denied",
+            source="dashboard",
+            actor_discord_id=actor_id,
+            actor_username=actor_username,
+            details={"reason": "guild_not_authorized", "path": path},
+            collection=audit_collection,
+        )
+    except Exception:
+        logging.exception("event=access_denied_audit_failed guild_id=%s", guild_id)
     raise web.HTTPForbidden(text="You do not have access to this guild.")
 
 
@@ -1555,7 +1663,7 @@ async def guild_settings_page(request: web.Request) -> web.Response:
     settings: Settings = request.app["settings"]
 
     guild_id_str = request.match_info["guild_id"]
-    guild_id = _require_owned_guild(session, guild_id=guild_id_str)
+    guild_id = _require_owned_guild(session, settings=settings, path=request.path_qs, guild_id=guild_id_str)
 
     installed, install_error = await _detect_bot_installed(request, guild_id=guild_id)
     if installed is False:
@@ -1882,7 +1990,7 @@ async def guild_settings_save(request: web.Request) -> web.Response:
     session = _require_session(request)
     settings: Settings = request.app["settings"]
     guild_id_str = request.match_info["guild_id"]
-    guild_id = _require_owned_guild(session, guild_id=guild_id_str)
+    guild_id = _require_owned_guild(session, settings=settings, path=request.path_qs, guild_id=guild_id_str)
 
     installed, _install_error = await _detect_bot_installed(request, guild_id=guild_id)
     if installed is False:
@@ -2029,7 +2137,7 @@ async def guild_page(request: web.Request) -> web.Response:
     settings: Settings = request.app["settings"]
 
     guild_id_str = request.match_info["guild_id"]
-    guild_id = _require_owned_guild(session, guild_id=guild_id_str)
+    guild_id = _require_owned_guild(session, settings=settings, path=request.path_qs, guild_id=guild_id_str)
 
     installed, _install_error = await _detect_bot_installed(request, guild_id=guild_id)
     analytics = get_guild_analytics(settings, guild_id=guild_id)
@@ -2123,7 +2231,7 @@ async def guild_overview_page(request: web.Request) -> web.Response:
     settings: Settings = request.app["settings"]
 
     guild_id_str = request.match_info["guild_id"]
-    guild_id = _require_owned_guild(session, guild_id=guild_id_str)
+    guild_id = _require_owned_guild(session, settings=settings, path=request.path_qs, guild_id=guild_id_str)
 
     invite_href = _invite_url(settings, guild_id=str(guild_id), disable_guild_select=True)
     installed, install_error = await _detect_bot_installed(request, guild_id=guild_id)
@@ -2434,7 +2542,7 @@ async def guild_setup_wizard_page(request: web.Request) -> web.Response:
     settings: Settings = request.app["settings"]
 
     guild_id_str = request.match_info["guild_id"]
-    guild_id = _require_owned_guild(session, guild_id=guild_id_str)
+    guild_id = _require_owned_guild(session, settings=settings, path=request.path_qs, guild_id=guild_id_str)
 
     plan = entitlements_service.get_guild_plan(settings, guild_id=guild_id)
     is_pro = plan == entitlements_service.PLAN_PRO
@@ -2823,7 +2931,7 @@ async def guild_permissions_page(request: web.Request) -> web.Response:
     settings: Settings = request.app["settings"]
 
     guild_id_str = request.match_info["guild_id"]
-    guild_id = _require_owned_guild(session, guild_id=guild_id_str)
+    guild_id = _require_owned_guild(session, settings=settings, path=request.path_qs, guild_id=guild_id_str)
 
     invite_href = _invite_url(settings, guild_id=str(guild_id), disable_guild_select=True)
     installed, install_error = await _detect_bot_installed(request, guild_id=guild_id)
@@ -3115,7 +3223,7 @@ async def guild_audit_page(request: web.Request) -> web.Response:
     settings: Settings = request.app["settings"]
 
     guild_id_str = request.match_info["guild_id"]
-    guild_id = _require_owned_guild(session, guild_id=guild_id_str)
+    guild_id = _require_owned_guild(session, settings=settings, path=request.path_qs, guild_id=guild_id_str)
 
     installed, _install_error = await _detect_bot_installed(request, guild_id=guild_id)
     plan = entitlements_service.get_guild_plan(settings, guild_id=guild_id)
@@ -3214,7 +3322,7 @@ async def guild_audit_csv(request: web.Request) -> web.Response:
     settings: Settings = request.app["settings"]
 
     guild_id_str = request.match_info["guild_id"]
-    guild_id = _require_owned_guild(session, guild_id=guild_id_str)
+    guild_id = _require_owned_guild(session, settings=settings, path=request.path_qs, guild_id=guild_id_str)
 
     plan = entitlements_service.get_guild_plan(settings, guild_id=guild_id)
     if plan != entitlements_service.PLAN_PRO:
@@ -3276,7 +3384,7 @@ async def guild_ops_page(request: web.Request) -> web.Response:
     settings: Settings = request.app["settings"]
 
     guild_id_str = request.match_info["guild_id"]
-    guild_id = _require_owned_guild(session, guild_id=guild_id_str)
+    guild_id = _require_owned_guild(session, settings=settings, path=request.path_qs, guild_id=guild_id_str)
 
     installed, install_error = await _detect_bot_installed(request, guild_id=guild_id)
     if not settings.mongodb_uri:
@@ -3483,7 +3591,7 @@ async def _enqueue_ops_from_dashboard(
         raise web.HTTPInternalServerError(text="MongoDB is not configured.")
 
     guild_id_str = request.match_info["guild_id"]
-    guild_id = _require_owned_guild(session, guild_id=guild_id_str)
+    guild_id = _require_owned_guild(session, settings=settings, path=request.path_qs, guild_id=guild_id_str)
 
     installed, _install_error = await _detect_bot_installed(request, guild_id=guild_id)
     if installed is False:
@@ -3539,7 +3647,7 @@ async def guild_ops_run_full_setup(request: web.Request) -> web.Response:
         raise web.HTTPInternalServerError(text="MongoDB is not configured.")
 
     guild_id_str = request.match_info["guild_id"]
-    guild_id = _require_owned_guild(session, guild_id=guild_id_str)
+    guild_id = _require_owned_guild(session, settings=settings, path=request.path_qs, guild_id=guild_id_str)
 
     installed, _install_error = await _detect_bot_installed(request, guild_id=guild_id)
     if installed is False:
@@ -3600,7 +3708,7 @@ async def guild_ops_schedule_delete_data(request: web.Request) -> web.Response:
         raise web.HTTPBadRequest(text="Data deletion requires MONGODB_PER_GUILD_DB=true.")
 
     guild_id_str = request.match_info["guild_id"]
-    guild_id = _require_owned_guild(session, guild_id=guild_id_str)
+    guild_id = _require_owned_guild(session, settings=settings, path=request.path_qs, guild_id=guild_id_str)
 
     data = await request.post()
     if str(data.get("csrf", "")) != session.csrf_token:
@@ -3657,7 +3765,7 @@ async def guild_ops_cancel_delete_data(request: web.Request) -> web.Response:
         raise web.HTTPInternalServerError(text="MongoDB is not configured.")
 
     guild_id_str = request.match_info["guild_id"]
-    guild_id = _require_owned_guild(session, guild_id=guild_id_str)
+    guild_id = _require_owned_guild(session, settings=settings, path=request.path_qs, guild_id=guild_id_str)
 
     data = await request.post()
     if str(data.get("csrf", "")) != session.csrf_token:
@@ -3692,7 +3800,7 @@ async def guild_analytics_json(request: web.Request) -> web.Response:
     settings: Settings = request.app["settings"]
 
     guild_id_str = request.match_info["guild_id"]
-    guild_id = _require_owned_guild(session, guild_id=guild_id_str)
+    guild_id = _require_owned_guild(session, settings=settings, path=request.path_qs, guild_id=guild_id_str)
     analytics = get_guild_analytics(settings, guild_id=guild_id)
 
     return web.json_response(
@@ -3709,7 +3817,7 @@ async def guild_analytics_json(request: web.Request) -> web.Response:
 async def guild_discord_metadata_json(request: web.Request) -> web.Response:
     session = _require_session(request)
     guild_id_str = request.match_info["guild_id"]
-    guild_id = _require_owned_guild(session, guild_id=guild_id_str)
+    guild_id = _require_owned_guild(session, settings=settings, path=request.path_qs, guild_id=guild_id_str)
     roles, channels = await _get_guild_discord_metadata(request, guild_id=guild_id)
     return web.json_response({"guild_id": guild_id, "roles": roles, "channels": channels})
 
@@ -3759,9 +3867,9 @@ async def billing_page(request: web.Request) -> web.Response:
 
     selected_guild_id = request.query.get("guild_id", "").strip()
     if selected_guild_id:
-        guild_id = _require_owned_guild(session, guild_id=selected_guild_id)
+        guild_id = _require_owned_guild(session, settings=settings, path=request.path_qs, guild_id=selected_guild_id)
     elif session.owner_guilds:
-        guild_id = _require_owned_guild(session, guild_id=str(session.owner_guilds[0].get("id") or ""))
+        guild_id = _require_owned_guild(session, settings=settings, path=request.path_qs, guild_id=str(session.owner_guilds[0].get("id") or ""))
     else:
         guild_id = 0
 
@@ -3877,7 +3985,7 @@ async def billing_portal(request: web.Request) -> web.Response:
     if str(data.get("csrf", "")) != session.csrf_token:
         raise web.HTTPBadRequest(text="Invalid CSRF token.")
 
-    guild_id = _require_owned_guild(session, guild_id=str(data.get("guild_id") or ""))
+    guild_id = _require_owned_guild(session, settings=settings, path=request.path_qs, guild_id=str(data.get("guild_id") or ""))
 
     subscription = get_guild_subscription(settings, guild_id=guild_id) or {}
     customer_id = str(subscription.get("customer_id") or "").strip()
@@ -3911,7 +4019,7 @@ async def billing_checkout(request: web.Request) -> web.Response:
     if str(data.get("csrf", "")) != session.csrf_token:
         raise web.HTTPBadRequest(text="Invalid CSRF token.")
 
-    guild_id = _require_owned_guild(session, guild_id=str(data.get("guild_id") or ""))
+    guild_id = _require_owned_guild(session, settings=settings, path=request.path_qs, guild_id=str(data.get("guild_id") or ""))
     plan = str(data.get("plan") or "pro").strip().lower()
     if plan != entitlements_service.PLAN_PRO:
         raise web.HTTPBadRequest(text="Unsupported plan.")
@@ -3949,7 +4057,7 @@ async def billing_success(request: web.Request) -> web.Response:
     settings: Settings = request.app["settings"]
     gid = request.query.get("guild_id", "").strip()
     checkout_session_id = request.query.get("session_id", "").strip()
-    guild_id = _require_owned_guild(session, guild_id=gid) if gid else 0
+    guild_id = _require_owned_guild(session, settings=settings, path=request.path_qs, guild_id=gid) if gid else 0
     if not guild_id:
         raise web.HTTPBadRequest(text="Missing guild_id.")
 
@@ -4065,7 +4173,7 @@ async def billing_success(request: web.Request) -> web.Response:
 async def billing_cancel(request: web.Request) -> web.Response:
     session = _require_session(request)
     gid = request.query.get("guild_id", "").strip()
-    guild_id = _require_owned_guild(session, guild_id=gid) if gid else 0
+    guild_id = _require_owned_guild(session, settings=settings, path=request.path_qs, guild_id=gid) if gid else 0
     if not guild_id:
         raise web.HTTPBadRequest(text="Missing guild_id.")
     raise web.HTTPFound(f"/app/billing?guild_id={guild_id}&status=cancelled")
@@ -4095,9 +4203,10 @@ def create_app(*, settings: Settings | None = None) -> web.Application:
     app_settings = settings or load_settings()
     app["settings"] = app_settings
     init_error_reporting(settings=app_settings, service_name="dashboard")
-    session_collection, state_collection = _ensure_dashboard_collections(app_settings)
+    session_collection, state_collection, user_collection = _ensure_dashboard_collections(app_settings)
     app["session_collection"] = session_collection
     app["state_collection"] = state_collection
+    app["user_collection"] = user_collection
     if app_settings.mongodb_uri:
         ensure_stripe_webhook_indexes(app_settings)
         ensure_ops_task_indexes(app_settings)
