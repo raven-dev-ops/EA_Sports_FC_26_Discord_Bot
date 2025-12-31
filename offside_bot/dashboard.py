@@ -342,12 +342,15 @@ def _pro_locked_page(
     body = f"""
       <h1 style="margin-top:0;">{_escape_html(title)}</h1>
       <div class="card">
-        <div style="display:flex; gap:10px; align-items:center; justify-content:space-between;">
-          <div><strong>Pro feature</strong></div>
+        <div class="flex-between">
+          <div class="flex-start">
+            <span class="badge warn">PRO</span>
+            <strong>Locked</strong>
+          </div>
           <span class="badge warn">LOCKED</span>
         </div>
-        <p class="muted" style="margin-top:8px;">{_escape_html(message)}</p>
-        <div style="margin-top:10px; display:flex; gap:10px; flex-wrap:wrap;">
+        <p class="muted spacer-sm">{_escape_html(message)}</p>
+        <div class="btn-group spacer-sm">
           <a class="btn blue" href="{_escape_html(upgrade_href)}">Upgrade to Pro</a>
           <a class="btn secondary" href="/app/billing?guild_id={guild_id}">Billing</a>
           <a class="btn secondary" href="/guild/{guild_id}/overview">Back to overview</a>
@@ -355,7 +358,7 @@ def _pro_locked_page(
       </div>
       <div class="card">
         <h2 style="margin-top:0;">What you get with Pro</h2>
-        <ul>
+        <ul class="list-reset">
           {benefits_html}
         </ul>
       </div>
@@ -2006,7 +2009,7 @@ async def guild_settings_page(request: web.Request) -> web.Response:
             <span class="badge warn">PRO</span>
             <strong>Premium features locked</strong>
           </div>
-          <p class="muted" style="margin:6px 0 0;">Premium coach tiers, Premium Coaches report, and FC25 stats are available on the Pro plan.</p>
+          <p class="muted spacer-sm">Premium coach tiers, Premium Coaches report, and FC25 stats are available on the Pro plan.</p>
         </div>
         <div class="btn-group">
           <a class="btn blue" href="{_escape_html(upgrade_href)}">Upgrade</a>
