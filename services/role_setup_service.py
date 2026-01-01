@@ -12,7 +12,7 @@ OWNER_ROLE_NAME = "League Owner"
 MANAGER_ROLE_NAME = "Manager"
 FREE_PLAYER_ROLE_NAME = "Free Player"
 PREMIUM_PLAYER_ROLE_NAME = "Premium Player"
-RECRUIT_ROLE_NAME = "Recruit"
+FREE_AGENT_ROLE_NAME = "Free Agent"
 RETIRED_ROLE_NAME = "Retired"
 
 STAFF_ROLE_IDS_KEY = "staff_role_ids"
@@ -90,10 +90,10 @@ async def ensure_offside_roles(
         existing_role_id=_parse_int(config.get("role_premium_player_id")),
         actions=actions,
     )
-    recruit_role = await _ensure_role(
+    free_agent_role = await _ensure_role(
         guild,
-        name=RECRUIT_ROLE_NAME,
-        aliases=(),
+        name=FREE_AGENT_ROLE_NAME,
+        aliases=("Recruit",),
         existing_role_id=_parse_int(config.get("role_recruit_id")),
         actions=actions,
     )
@@ -112,7 +112,7 @@ async def ensure_offside_roles(
     config["role_manager_id"] = manager_role.id
     config["role_free_player_id"] = free_player_role.id
     config["role_premium_player_id"] = premium_player_role.id
-    config["role_recruit_id"] = recruit_role.id
+    config["role_recruit_id"] = free_agent_role.id
     config["role_retired_id"] = retired_role.id
 
     staff_role_ids = _parse_int_set(config.get(STAFF_ROLE_IDS_KEY))
