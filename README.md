@@ -220,10 +220,10 @@ staff monitor channel (`channel_staff_monitor_id`) only.
 
 ## Heroku deploy
 
-1. Ensure the repo includes a `Procfile` with a worker process.
+1. Ensure the repo includes a `Procfile` with both `web` (dashboard + webhooks) and `worker` (bot) processes.
 2. Add required config vars in the Heroku dashboard or CLI.
-3. Scale the worker dyno:
-   - `heroku ps:scale worker=1 -a <app-name>`
+3. Scale the dynos:
+   - `heroku ps:scale web=1 worker=1 -a <app-name>`
 
 ## Deployment Hardening (Recommended)
 - Enable Privileged Intents (Server Members) in the Discord developer portal if you need member exports or eligibility checks.

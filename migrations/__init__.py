@@ -6,9 +6,9 @@ from typing import Callable
 
 from config import load_settings
 from database import ensure_indexes, ensure_offside_indexes, get_collection, get_database
+from services.entitlements_service import ensure_entitlements_indexes
 from services.stripe_webhook_service import ensure_stripe_webhook_indexes
 from services.subscription_service import ensure_subscription_indexes
-from services.entitlements_service import ensure_entitlements_indexes
 
 MigrationFunc = Callable[[dict], None]
 

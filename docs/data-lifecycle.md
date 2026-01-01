@@ -14,7 +14,7 @@ Recommended backup strategy (production):
 
 ### Atlas / managed MongoDB
 
-If you’re using MongoDB Atlas or another managed provider:
+If you're using MongoDB Atlas or another managed provider:
 
 - Enable continuous backups / point-in-time restore if available.
 - Ensure backup retention matches your compliance needs.
@@ -54,7 +54,7 @@ Configure retention with:
 
 Notes:
 
-- Existing docs written before this policy may not have `expires_at` (they won’t auto-expire until backfilled).
+- Existing docs written before this policy may not have `expires_at` (they won't auto-expire until backfilled).
 - Decreasing retention affects **new** documents immediately; existing documents keep their precomputed `expires_at`.
 
 ## Guild data deletion (GDPR-style request)
@@ -63,7 +63,7 @@ From the web dashboard:
 
 1. Go to `Ops` for the guild.
 2. Under **Data deletion**, type `DELETE <guild_id>` and submit.
-3. The bot schedules an ops task that irreversibly deletes the guild’s stored data after the grace window.
+3. The bot schedules an ops task that irreversibly deletes the guild's stored data after the grace window.
 
 Configuration:
 

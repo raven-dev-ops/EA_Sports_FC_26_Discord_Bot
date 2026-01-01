@@ -19,7 +19,7 @@ See `.env.example` for the full list.
 ## Stripe setup (Dashboard)
 
 1. Create a Product (example: `Offside Pro`).
-2. Create a recurring Price for that product (monthly, or yearly — pick one to start).
+2. Create a recurring Price for that product (monthly, or yearly - pick one to start).
 3. Copy the Price ID into `STRIPE_PRICE_PRO_ID`.
 
 ## Webhook setup
@@ -41,11 +41,11 @@ In Stripe:
 
 ## Stripe Billing Portal
 
-The dashboard includes a self-serve “Manage subscription” button (Stripe Billing Portal).
+The dashboard includes a self-serve "Manage subscription" button (Stripe Billing Portal).
 
 In Stripe:
 
-1. Enable **Billing Portal** (Settings → Billing → Customer portal).
+1. Enable **Billing Portal** (Settings -> Billing -> Customer portal).
 2. Configure allowed actions (payment method updates, cancellations, etc.) as desired.
 
 ## Notes

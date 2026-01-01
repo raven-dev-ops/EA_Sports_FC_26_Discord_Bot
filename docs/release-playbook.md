@@ -34,14 +34,14 @@ See also:
   - Discord staging guild: `docs/qa-checklist.md`
 - [ ] Confirm Discord developer portal settings are correct (redirect URIs, install link, bot perms).
 - [ ] Deploy the release to production (see platform notes below).
-- [ ] Watch logs for 5–10 minutes after deploy (startup migrations, setup tasks, dashboard health).
+- [ ] Watch logs for 5-10 minutes after deploy (startup migrations, setup tasks, dashboard health).
 
 ## Known GitHub Actions caveat (billing-gated dynamic workflow)
 
 Some repos may show a failing check named `Automatic Dependency Submission (Python)` even when CI is green.
 It is GitHub-managed and may fail if GitHub-hosted runners cannot start due to account billing/spending limits.
 
-If you don’t need it, disable it in repo settings (details: `docs/ci.md`).
+If you don't need it, disable it in repo settings (details: `docs/ci.md`).
 
 ## Environment variable checklist
 

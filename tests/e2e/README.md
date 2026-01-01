@@ -7,10 +7,10 @@ These are manual/automation-ready scenarios that can be exercised with mocked cr
    - Covers: unauth marketing pages, OAuth return-to-route, settings page load, and a mocked Stripe checkout redirect.
 
 1) **Roster lifecycle**
-   - `/roster` create → add 8 players → submit → approve/reject → unlock → resubmit.
+- `/roster` create -> add 8 players -> submit -> approve/reject -> unlock -> resubmit.
    - Verify approved roster posts to roster listing channel; staff card cleans up on decision.
 2) **Tournament flow**
-   - `/tournament_create` → `/tournament_register` 4 teams → `/tournament_bracket_preview` → `/tournament_bracket` → `/match_report` + `/match_confirm` → `/advance_round` → `/tournament_stats`.
+- `/tournament_create` -> `/tournament_register` 4 teams -> `/tournament_bracket_preview` -> `/tournament_bracket` -> `/match_report` + `/match_confirm` -> `/advance_round` -> `/tournament_stats`.
 3) **Recovery**
    - Insert a submitted roster without submission record; restart worker and confirm it auto-unlocks.
 4) **Permissions**

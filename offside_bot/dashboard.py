@@ -35,9 +35,9 @@ from services.guild_settings_schema import (
 from services.heartbeat_service import get_worker_heartbeat
 from services.ops_tasks_service import (
     OPS_TASK_ACTION_DELETE_GUILD_DATA,
-    OPS_TASKS_COLLECTION,
     OPS_TASK_ACTION_REPOST_PORTALS,
     OPS_TASK_ACTION_RUN_SETUP,
+    OPS_TASKS_COLLECTION,
     cancel_ops_task,
     enqueue_ops_task,
     ensure_ops_task_indexes,
@@ -56,9 +56,9 @@ from services.subscription_service import (
     get_subscription_collection,
     upsert_guild_subscription,
 )
-from utils.redaction import redact_ip, redact_text
 from utils.environment import validate_stripe_environment
 from utils.i18n import t
+from utils.redaction import redact_ip, redact_text
 
 DISCORD_API_BASE = "https://discord.com/api"
 AUTHORIZE_URL = "https://discord.com/oauth2/authorize"
@@ -4189,6 +4189,68 @@ async def guild_ops_page(request: web.Request) -> web.Response:
     )
 
 
+async def _enqueue_ops_from_dashboard(request: web.Request, *, action: str) -> web.Response:
+    session = _require_session(request)
+    settings: Settings = request.app["settings"]
+    if not settings.mongodb_uri:
+        raise web.HTTPInternalServerError(text="MongoDB is not configured.")
+
+    guild_id_str = request.match_info["guild_id"]
+    guild_id = _require_owned_guild(session, settings=settings, path=request.path_qs, guild_id=guild_id_str)
+
+    installed, _install_error = await _detect_bot_installed(request, guild_id=guild_id)
+    if installed is False:
+        raise web.HTTPBadRequest(text="Bot is not installed in this server yet. Invite it first.")
+
+    data = await request.post()
+    if str(data.get("csrf", "")) != session.csrf_token:
+        raise web.HTTPBadRequest(text="Invalid CSRF token.")
+
+    actor_id = _parse_int(session.user.get("id"))
+    actor_username = f"{session.user.get('username','')}#{session.user.get('discriminator','')}".strip("#")
+
+    task = enqueue_ops_task(
+        settings,
+        guild_id=guild_id,
+        action=action,
+        requested_by_discord_id=actor_id,
+        requested_by_username=actor_username or None,
+        source="dashboard",
+    )
+
+    try:
+        audit_col = get_collection(settings, record_type="audit_event", guild_id=guild_id)
+        record_audit_event(
+            guild_id=guild_id,
+            category="ops",
+            action="ops_task.enqueued",
+            source="dashboard",
+            actor_discord_id=actor_id,
+            actor_display_name=str(session.user.get("username") or "") or None,
+            actor_username=actor_username or None,
+            details={
+                "task_id": str(task.get("_id") or ""),
+                "task_action": str(task.get("action") or ""),
+                "task_status": str(task.get("status") or ""),
+            },
+            collection=audit_col,
+        )
+    except Exception:
+        pass
+
+    referer = request.headers.get("Referer", "").strip()
+    if referer:
+        parsed = urllib.parse.urlparse(referer)
+        redirect_path = parsed.path
+        if parsed.query:
+            redirect_path = f"{redirect_path}?{parsed.query}"
+        redirect_path = _sanitize_next_path(redirect_path)
+        if redirect_path != "/":
+            raise web.HTTPFound(redirect_path)
+
+    raise web.HTTPFound(f"/guild/{guild_id}/overview")
+
+
 async def guild_ops_run_setup(request: web.Request) -> web.Response:
     return await _enqueue_ops_from_dashboard(request, action=OPS_TASK_ACTION_RUN_SETUP)
 
@@ -4373,6 +4435,7 @@ async def guild_analytics_json(request: web.Request) -> web.Response:
 
 async def guild_discord_metadata_json(request: web.Request) -> web.Response:
     session = _require_session(request)
+    settings: Settings = request.app["settings"]
     guild_id_str = request.match_info["guild_id"]
     guild_id = _require_owned_guild(session, settings=settings, path=request.path_qs, guild_id=guild_id_str)
     roles, channels = await _get_guild_discord_metadata(request, guild_id=guild_id)

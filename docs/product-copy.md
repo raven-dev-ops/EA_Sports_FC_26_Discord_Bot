@@ -21,7 +21,7 @@ Offside turns your EA Sports FC Discord into an ops dashboard: rosters, recruiti
 
 ## Modules (canonical names)
 
-| Module | Who it’s for | What it does |
+| Module | Who it's for | What it does |
 | --- | --- | --- |
 | Dashboards + Setup Wizard | owners + staff | guided setup checks, portal dashboards, and idempotent reposting |
 | Rosters | coaches + staff | roster lifecycle: create, add/remove, caps, submit, review, approve/reject/unlock |
@@ -57,11 +57,28 @@ It includes everything in Pro, plus negotiated features and operational commitme
 
 ## Routes (public vs app)
 
-- `/` — public landing
-- `/features` — module overviews
-- `/pricing` — plan cards + FAQ (Discord-friendly terms, per-guild billing)
-- `/support` — support channels (Discord + email) + docs
-- `/docs` — index of allowlisted docs (setup, billing, data lifecycle, environments, admin console, localization, disaster recovery, monitoring, QA, release)
-- `/docs/<slug>` — allowlisted markdown docs rendered for self-serve
-- `/app` — server picker (requires login)
-- `/app/:guild_id/overview|setup|billing|analytics|settings|permissions|ops` — authenticated guild-scoped routes
+Public:
+- `/` - public landing
+- `/features` - module overviews
+- `/pricing` - plan cards + FAQ (Discord-friendly terms, per-guild billing)
+- `/enterprise` - enterprise contact CTA
+- `/product` - product copy source
+- `/support` - support channels (Discord + email) + docs
+- `/docs` - index of allowlisted docs (setup, billing, data lifecycle, environments, admin console, localization, disaster recovery, monitoring, QA, release)
+- `/docs/<slug>` - allowlisted markdown docs rendered for self-serve
+- `/commands` - command reference
+- `/terms`, `/privacy` - legal pages
+- `/install` - bot install redirect
+- `/login`, `/oauth/callback`, `/logout` - OAuth login + session
+
+Authenticated:
+- `/app` - server picker (requires login)
+- `/app/upgrade?guild_id=<id>` - upgrade redirect
+- `/app/billing?guild_id=<id>` - billing for a guild (owner-only)
+- `/guild/<guild_id>` - analytics overview
+- `/guild/<guild_id>/overview` - setup overview
+- `/guild/<guild_id>/setup` - setup wizard
+- `/guild/<guild_id>/settings` - guild settings
+- `/guild/<guild_id>/permissions` - permissions checks
+- `/guild/<guild_id>/audit` and `/guild/<guild_id>/audit.csv` - audit log
+- `/guild/<guild_id>/ops` - ops tasks
