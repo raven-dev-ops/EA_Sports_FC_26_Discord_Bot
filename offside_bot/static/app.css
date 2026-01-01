@@ -404,8 +404,7 @@ pre code {
   padding: 10px;
   border-radius: var(--radius-lg);
   border: 1px solid var(--border);
-  background: rgba(30, 31, 34, 0.55);
-  backdrop-filter: blur(10px);
+  background: rgba(30, 31, 34, 0.92);
   box-shadow: var(--shadow-sm);
 }
 
@@ -579,8 +578,7 @@ pre code {
   padding: 12px 14px;
   border-radius: var(--radius-lg);
   border: 1px solid var(--border);
-  background: rgba(43, 45, 49, 0.72);
-  backdrop-filter: blur(10px);
+  background: rgba(43, 45, 49, 0.92);
   box-shadow: var(--shadow-sm);
   position: sticky;
   top: 16px;
@@ -1012,7 +1010,6 @@ select:focus {
     padding: 0;
     border: 0;
     background: transparent;
-    backdrop-filter: none;
     box-shadow: none;
   }
 
