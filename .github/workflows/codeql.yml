@@ -16,7 +16,7 @@ permissions:
 jobs:
   analyze:
     name: Analyze
-    runs-on: [self-hosted, Windows, X64, offside]
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
@@ -29,8 +29,8 @@ jobs:
         with:
           python-version: "3.12"
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@v3
+        uses: github/codeql-action/init@v4
         with:
           languages: ${{ matrix.language }}
       - name: Analyze
-        uses: github/codeql-action/analyze@v3
+        uses: github/codeql-action/analyze@v4
