@@ -966,10 +966,11 @@ def _require_session(request: web.Request) -> SessionData:
         next_path = _sanitize_next_path(request.path_qs)
         if len(next_path) > 1024:
             next_path = "/"
+        next_cookie_value = urllib.parse.quote(next_path, safe="")
         resp = web.HTTPFound("/login")
         resp.set_cookie(
             NEXT_COOKIE_NAME,
-            next_path,
+            next_cookie_value,
             httponly=True,
             samesite="Lax",
             secure=_is_https(request),
@@ -2095,7 +2096,10 @@ async def ready(request: web.Request) -> web.Response:
 async def login(request: web.Request) -> web.Response:
     settings: Settings = request.app[SETTINGS_KEY]
     client_id, _client_secret, redirect_uri = _oauth_config(settings)
-    raw_next = str(request.query.get("next") or "").strip() or str(request.cookies.get(NEXT_COOKIE_NAME) or "")
+    cookie_next = str(request.cookies.get(NEXT_COOKIE_NAME) or "")
+    if cookie_next:
+        cookie_next = urllib.parse.unquote(cookie_next)
+    raw_next = str(request.query.get("next") or "").strip() or cookie_next
     next_path = _sanitize_next_path(raw_next)
     states: Collection = request.app[STATE_COLLECTION_KEY]
     expires_at = _utc_now() + timedelta(seconds=STATE_TTL_SECONDS)

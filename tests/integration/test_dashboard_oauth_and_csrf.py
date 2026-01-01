@@ -58,7 +58,7 @@ def _stripe_sig_header(*, payload: bytes, secret: str, timestamp: int) -> str:
 
 @pytest.mark.asyncio
 async def test_protected_routes_redirect_to_login_with_next(monkeypatch) -> None:
-    from urllib.parse import urlparse
+    from urllib.parse import unquote, urlparse
 
     from aiohttp.test_utils import TestClient, TestServer
 
@@ -77,14 +77,14 @@ async def test_protected_routes_redirect_to_login_with_next(monkeypatch) -> None
         assert parsed.path == "/login"
         next_cookie = resp.cookies.get(dashboard.NEXT_COOKIE_NAME)
         assert next_cookie is not None
-        assert next_cookie.value == "/app/billing?guild_id=123"
+        assert unquote(next_cookie.value) == "/app/billing?guild_id=123"
     finally:
         await client.close()
 
 
 @pytest.mark.asyncio
 async def test_app_requires_login_redirects_with_next(monkeypatch) -> None:
-    from urllib.parse import urlparse
+    from urllib.parse import unquote, urlparse
 
     from aiohttp.test_utils import TestClient, TestServer
 
@@ -103,7 +103,7 @@ async def test_app_requires_login_redirects_with_next(monkeypatch) -> None:
         assert parsed.path == "/login"
         next_cookie = resp.cookies.get(dashboard.NEXT_COOKIE_NAME)
         assert next_cookie is not None
-        assert next_cookie.value == "/app"
+        assert unquote(next_cookie.value) == "/app"
     finally:
         await client.close()
 
@@ -326,7 +326,7 @@ async def test_oauth_callback_with_expired_state_is_rejected(monkeypatch) -> Non
 
 @pytest.mark.asyncio
 async def test_session_idle_timeout_forces_relogin(monkeypatch) -> None:
-    from urllib.parse import urlparse
+    from urllib.parse import unquote, urlparse
 
     from aiohttp.test_utils import TestClient, TestServer
 
@@ -358,7 +358,7 @@ async def test_session_idle_timeout_forces_relogin(monkeypatch) -> None:
         assert parsed.path == "/login"
         next_cookie = resp.cookies.get(dashboard.NEXT_COOKIE_NAME)
         assert next_cookie is not None
-        assert next_cookie.value == "/app"
+        assert unquote(next_cookie.value) == "/app"
         assert sessions.find_one({"_id": "sess_idle"}) is None
     finally:
         await client.close()
@@ -366,7 +366,7 @@ async def test_session_idle_timeout_forces_relogin(monkeypatch) -> None:
 
 @pytest.mark.asyncio
 async def test_guild_list_cache_ttl_forces_relogin(monkeypatch) -> None:
-    from urllib.parse import urlparse
+    from urllib.parse import unquote, urlparse
 
     from aiohttp.test_utils import TestClient, TestServer
 
@@ -400,7 +400,7 @@ async def test_guild_list_cache_ttl_forces_relogin(monkeypatch) -> None:
         assert parsed.path == "/login"
         next_cookie = resp.cookies.get(dashboard.NEXT_COOKIE_NAME)
         assert next_cookie is not None
-        assert next_cookie.value == "/app"
+        assert unquote(next_cookie.value) == "/app"
         assert sessions.find_one({"_id": "sess_stale_guilds"}) is None
     finally:
         await client.close()
