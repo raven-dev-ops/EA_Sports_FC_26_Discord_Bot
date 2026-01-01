@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from typing import Any
 
 import discord
@@ -60,6 +61,14 @@ async def ensure_offside_channels(
         REPORTS_CATEGORY_NAME,
         actions=actions,
         bot_member=bot_member,
+    )
+
+    await _cleanup_duplicate_offside_categories(
+        guild,
+        config=config,
+        dashboard_category=dashboard_category,
+        reports_category=reports_category,
+        actions=actions,
     )
 
     dashboard_channels: list[discord.TextChannel] = []
@@ -257,52 +266,57 @@ async def _ensure_category(
     actions: list[str],
     bot_member: discord.Member | None = None,
 ) -> discord.CategoryChannel:
-    existing = discord.utils.get(guild.categories, name=name)
-    if existing is not None:
-        if bot_member is not None and bot_member.guild_permissions.manage_channels:
-            perms = existing.permissions_for(bot_member)
-            if not (perms.view_channel and perms.manage_channels):
-                repaired_name = _unique_category_name(guild, f"{name} (Offside)")
-                category = await guild.create_category(repaired_name, reason="Offside setup (repair)")
-                actions.append(
-                    f"Existing category `{name}` has restricted permissions; created `{repaired_name}` instead."
-                )
-                return category
-        return existing
+    candidates = [cat for cat in guild.categories if cat.name == name]
+    if candidates:
+        category = _pick_category_candidate(candidates)
+        if bot_member is not None:
+            await _ensure_category_bot_access(category, bot_member=bot_member, actions=actions)
+        return category
+
     category = await guild.create_category(name, reason="Offside setup")
     actions.append(f"Created category `{name}`.")
+    if bot_member is not None:
+        await _ensure_category_bot_access(category, bot_member=bot_member, actions=actions)
     return category
 
 
-def _unique_category_name(guild: discord.Guild, base: str) -> str:
-    existing = {cat.name for cat in guild.categories}
-    if base not in existing:
-        return base
-    for idx in range(2, 26):
-        candidate = f"{base} ({idx})"
-        if candidate not in existing:
-            return candidate
-    return f"{base} ({len(existing) + 1})"
+def _pick_category_candidate(candidates: list[discord.CategoryChannel]) -> discord.CategoryChannel:
+    if len(candidates) == 1:
+        return candidates[0]
+    return sorted(candidates, key=lambda cat: (-len(cat.channels), cat.position))[0]
 
 
-async def _ensure_repair_category(
-    guild: discord.Guild,
+async def _ensure_category_bot_access(
+    category: discord.CategoryChannel,
     *,
-    base_name: str,
+    bot_member: discord.Member,
     actions: list[str],
-) -> discord.CategoryChannel | None:
-    for cat in guild.categories:
-        if cat.name == base_name or cat.name.startswith(f"{base_name} ("):
-            return cat
-
-    repaired_name = _unique_category_name(guild, base_name)
+) -> None:
+    if bot_member.guild_permissions.administrator:
+        return
+    perms = category.permissions_for(bot_member)
+    if perms.view_channel and perms.manage_channels:
+        return
+    if not bot_member.guild_permissions.manage_channels:
+        return
     try:
-        category = await guild.create_category(repaired_name, reason="Offside setup (repair category)")
+        await category.set_permissions(
+            bot_member,
+            view_channel=True,
+            manage_channels=True,
+            send_messages=True,
+            read_message_history=True,
+            reason="Offside setup: ensure bot access",
+        )
+    except discord.Forbidden:
+        actions.append(
+            f"Category `{category.name}` has restricted permissions. "
+            "Grant the bot `View Channel` + `Manage Channels` for this category and retry setup."
+        )
+        return
     except discord.DiscordException:
-        return None
-
-    actions.append(f"Created category `{category.name}` (repair).")
-    return category
+        return
+    actions.append(f"Updated permissions for category `{category.name}` to allow bot access.")
 
 
 async def _ensure_text_channel(
@@ -357,30 +371,30 @@ async def _ensure_text_channel_with_created(
                 reason="Offside setup",
             )
         except discord.Forbidden:
-            # Some guilds restrict the category such that a bot can manage channels in the guild
-            # but cannot create new channels under the intended category.
-            repaired = await _ensure_repair_category(
-                guild,
-                base_name=f"{category.name} (Offside)",
-                actions=actions,
-            )
-            if repaired is not None:
-                try:
-                    channel = await guild.create_text_channel(
-                        name,
-                        category=repaired,
-                        overwrites=overwrites,
-                        reason="Offside setup (repair category)",
-                    )
-                except discord.DiscordException:
-                    channel = None
-                else:
-                    actions.append(
-                        f"Created <#{channel.id}> under `{repaired.name}` (original category permissions blocked channel creation)."
-                    )
-                    return channel, True
+            # Fallback: try creating without custom overwrites (inherit category permissions).
+            try:
+                channel = await guild.create_text_channel(
+                    name,
+                    category=category,
+                    reason="Offside setup (fallback: no overwrites)",
+                )
+                actions.append(
+                    f"Created <#{channel.id}> under `{category.name}` without custom permissions. "
+                    "Please verify channel permissions."
+                )
+            except discord.Forbidden:
+                channel = None
 
-            # Fallback: create the channel without a parent category (minimally), then attempt to move it into place.
+            if channel is not None:
+                try:
+                    await channel.edit(overwrites=overwrites, reason="Offside setup: apply permissions")
+                except discord.DiscordException:
+                    actions.append(
+                        f"Could not apply permissions for <#{channel.id}> automatically. Please verify channel permissions."
+                    )
+                return channel, True
+
+            # Final fallback: create the channel without a parent category (minimally), then attempt to move it into place.
             try:
                 channel = await guild.create_text_channel(
                     name,
@@ -390,22 +404,14 @@ async def _ensure_text_channel_with_created(
                     f"Created <#{channel.id}> outside `{category.name}` (category permissions blocked channel creation)."
                 )
             except discord.Forbidden:
-                # As a last attempt, try creating under a repair category without custom overwrites.
-                if repaired is not None:
-                    channel = await guild.create_text_channel(
-                        name,
-                        category=repaired,
-                        reason="Offside setup (repair category minimal)",
-                    )
-                    actions.append(
-                        f"Created <#{channel.id}> under `{repaired.name}` without custom permissions (permission overwrites blocked)."
-                    )
-                    return channel, True
                 raise
             try:
                 await channel.edit(category=category, reason="Offside setup: move into category")
             except discord.DiscordException:
-                pass
+                actions.append(
+                    f"Could not move <#{channel.id}> into `{category.name}` automatically. "
+                    "Please move it manually and verify category permissions."
+                )
             try:
                 await channel.edit(overwrites=overwrites, reason="Offside setup: apply permissions")
             except discord.DiscordException:
@@ -485,6 +491,99 @@ def _resolve_staff_roles(
             roles.append(resolved_role)
 
     return _filter_roles_for_overwrites(roles, bot_member=bot_member, actions=actions)
+
+
+async def _cleanup_duplicate_offside_categories(
+    guild: discord.Guild,
+    *,
+    config: dict[str, Any],
+    dashboard_category: discord.CategoryChannel,
+    reports_category: discord.CategoryChannel,
+    actions: list[str],
+) -> None:
+    managed_ids = {
+        _parse_int(config.get(key))
+        for key in (
+            "channel_staff_portal_id",
+            "channel_manager_portal_id",
+            "channel_club_portal_id",
+            "channel_coach_portal_id",
+            "channel_recruit_portal_id",
+            "channel_free_player_portal_id",
+            "channel_premium_player_portal_id",
+            "channel_staff_monitor_id",
+            "channel_roster_listing_id",
+            "channel_recruit_listing_id",
+            "channel_club_listing_id",
+            "channel_premium_coaches_id",
+        )
+        if _parse_int(config.get(key))
+    }
+
+    managed_names = {
+        STAFF_PORTAL_CHANNEL_NAME,
+        MANAGER_PORTAL_CHANNEL_NAME,
+        CLUB_PORTAL_CHANNEL_NAME,
+        COACH_PORTAL_CHANNEL_NAME,
+        RECRUIT_PORTAL_CHANNEL_NAME,
+        FREE_PLAYER_PORTAL_CHANNEL_NAME,
+        PREMIUM_PLAYER_PORTAL_CHANNEL_NAME,
+        STAFF_MONITOR_CHANNEL_NAME,
+        ROSTER_LISTING_CHANNEL_NAME,
+        RECRUIT_LISTING_CHANNEL_NAME,
+        CLUB_LISTING_CHANNEL_NAME,
+        PREMIUM_COACHES_CHANNEL_NAME,
+    }
+
+    repairs: list[tuple[discord.CategoryChannel, discord.CategoryChannel]] = []
+    for category in guild.categories:
+        if _is_repair_category_name(category.name, DASHBOARD_CATEGORY_NAME):
+            repairs.append((category, dashboard_category))
+        elif _is_repair_category_name(category.name, REPORTS_CATEGORY_NAME):
+            repairs.append((category, reports_category))
+
+    for duplicate_category, target_category in repairs:
+        moved_any = False
+        for channel in list(duplicate_category.channels):
+            if not isinstance(channel, discord.TextChannel):
+                continue
+            if channel.id not in managed_ids and getattr(channel, "name", "") not in managed_names:
+                continue
+            try:
+                await channel.edit(
+                    category=target_category,
+                    reason="Offside setup: cleanup duplicate categories",
+                )
+            except discord.DiscordException:
+                actions.append(
+                    f"Could not move <#{channel.id}> from `{duplicate_category.name}` to `{target_category.name}`. "
+                    "Please move it manually."
+                )
+                continue
+            moved_any = True
+
+        if moved_any:
+            actions.append(
+                f"Moved Offside channels from `{duplicate_category.name}` to `{target_category.name}`."
+            )
+
+        if duplicate_category.channels:
+            actions.append(
+                f"Duplicate category `{duplicate_category.name}` still contains channels; leaving it in place."
+            )
+            continue
+
+        try:
+            await duplicate_category.delete(reason="Offside setup: cleanup duplicate categories")
+        except discord.DiscordException:
+            actions.append(f"Could not delete duplicate category `{duplicate_category.name}`.")
+        else:
+            actions.append(f"Deleted duplicate category `{duplicate_category.name}`.")
+
+
+def _is_repair_category_name(category_name: str, canonical_name: str) -> bool:
+    pattern = re.compile(rf"^{re.escape(canonical_name)}\s*\(offside\)", re.IGNORECASE)
+    return bool(pattern.match(category_name))
 
 
 def _filter_roles_for_overwrites(
