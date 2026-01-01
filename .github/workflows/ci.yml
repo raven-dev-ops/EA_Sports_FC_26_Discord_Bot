@@ -9,7 +9,7 @@ permissions:
 
 jobs:
   secrets:
-    runs-on: [self-hosted, Windows, X64, offside]
+    runs-on: windows-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -28,7 +28,7 @@ jobs:
         run: gitleaks detect --source . --redact --no-banner
 
   build:
-    runs-on: [self-hosted, Windows, X64, offside]
+    runs-on: windows-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
