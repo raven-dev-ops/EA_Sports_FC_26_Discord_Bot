@@ -106,6 +106,9 @@ async def test_dashboard_smoke_critical_path(monkeypatch) -> None:
         resp = await client.get("/commands", allow_redirects=False)
         assert resp.status == 200
 
+        resp = await client.get("/support", allow_redirects=False)
+        assert resp.status == 200
+
         # Login flow returns to the originally requested page.
         login_qs = urlencode({"next": "/app/billing?guild_id=123"})
         resp = await client.get(f"/login?{login_qs}", allow_redirects=False)
