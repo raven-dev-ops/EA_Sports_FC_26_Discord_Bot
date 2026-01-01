@@ -132,7 +132,7 @@ async def test_dashboard_smoke_critical_path(monkeypatch) -> None:
         assert settings_page.status == 200
 
         # Upgrade checkout can be started (Stripe mocked).
-        sessions = app["session_collection"]
+        sessions = app[dashboard.SESSION_COLLECTION_KEY]
         session_doc = sessions.find_one({"_id": cookie.value}) or {}
         csrf = session_doc.get("csrf_token")
         assert isinstance(csrf, str) and csrf
@@ -172,7 +172,7 @@ async def test_dashboard_smoke_login_state_expires(monkeypatch) -> None:
     monkeypatch.setattr(dashboard, "_discord_get_json", fake_discord_get_json)
 
     app = dashboard.create_app(settings=_settings())
-    states = app["state_collection"]
+    states = app[dashboard.STATE_COLLECTION_KEY]
     states.insert_one(
         {
             "_id": "state1",

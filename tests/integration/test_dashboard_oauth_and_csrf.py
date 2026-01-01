@@ -206,7 +206,7 @@ async def test_oauth_callback_access_denied_renders_friendly_page(monkeypatch) -
     monkeypatch.setenv("DASHBOARD_REDIRECT_URI", "http://localhost:8080/oauth/callback")
 
     app = dashboard.create_app(settings=_settings())
-    states = app["state_collection"]
+    states = app[dashboard.STATE_COLLECTION_KEY]
     states.insert_one(
         {
             "_id": "state1",
@@ -256,7 +256,7 @@ async def test_oauth_callback_records_manage_guild_as_eligible(monkeypatch) -> N
     monkeypatch.setattr(dashboard, "_discord_get_json", fake_discord_get_json)
 
     app = dashboard.create_app(settings=_settings())
-    states = app["state_collection"]
+    states = app[dashboard.STATE_COLLECTION_KEY]
     states.insert_one(
         {
             "_id": "state1",
@@ -275,7 +275,7 @@ async def test_oauth_callback_records_manage_guild_as_eligible(monkeypatch) -> N
         assert cookie is not None
 
         session_id = cookie.value
-        sessions = app["session_collection"]
+        sessions = app[dashboard.SESSION_COLLECTION_KEY]
         doc = sessions.find_one({"_id": session_id})
         assert isinstance(doc, dict)
 
@@ -299,7 +299,7 @@ async def test_oauth_callback_with_expired_state_is_rejected(monkeypatch) -> Non
     monkeypatch.setenv("DASHBOARD_REDIRECT_URI", "http://localhost:8080/oauth/callback")
 
     app = dashboard.create_app(settings=_settings())
-    states = app["state_collection"]
+    states = app[dashboard.STATE_COLLECTION_KEY]
     states.insert_one(
         {
             "_id": "state_expired",
@@ -330,7 +330,7 @@ async def test_session_idle_timeout_forces_relogin(monkeypatch) -> None:
     monkeypatch.setattr(database, "_CLIENT", None)
 
     app = dashboard.create_app(settings=_settings())
-    sessions = app["session_collection"]
+    sessions = app[dashboard.SESSION_COLLECTION_KEY]
     now = time.time()
     sessions.insert_one(
         {
@@ -368,7 +368,7 @@ async def test_guild_list_cache_ttl_forces_relogin(monkeypatch) -> None:
     monkeypatch.setattr(database, "_CLIENT", None)
 
     app = dashboard.create_app(settings=_settings())
-    sessions = app["session_collection"]
+    sessions = app[dashboard.SESSION_COLLECTION_KEY]
     now = time.time()
     stale = now - (dashboard.GUILD_METADATA_TTL_SECONDS + 5)
     sessions.insert_one(
@@ -422,7 +422,7 @@ async def test_oauth_callback_sets_secure_cookie_flags_when_https(monkeypatch) -
     monkeypatch.setattr(dashboard, "_is_https", lambda _req: True)
 
     app = dashboard.create_app(settings=_settings())
-    states = app["state_collection"]
+    states = app[dashboard.STATE_COLLECTION_KEY]
     states.insert_one(
         {
             "_id": "state_secure",
@@ -457,7 +457,7 @@ async def test_billing_checkout_requires_csrf(monkeypatch) -> None:
     monkeypatch.setenv("STRIPE_PRICE_PRO_ID", "price_123")
 
     app = dashboard.create_app(settings=_settings())
-    sessions = app["session_collection"]
+    sessions = app[dashboard.SESSION_COLLECTION_KEY]
     sessions.insert_one(
         {
             "_id": "sess1",
@@ -510,7 +510,7 @@ async def test_billing_checkout_blocks_duplicate_subscription(monkeypatch) -> No
     monkeypatch.setattr(dashboard, "get_guild_subscription", fake_subscription)
 
     app = dashboard.create_app(settings=_settings())
-    sessions = app["session_collection"]
+    sessions = app[dashboard.SESSION_COLLECTION_KEY]
     sessions.insert_one(
         {
             "_id": "sess1",
@@ -547,7 +547,7 @@ async def test_guild_access_denied_is_logged(monkeypatch) -> None:
     monkeypatch.setattr(database, "_CLIENT", None)
 
     app = dashboard.create_app(settings=_settings())
-    sessions = app["session_collection"]
+    sessions = app[dashboard.SESSION_COLLECTION_KEY]
     now = time.time()
     sessions.insert_one(
         {
@@ -588,7 +588,7 @@ async def test_billing_portal_requires_csrf(monkeypatch) -> None:
     monkeypatch.setattr(database, "_CLIENT", None)
 
     app = dashboard.create_app(settings=_settings())
-    sessions = app["session_collection"]
+    sessions = app[dashboard.SESSION_COLLECTION_KEY]
     sessions.insert_one(
         {
             "_id": "sess1",
@@ -649,7 +649,7 @@ async def test_billing_success_syncs_subscription(monkeypatch) -> None:
     monkeypatch.setitem(sys.modules, "stripe", fake_stripe)
 
     app = dashboard.create_app(settings=_settings())
-    sessions = app["session_collection"]
+    sessions = app[dashboard.SESSION_COLLECTION_KEY]
     sessions.insert_one(
         {
             "_id": "sess1",
@@ -763,7 +763,7 @@ async def test_dashboard_shows_pro_expired_notice(monkeypatch) -> None:
     )
 
     app = dashboard.create_app(settings=_settings())
-    sessions = app["session_collection"]
+    sessions = app[dashboard.SESSION_COLLECTION_KEY]
     sessions.insert_one(
         {
             "_id": "sess1",
@@ -809,7 +809,7 @@ async def test_settings_blocks_when_bot_not_installed(monkeypatch) -> None:
     monkeypatch.setattr(dashboard, "_discord_bot_get_json", fake_bot_get_json)
 
     app = dashboard.create_app(settings=_settings())
-    sessions = app["session_collection"]
+    sessions = app[dashboard.SESSION_COLLECTION_KEY]
     sessions.insert_one(
         {
             "_id": "sess1",
@@ -903,7 +903,7 @@ async def test_permissions_page_renders(monkeypatch) -> None:
     )
 
     app = dashboard.create_app(settings=_settings())
-    sessions = app["session_collection"]
+    sessions = app[dashboard.SESSION_COLLECTION_KEY]
     sessions.insert_one(
         {
             "_id": "sess1",
@@ -989,7 +989,7 @@ async def test_overview_page_renders(monkeypatch) -> None:
     )
 
     app = dashboard.create_app(settings=_settings())
-    sessions = app["session_collection"]
+    sessions = app[dashboard.SESSION_COLLECTION_KEY]
     sessions.insert_one(
         {
             "_id": "sess1",
@@ -1036,7 +1036,7 @@ async def test_audit_page_is_locked_for_free_plan(monkeypatch) -> None:
     monkeypatch.setattr(dashboard, "_discord_bot_get_json", fake_bot_get_json)
 
     app = dashboard.create_app(settings=_settings())
-    sessions = app["session_collection"]
+    sessions = app[dashboard.SESSION_COLLECTION_KEY]
     sessions.insert_one(
         {
             "_id": "sess1",
@@ -1090,7 +1090,7 @@ async def test_audit_page_allows_pro_plan(monkeypatch) -> None:
     )
 
     app = dashboard.create_app(settings=_settings())
-    sessions = app["session_collection"]
+    sessions = app[dashboard.SESSION_COLLECTION_KEY]
     sessions.insert_one(
         {
             "_id": "sess1",
@@ -1127,7 +1127,7 @@ async def test_upgrade_redirect_records_audit_event(monkeypatch) -> None:
     monkeypatch.setattr(database, "_CLIENT", None)
 
     app = dashboard.create_app(settings=_settings())
-    sessions = app["session_collection"]
+    sessions = app[dashboard.SESSION_COLLECTION_KEY]
     sessions.insert_one(
         {
             "_id": "sess1",
@@ -1178,7 +1178,7 @@ async def test_settings_save_blocks_fc25_override_for_free(monkeypatch) -> None:
     monkeypatch.setattr(dashboard, "get_guild_config", lambda _gid: {})
 
     app = dashboard.create_app(settings=_settings())
-    sessions = app["session_collection"]
+    sessions = app[dashboard.SESSION_COLLECTION_KEY]
     sessions.insert_one(
         {
             "_id": "sess1",
@@ -1261,7 +1261,7 @@ async def test_setup_wizard_page_renders(monkeypatch) -> None:
     )
 
     app = dashboard.create_app(settings=_settings())
-    sessions = app["session_collection"]
+    sessions = app[dashboard.SESSION_COLLECTION_KEY]
     sessions.insert_one(
         {
             "_id": "sess1",
@@ -1304,7 +1304,7 @@ async def test_run_full_setup_enqueues_tasks(monkeypatch) -> None:
     monkeypatch.setattr(dashboard, "_detect_bot_installed", fake_detect_installed)
 
     app = dashboard.create_app(settings=_settings())
-    sessions = app["session_collection"]
+    sessions = app[dashboard.SESSION_COLLECTION_KEY]
     sessions.insert_one(
         {
             "_id": "sess1",
@@ -1351,7 +1351,7 @@ async def test_ops_run_setup_enqueues_task(monkeypatch) -> None:
 
     settings = _settings()
     app = dashboard.create_app(settings=settings)
-    sessions = app["session_collection"]
+    sessions = app[dashboard.SESSION_COLLECTION_KEY]
     sessions.insert_one(
         {
             "_id": "sess1",
@@ -1397,7 +1397,7 @@ async def test_ops_repost_portals_enqueues_task(monkeypatch) -> None:
 
     settings = _settings()
     app = dashboard.create_app(settings=settings)
-    sessions = app["session_collection"]
+    sessions = app[dashboard.SESSION_COLLECTION_KEY]
     sessions.insert_one(
         {
             "_id": "sess1",
@@ -1443,7 +1443,7 @@ async def test_ops_schedule_delete_data_enqueues_task(monkeypatch) -> None:
 
     settings = _settings(mongodb_per_guild_db=True)
     app = dashboard.create_app(settings=settings)
-    sessions = app["session_collection"]
+    sessions = app[dashboard.SESSION_COLLECTION_KEY]
     sessions.insert_one(
         {
             "_id": "sess1",

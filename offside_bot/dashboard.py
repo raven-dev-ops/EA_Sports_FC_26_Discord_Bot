@@ -12,7 +12,7 @@ import urllib.parse
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Final
 
 from aiohttp import ClientSession, web
 from pymongo.collection import Collection
@@ -186,6 +186,12 @@ DOCS_EXTRAS = [
 DASHBOARD_SESSIONS_COLLECTION = "dashboard_sessions"
 DASHBOARD_OAUTH_STATES_COLLECTION = "dashboard_oauth_states"
 DASHBOARD_USERS_COLLECTION = "dashboard_users"
+SETTINGS_KEY: Final = web.AppKey("settings", Settings)
+SESSION_COLLECTION_KEY: Final = web.AppKey("session_collection", Collection)
+STATE_COLLECTION_KEY: Final = web.AppKey("state_collection", Collection)
+USER_COLLECTION_KEY: Final = web.AppKey("user_collection", Collection)
+GUILD_METADATA_CACHE_KEY: Final = web.AppKey("guild_metadata_cache", dict[int, dict[str, Any]])
+HTTP_SESSION_KEY: Final = web.AppKey("http", ClientSession | None)
 
 
 @dataclass
@@ -584,7 +590,7 @@ def _require_pro_plan_for_ops(settings: Settings, guild_id: int) -> None:
 
 async def upgrade_redirect(request: web.Request) -> web.Response:
     session = _require_session(request)
-    settings: Settings = request.app["settings"]
+    settings: Settings = request.app[SETTINGS_KEY]
 
     gid = request.query.get("guild_id", "").strip()
     guild_id = _require_owned_guild(session, settings=settings, path=request.path_qs, guild_id=gid) if gid else 0
@@ -838,7 +844,7 @@ async def _get_guild_discord_metadata(
     *,
     guild_id: int,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    cache: dict[int, dict[str, Any]] = request.app["guild_metadata_cache"]
+    cache: dict[int, dict[str, Any]] = request.app[GUILD_METADATA_CACHE_KEY]
     now = time.time()
     cached = cache.get(guild_id)
     if isinstance(cached, dict):
@@ -849,8 +855,8 @@ async def _get_guild_discord_metadata(
             if isinstance(roles, list) and isinstance(channels, list):
                 return [r for r in roles if isinstance(r, dict)], [c for c in channels if isinstance(c, dict)]
 
-    settings: Settings = request.app["settings"]
-    http = request.app.get("http")
+    settings: Settings = request.app[SETTINGS_KEY]
+    http = request.app.get(HTTP_SESSION_KEY)
     if not isinstance(http, ClientSession):
         raise web.HTTPInternalServerError(text="Dashboard HTTP client is not ready yet.")
 
@@ -861,8 +867,8 @@ async def _get_guild_discord_metadata(
 
 
 async def _detect_bot_installed(request: web.Request, *, guild_id: int) -> tuple[bool | None, str | None]:
-    settings: Settings = request.app["settings"]
-    http = request.app.get("http")
+    settings: Settings = request.app[SETTINGS_KEY]
+    http = request.app.get(HTTP_SESSION_KEY)
     if not isinstance(http, ClientSession):
         return None, "Dashboard HTTP client is not ready yet."
 
@@ -885,7 +891,7 @@ async def session_middleware(request: web.Request, handler):
     session: SessionData | None = None
     now = time.time()
     if session_id:
-        sessions: Collection = request.app["session_collection"]
+        sessions: Collection = request.app[SESSION_COLLECTION_KEY]
         doc = sessions.find_one({"_id": session_id}) or {}
         created_at = doc.get("created_at")
         expires_at_dt = doc.get("expires_at")
@@ -1300,7 +1306,7 @@ def _guild_is_owner(session: SessionData, guild_id: int) -> bool:
 
 
 async def index(request: web.Request) -> web.Response:
-    settings: Settings = request.app["settings"]
+    settings: Settings = request.app[SETTINGS_KEY]
     invite_href = _invite_url(settings)
     from offside_bot.web_templates import render
 
@@ -1310,7 +1316,7 @@ async def index(request: web.Request) -> web.Response:
 
 async def app_index(request: web.Request) -> web.Response:
     session = _require_session(request)
-    settings: Settings = request.app["settings"]
+    settings: Settings = request.app[SETTINGS_KEY]
 
     from offside_bot.web_templates import render
 
@@ -1728,7 +1734,7 @@ def _admin_actor(session: SessionData) -> tuple[int | None, str | None]:
 async def admin_dashboard(request: web.Request) -> web.Response:
     session = _require_session(request)
     _require_admin(session)
-    settings: Settings = request.app["settings"]
+    settings: Settings = request.app[SETTINGS_KEY]
     from offside_bot.web_templates import render
 
     status = str(request.query.get("status") or "").strip().lower()
@@ -1835,7 +1841,7 @@ async def admin_dashboard(request: web.Request) -> web.Response:
 async def admin_stripe_resync(request: web.Request) -> web.Response:
     session = _require_session(request)
     _require_admin(session)
-    settings: Settings = request.app["settings"]
+    settings: Settings = request.app[SETTINGS_KEY]
     if not settings.mongodb_uri:
         raise web.HTTPBadRequest(text="MongoDB is not configured.")
 
@@ -2023,7 +2029,7 @@ async def health(_request: web.Request) -> web.Response:
 
 
 async def ready(request: web.Request) -> web.Response:
-    settings: Settings = request.app["settings"]
+    settings: Settings = request.app[SETTINGS_KEY]
     if not settings.mongodb_uri:
         return web.json_response({"ok": False, "mongo": "not_configured"}, status=503)
     try:
@@ -2056,10 +2062,10 @@ async def ready(request: web.Request) -> web.Response:
 
 
 async def login(request: web.Request) -> web.Response:
-    settings: Settings = request.app["settings"]
+    settings: Settings = request.app[SETTINGS_KEY]
     client_id, _client_secret, redirect_uri = _oauth_config(settings)
     next_path = _sanitize_next_path(request.query.get("next", ""))
-    states: Collection = request.app["state_collection"]
+    states: Collection = request.app[STATE_COLLECTION_KEY]
     expires_at = _utc_now() + timedelta(seconds=STATE_TTL_SECONDS)
     state = _insert_unique(
         states,
@@ -2076,7 +2082,7 @@ async def login(request: web.Request) -> web.Response:
 
 
 async def install(request: web.Request) -> web.Response:
-    settings: Settings = request.app["settings"]
+    settings: Settings = request.app[SETTINGS_KEY]
     client_id, _client_secret, redirect_uri = _oauth_config(settings)
 
     requested_guild_id = request.query.get("guild_id", "").strip()
@@ -2087,7 +2093,7 @@ async def install(request: web.Request) -> web.Response:
         extra["disable_guild_select"] = "true"
         next_path = f"/guild/{requested_guild_id}/permissions"
 
-    states: Collection = request.app["state_collection"]
+    states: Collection = request.app[STATE_COLLECTION_KEY]
     expires_at = _utc_now() + timedelta(seconds=STATE_TTL_SECONDS)
     state = _insert_unique(
         states,
@@ -2131,9 +2137,9 @@ def _oauth_error_response(
 
 
 async def oauth_callback(request: web.Request) -> web.Response:
-    settings: Settings = request.app["settings"]
+    settings: Settings = request.app[SETTINGS_KEY]
     client_id, client_secret, redirect_uri = _oauth_config(settings)
-    http: ClientSession = request.app["http"]
+    http: ClientSession = request.app[HTTP_SESSION_KEY]
     request_id = _request_id(request)
 
     code = str(request.query.get("code") or "").strip()
@@ -2145,7 +2151,7 @@ async def oauth_callback(request: web.Request) -> web.Response:
     issued_at: float | None = None
     pending_state: dict[str, Any] | None = None
     if state:
-        states: Collection = request.app["state_collection"]
+        states: Collection = request.app[STATE_COLLECTION_KEY]
         raw_state = states.find_one_and_delete({"_id": state})
         pending_state = raw_state if isinstance(raw_state, dict) else None
         issued_at_value = pending_state.get("issued_at") if pending_state else None
@@ -2285,7 +2291,7 @@ async def oauth_callback(request: web.Request) -> web.Response:
                 next_path = f"/guild/{installed_guild_id}"
                 break
 
-    sessions: Collection = request.app["session_collection"]
+    sessions: Collection = request.app[SESSION_COLLECTION_KEY]
     expires_at = _utc_now() + timedelta(seconds=SESSION_TTL_SECONDS)
     csrf_token = secrets.token_urlsafe(24)
     now_ts = time.time()
@@ -2320,7 +2326,7 @@ async def oauth_callback(request: web.Request) -> web.Response:
 async def logout(request: web.Request) -> web.Response:
     session_id = request.cookies.get(COOKIE_NAME)
     if session_id:
-        sessions: Collection = request.app["session_collection"]
+        sessions: Collection = request.app[SESSION_COLLECTION_KEY]
         sessions.delete_one({"_id": session_id})
     resp = web.HTTPFound("/")
     resp.del_cookie(COOKIE_NAME)
@@ -2454,7 +2460,7 @@ def _parse_bool(value: Any) -> bool:
 
 async def guild_settings_page(request: web.Request) -> web.Response:
     session = _require_session(request)
-    settings: Settings = request.app["settings"]
+    settings: Settings = request.app[SETTINGS_KEY]
     from offside_bot.web_templates import render
 
     guild_id_str = request.match_info["guild_id"]
@@ -2798,7 +2804,7 @@ async def guild_settings_page(request: web.Request) -> web.Response:
 
 async def guild_settings_save(request: web.Request) -> web.Response:
     session = _require_session(request)
-    settings: Settings = request.app["settings"]
+    settings: Settings = request.app[SETTINGS_KEY]
     guild_id_str = request.match_info["guild_id"]
     guild_id = _require_owned_guild(session, settings=settings, path=request.path_qs, guild_id=guild_id_str)
 
@@ -2954,7 +2960,7 @@ async def guild_settings_save(request: web.Request) -> web.Response:
 
 async def guild_page(request: web.Request) -> web.Response:
     session = _require_session(request)
-    settings: Settings = request.app["settings"]
+    settings: Settings = request.app[SETTINGS_KEY]
     from offside_bot.web_templates import render
 
     guild_id_str = request.match_info["guild_id"]
@@ -3038,7 +3044,7 @@ async def _channel_has_recent_bot_message(
 
 async def guild_overview_page(request: web.Request) -> web.Response:
     session = _require_session(request)
-    settings: Settings = request.app["settings"]
+    settings: Settings = request.app[SETTINGS_KEY]
     from offside_bot.web_templates import render
 
     guild_id_str = request.match_info["guild_id"]
@@ -3167,7 +3173,7 @@ async def guild_overview_page(request: web.Request) -> web.Response:
         posts_status = _status("WARN", "warn")
         posts_details = "Install the bot to validate posted embeds."
     else:
-        http = request.app.get("http")
+        http = request.app.get(HTTP_SESSION_KEY)
         if not isinstance(http, ClientSession):
             posts_status = _status("UNKNOWN", "warn")
             posts_details = "Dashboard HTTP client is not ready yet."
@@ -3299,7 +3305,7 @@ async def guild_overview_page(request: web.Request) -> web.Response:
 
 async def guild_setup_wizard_page(request: web.Request) -> web.Response:
     session = _require_session(request)
-    settings: Settings = request.app["settings"]
+    settings: Settings = request.app[SETTINGS_KEY]
     from offside_bot.web_templates import render
 
     guild_id_str = request.match_info["guild_id"]
@@ -3355,7 +3361,7 @@ async def guild_setup_wizard_page(request: web.Request) -> web.Response:
         perms_status = _status("WARN", "warn")
         perms_details = install_error or "Bot is not installed in this server yet."
     elif installed is True:
-        http = request.app.get("http")
+        http = request.app.get(HTTP_SESSION_KEY)
         if not isinstance(http, ClientSession):
             perms_details = "Dashboard HTTP client is not ready yet."
         else:
@@ -3485,7 +3491,7 @@ async def guild_setup_wizard_page(request: web.Request) -> web.Response:
         portals_status = _status("WARN", "warn")
         portals_details = "Install the bot to validate posted portals."
     else:
-        http = request.app.get("http")
+        http = request.app.get(HTTP_SESSION_KEY)
         if not isinstance(http, ClientSession):
             portals_details = "Dashboard HTTP client is not ready yet."
         else:
@@ -3636,7 +3642,7 @@ async def guild_setup_wizard_page(request: web.Request) -> web.Response:
 
 async def guild_permissions_page(request: web.Request) -> web.Response:
     session = _require_session(request)
-    settings: Settings = request.app["settings"]
+    settings: Settings = request.app[SETTINGS_KEY]
     from offside_bot.web_templates import render
 
     guild_id_str = request.match_info["guild_id"]
@@ -3660,7 +3666,7 @@ async def guild_permissions_page(request: web.Request) -> web.Response:
     if installed is False:
         blocked_message = install_error or "Bot is not installed in this server yet."
     else:
-        http = request.app.get("http")
+        http = request.app.get(HTTP_SESSION_KEY)
         if not isinstance(http, ClientSession):
             raise web.HTTPInternalServerError(text="Dashboard HTTP client is not ready yet.")
 
@@ -3872,7 +3878,7 @@ async def guild_permissions_page(request: web.Request) -> web.Response:
 
 async def guild_audit_page(request: web.Request) -> web.Response:
     session = _require_session(request)
-    settings: Settings = request.app["settings"]
+    settings: Settings = request.app[SETTINGS_KEY]
     from offside_bot.web_templates import render
 
     guild_id_str = request.match_info["guild_id"]
@@ -3962,7 +3968,7 @@ async def guild_audit_page(request: web.Request) -> web.Response:
 
 async def guild_audit_csv(request: web.Request) -> web.Response:
     session = _require_session(request)
-    settings: Settings = request.app["settings"]
+    settings: Settings = request.app[SETTINGS_KEY]
 
     guild_id_str = request.match_info["guild_id"]
     guild_id = _require_owned_guild(session, settings=settings, path=request.path_qs, guild_id=guild_id_str)
@@ -4041,7 +4047,7 @@ async def guild_audit_csv(request: web.Request) -> web.Response:
 
 async def guild_ops_page(request: web.Request) -> web.Response:
     session = _require_session(request)
-    settings: Settings = request.app["settings"]
+    settings: Settings = request.app[SETTINGS_KEY]
     from offside_bot.web_templates import render
 
     guild_id_str = request.match_info["guild_id"]
@@ -4191,7 +4197,7 @@ async def guild_ops_page(request: web.Request) -> web.Response:
 
 async def _enqueue_ops_from_dashboard(request: web.Request, *, action: str) -> web.Response:
     session = _require_session(request)
-    settings: Settings = request.app["settings"]
+    settings: Settings = request.app[SETTINGS_KEY]
     if not settings.mongodb_uri:
         raise web.HTTPInternalServerError(text="MongoDB is not configured.")
 
@@ -4257,7 +4263,7 @@ async def guild_ops_run_setup(request: web.Request) -> web.Response:
 
 async def guild_ops_run_full_setup(request: web.Request) -> web.Response:
     session = _require_session(request)
-    settings: Settings = request.app["settings"]
+    settings: Settings = request.app[SETTINGS_KEY]
     if not settings.mongodb_uri:
         raise web.HTTPInternalServerError(text="MongoDB is not configured.")
 
@@ -4315,7 +4321,7 @@ async def guild_ops_repost_portals(request: web.Request) -> web.Response:
 
 async def guild_ops_schedule_delete_data(request: web.Request) -> web.Response:
     session = _require_session(request)
-    settings: Settings = request.app["settings"]
+    settings: Settings = request.app[SETTINGS_KEY]
     if not settings.mongodb_uri:
         raise web.HTTPInternalServerError(text="MongoDB is not configured.")
 
@@ -4377,7 +4383,7 @@ async def guild_ops_schedule_delete_data(request: web.Request) -> web.Response:
 
 async def guild_ops_cancel_delete_data(request: web.Request) -> web.Response:
     session = _require_session(request)
-    settings: Settings = request.app["settings"]
+    settings: Settings = request.app[SETTINGS_KEY]
     if not settings.mongodb_uri:
         raise web.HTTPInternalServerError(text="MongoDB is not configured.")
 
@@ -4416,7 +4422,7 @@ async def guild_ops_cancel_delete_data(request: web.Request) -> web.Response:
 
 async def guild_analytics_json(request: web.Request) -> web.Response:
     session = _require_session(request)
-    settings: Settings = request.app["settings"]
+    settings: Settings = request.app[SETTINGS_KEY]
 
     guild_id_str = request.match_info["guild_id"]
     guild_id = _require_owned_guild(session, settings=settings, path=request.path_qs, guild_id=guild_id_str)
@@ -4435,7 +4441,7 @@ async def guild_analytics_json(request: web.Request) -> web.Response:
 
 async def guild_discord_metadata_json(request: web.Request) -> web.Response:
     session = _require_session(request)
-    settings: Settings = request.app["settings"]
+    settings: Settings = request.app[SETTINGS_KEY]
     guild_id_str = request.match_info["guild_id"]
     guild_id = _require_owned_guild(session, settings=settings, path=request.path_qs, guild_id=guild_id_str)
     roles, channels = await _get_guild_discord_metadata(request, guild_id=guild_id)
@@ -4443,7 +4449,7 @@ async def guild_discord_metadata_json(request: web.Request) -> web.Response:
 
 
 async def billing_webhook(request: web.Request) -> web.Response:
-    settings: Settings = request.app["settings"]
+    settings: Settings = request.app[SETTINGS_KEY]
     if not settings.mongodb_uri:
         raise web.HTTPInternalServerError(text="MongoDB is not configured.")
 
@@ -4483,7 +4489,7 @@ async def billing_webhook(request: web.Request) -> web.Response:
 
 async def billing_page(request: web.Request) -> web.Response:
     session = _require_session(request)
-    settings: Settings = request.app["settings"]
+    settings: Settings = request.app[SETTINGS_KEY]
     from offside_bot.web_templates import render
 
     selected_guild_id = request.query.get("guild_id", "").strip()
@@ -4577,7 +4583,7 @@ async def billing_page(request: web.Request) -> web.Response:
 
 async def billing_portal(request: web.Request) -> web.Response:
     session = _require_session(request)
-    settings: Settings = request.app["settings"]
+    settings: Settings = request.app[SETTINGS_KEY]
     if not settings.mongodb_uri:
         raise web.HTTPInternalServerError(text="MongoDB is not configured.")
 
@@ -4615,7 +4621,7 @@ async def billing_portal(request: web.Request) -> web.Response:
 
 async def billing_checkout(request: web.Request) -> web.Response:
     session = _require_session(request)
-    settings: Settings = request.app["settings"]
+    settings: Settings = request.app[SETTINGS_KEY]
     data = await request.post()
     if str(data.get("csrf", "")) != session.csrf_token:
         raise web.HTTPBadRequest(text="Invalid CSRF token.")
@@ -4662,7 +4668,7 @@ async def billing_checkout(request: web.Request) -> web.Response:
 
 async def billing_success(request: web.Request) -> web.Response:
     session = _require_session(request)
-    settings: Settings = request.app["settings"]
+    settings: Settings = request.app[SETTINGS_KEY]
     from offside_bot.web_templates import render
 
     gid = request.query.get("guild_id", "").strip()
@@ -4779,7 +4785,7 @@ async def billing_success(request: web.Request) -> web.Response:
 
 async def billing_cancel(request: web.Request) -> web.Response:
     session = _require_session(request)
-    settings: Settings = request.app["settings"]
+    settings: Settings = request.app[SETTINGS_KEY]
     gid = request.query.get("guild_id", "").strip()
     guild_id = _require_owned_guild(session, settings=settings, path=request.path_qs, guild_id=gid) if gid else 0
     if not guild_id:
@@ -4790,7 +4796,7 @@ async def billing_cancel(request: web.Request) -> web.Response:
 
 async def _on_startup(app: web.Application) -> None:
     # aiohttp ClientSession must be created with a running event loop.
-    app["http"] = ClientSession()
+    app[HTTP_SESSION_KEY] = ClientSession()
 
 
 async def _on_cleanup(app: web.Application) -> None:
@@ -4812,19 +4818,19 @@ def create_app(*, settings: Settings | None = None) -> web.Application:
         ]
     )
     app_settings = settings or load_settings()
-    app["settings"] = app_settings
+    app[SETTINGS_KEY] = app_settings
     validate_stripe_environment()
     init_error_reporting(settings=app_settings, service_name="dashboard")
     session_collection, state_collection, user_collection = _ensure_dashboard_collections(app_settings)
-    app["session_collection"] = session_collection
-    app["state_collection"] = state_collection
-    app["user_collection"] = user_collection
+    app[SESSION_COLLECTION_KEY] = session_collection
+    app[STATE_COLLECTION_KEY] = state_collection
+    app[USER_COLLECTION_KEY] = user_collection
     if app_settings.mongodb_uri:
         ensure_stripe_webhook_indexes(app_settings)
         ensure_ops_task_indexes(app_settings)
         ensure_guild_install_indexes(app_settings)
-    app["guild_metadata_cache"] = {}
-    app["http"] = None
+    app[GUILD_METADATA_CACHE_KEY] = {}
+    app[HTTP_SESSION_KEY] = None
     app.on_startup.append(_on_startup)
     app.on_cleanup.append(_on_cleanup)
 

@@ -49,3 +49,6 @@ disallow_untyped_defs = false
 allow_redefinition = true
 show_error_codes = true
 exclude = ["tests/.*", "scripts/.*"]
+
+[tool.pytest.ini_options]
+asyncio_default_fixture_loop_scope = "function"
