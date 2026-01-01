@@ -23,6 +23,20 @@
   <p><a href="{{ invite_href }}">{{ invite_href }}</a></p>
 {%- endmacro %}
 
+{% macro copy_field(value, label="") -%}
+  <div class="copy-field">
+    <input
+      class="copy-input"
+      type="text"
+      value="{{ value }}"
+      readonly
+      spellcheck="false"
+      {% if label %}aria-label="{{ label }}"{% endif %}
+    />
+    <button class="btn secondary" type="button" data-copy-text="{{ value }}">Copy</button>
+  </div>
+{%- endmacro %}
+
 {% macro table(headers, rows, empty_text="No data", table_class="") -%}
   <table class="{{ table_class }}">
     <thead>

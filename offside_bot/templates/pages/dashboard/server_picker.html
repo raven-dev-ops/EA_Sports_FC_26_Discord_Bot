@@ -1,3 +1,5 @@
+{% from "macros/ui.html" import copy_field %}
+
 <h1 class="mt-0">Your servers</h1>
 <div class="card mb-16">
   <label for="guild-search" class="muted">Search servers</label>
@@ -7,17 +9,25 @@
 {% if cards %}
   {% for card in cards %}
     <div class="card guild-card" data-name="{{ card.name }}">
-      <div class="flex gap-12 items-center justify-between flex-wrap">
-        <div class="flex gap-12 items-center">
-          {% if card.icon_url %}
-            <img src="{{ card.icon_url }}" alt="" class="avatar-lg" />
-          {% else %}
-            <div class="avatar-fallback">{{ card.fallback }}</div>
-          {% endif %}
-          <div>
-            <div class="font-600">{{ card.name }}</div>
-            <div class="muted">Guild ID: <code>{{ card.id }}</code></div>
-          </div>
+        <div class="flex gap-12 items-center justify-between flex-wrap">
+          <div class="flex gap-12 items-center">
+            {% if card.icon_url %}
+              <img
+                src="{{ card.icon_url }}"
+                alt=""
+                class="avatar-lg"
+                width="48"
+                height="48"
+                loading="lazy"
+                decoding="async"
+              />
+            {% else %}
+              <div class="avatar-fallback" aria-hidden="true">{{ card.fallback }}</div>
+            {% endif %}
+            <div>
+              <div class="font-600">{{ card.name }}</div>
+              <div class="muted">Guild ID: <code>{{ card.id }}</code></div>
+            </div>
         </div>
         <div class="flex gap-8 items-center">
           {% if card.plan_label %}
@@ -50,6 +60,8 @@
   <p>No servers found.</p>
 {% endif %}
 
-<h2>Invite link</h2>
-<p class="muted">Direct invite URL (shareable):</p>
-<p><a href="{{ invite_href }}">{{ invite_href }}</a></p>
+<div class="card">
+  <h2 class="mt-0">Invite link</h2>
+  <p class="muted">Direct invite URL (shareable):</p>
+  {{ copy_field(invite_href, label="Direct invite URL") }}
+</div>

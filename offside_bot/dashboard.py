@@ -1462,7 +1462,7 @@ async def terms_page(_request: web.Request) -> web.Response:
     content = f"""
       <p><a href="/">&larr; Back</a></p>
       <h1>Terms of Service</h1>
-      <div class="card">{html}</div>
+      <div class="card prose">{html}</div>
     """
     from offside_bot.web_templates import render, safe_html
 
@@ -1478,7 +1478,7 @@ async def privacy_page(_request: web.Request) -> web.Response:
     content = f"""
       <p><a href="/">&larr; Back</a></p>
       <h1>Privacy Policy</h1>
-      <div class="card">{html}</div>
+      <div class="card prose">{html}</div>
     """
     from offside_bot.web_templates import render, safe_html
 
@@ -1494,7 +1494,7 @@ async def product_copy_page(_request: web.Request) -> web.Response:
     content = f"""
       <p><a href="/">&larr; Back</a></p>
       <h1>Product</h1>
-      <div class="card">{html}</div>
+      <div class="card prose">{html}</div>
     """
     from offside_bot.web_templates import render, safe_html
 
@@ -1526,7 +1526,7 @@ async def docs_page(request: web.Request) -> web.Response:
     content = f"""
       <p><a href="/docs">&larr; Back to docs</a></p>
       <h1>{_escape_html(doc["title"])}</h1>
-      <div class="card">{html}</div>
+      <div class="card prose">{html}</div>
     """
     from offside_bot.web_templates import render, safe_html
 

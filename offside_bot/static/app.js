@@ -129,4 +129,55 @@
       });
     });
   }
+
+  const copyToClipboard = async (text, input) => {
+    if (!text) {
+      return false;
+    }
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(text);
+        return true;
+      }
+    } catch {
+      // fall back below
+    }
+
+    if (input && input.select) {
+      input.focus();
+      input.select();
+    }
+    try {
+      return document.execCommand && document.execCommand("copy");
+    } catch {
+      return false;
+    }
+  };
+
+  document.addEventListener("click", async (event) => {
+    const button = event.target.closest("[data-copy-text]");
+    if (!button) {
+      return;
+    }
+    event.preventDefault();
+    const text = button.getAttribute("data-copy-text") || "";
+    const input = button.parentElement && button.parentElement.querySelector(".copy-input");
+    const ok = await copyToClipboard(text, input);
+
+    const previous = button.textContent || "Copy";
+    button.textContent = ok ? "Copied" : "Copy failed";
+    window.setTimeout(() => {
+      button.textContent = previous;
+    }, 1200);
+  });
+
+  document.addEventListener("focusin", (event) => {
+    const input = event.target;
+    if (!input || !(input instanceof HTMLInputElement)) {
+      return;
+    }
+    if (input.classList.contains("copy-input")) {
+      input.select();
+    }
+  });
 })();

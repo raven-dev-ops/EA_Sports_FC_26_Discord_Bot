@@ -2,29 +2,33 @@
 {% from "macros/ui.html" import button, badge %}
 
 {% block content %}
-  <h1>Pricing</h1>
-  <p class="muted">Pricing is per server. Start free and upgrade when you need premium workflows.</p>
-
-  <div class="card flex justify-between items-center gap-12 flex-wrap">
-    <div>
-      <strong>Billing cadence</strong>
-      <div class="muted mt-6">Yearly pricing is coming soon.</div>
+  <div class="card hero-card">
+    <h1 class="mt-0 text-hero-sm">Pricing</h1>
+    <p class="muted text-lg mt-10">Pricing is per server. Start free and upgrade when you need premium workflows.</p>
+    <div class="flex justify-between items-center gap-12 flex-wrap mt-14">
+      <div>
+        <div class="muted">Billing cadence</div>
+        <div class="mt-6 font-600">Monthly <span class="muted">(yearly coming soon)</span></div>
+      </div>
+      <div class="btn-group" role="group" aria-label="Billing cadence">
+        <a class="btn {% if billing == 'monthly' %}blue{% else %}secondary{% endif %}" href="{{ toggle_monthly_href }}">
+          Monthly
+        </a>
+        <a class="btn {% if billing == 'yearly' %}blue{% else %}secondary{% endif %}" href="{{ toggle_yearly_href }}">
+          Yearly (soon)
+        </a>
+      </div>
     </div>
-    <div class="flex gap-10 flex-wrap">
-      <a class="btn secondary" href="{{ toggle_monthly_href }}">{{ "Monthly" if billing != "monthly" else "Monthly ✓" }}</a>
-      <a class="btn secondary" href="{{ toggle_yearly_href }}">{{ "Yearly (soon)" if billing != "yearly" else "Yearly ✓ (soon)" }}</a>
-    </div>
-  </div>
-
-  <div class="card flex justify-between items-center gap-12 flex-wrap">
-    <div>
-      <strong>Trust & billing</strong>
-      <div class="muted mt-6">Cancel anytime. Free tier never asks for a card.</div>
-    </div>
-    <div class="flex gap-10 flex-wrap">
-      <span class="badge ok">Stripe</span>
-      <span class="badge">Per server</span>
-      <span class="badge">No long-term lock-in</span>
+    <div class="flex justify-between items-center gap-12 flex-wrap mt-14">
+      <div>
+        <div class="muted">Trust & billing</div>
+        <div class="mt-6 font-600">Cancel anytime <span class="muted">(free tier never asks for a card)</span></div>
+      </div>
+      <div class="flex gap-10 flex-wrap">
+        <span class="badge ok">Stripe</span>
+        <span class="badge">Per server</span>
+        <span class="badge">No lock-in</span>
+      </div>
     </div>
   </div>
 
@@ -127,7 +131,7 @@
     <p class="muted">Enterprise plans support invoicing and custom onboarding.</p>
   </div>
 
-  <div class="card">
+  <div class="card cta-card">
     <div class="flex justify-between items-center gap-12 flex-wrap">
       <div>
         <div><strong>Ready to upgrade?</strong></div>

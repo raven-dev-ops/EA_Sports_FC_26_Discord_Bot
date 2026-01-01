@@ -1,33 +1,50 @@
 {% extends "layouts/public.html" %}
-{% from "macros/ui.html" import button, card %}
+{% from "macros/ui.html" import button, copy_field %}
 
 {% block content %}
-  <div class="card">
+  <div class="card hero-card">
     <div class="hero">
       <div class="hero-copy">
-        <h1 class="mt-0 text-hero">Offside</h1>
-        <p class="muted text-lg">
+        <div class="kicker">EA Sports FC 26 Discord ops dashboard</div>
+        <h1 class="mt-6 text-hero">Offside</h1>
+        <p class="muted text-lg mt-10">
           Offside turns your EA Sports FC Discord into an ops dashboard: rosters, recruiting, clubs, tournaments, and analytics.
         </p>
-        <div class="flex gap-10 flex-wrap mt-14">
+        <ul class="checklist mt-12">
+          <li>Guided setup wizard and dashboards</li>
+          <li>Roster + recruiting workflows</li>
+          <li>Clubs, tournaments, and analytics</li>
+        </ul>
+        <div class="flex gap-10 flex-wrap mt-16">
           {{ button("Add to Discord", "/install", "blue") }}
           {{ button("Open Dashboard", "/app", "secondary") }}
           {{ button("Features", "/features", "secondary") }}
         </div>
-        <p class="muted mt-14">Direct invite URL:</p>
-        <p><a href="{{ invite_href }}">{{ invite_href }}</a></p>
+        <div class="mt-16">
+          <div class="muted">Direct invite URL</div>
+          {{ copy_field(invite_href, label="Direct invite URL") }}
+        </div>
       </div>
       <div class="hero-media">
         <img
           class="hero-banner"
           src="{{ static_url('brand/offside_bot_banner.png') }}"
           alt="Offside dashboard banner"
+          width="1215"
+          height="543"
+          loading="eager"
+          decoding="async"
+          fetchpriority="high"
         />
         <div class="hero-portrait-wrap">
           <img
             class="hero-portrait"
             src="{{ static_url('brand/offside_bot_portrait.png') }}"
             alt="Offside bot portrait"
+            width="599"
+            height="469"
+            loading="lazy"
+            decoding="async"
           />
         </div>
       </div>
@@ -86,7 +103,7 @@
     <p class="muted">Visit the <a href="/support">Support page</a> for docs and contact options.</p>
   </div>
 
-  <div class="card">
+  <div class="card cta-card">
     <div class="flex justify-between items-center gap-12 flex-wrap">
       <div>
         <div><strong>Ready to get started?</strong></div>

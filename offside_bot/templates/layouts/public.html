@@ -21,9 +21,12 @@
         <a href="/support" {% if active_nav == "support" %}aria-current="page"{% endif %}>{{ t("nav.support") }}</a>
       </nav>
     </div>
-    <div class="flex gap-10 items-center">
+    <div class="flex gap-10 items-center topbar-cta">
       {% if right_cta %}
         {{ right_cta|safe }}
+      {% else %}
+        {{ button("Add to Discord", "/install", "blue") }}
+        {{ button("Open Dashboard", "/app", "secondary") }}
       {% endif %}
     </div>
   </div>
