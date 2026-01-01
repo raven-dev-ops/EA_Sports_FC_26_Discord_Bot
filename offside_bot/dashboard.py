@@ -966,11 +966,21 @@ def _require_session(request: web.Request) -> SessionData:
         next_path = _sanitize_next_path(request.path_qs)
         if len(next_path) > 1024:
             next_path = "/"
-        next_cookie_value = urllib.parse.quote(next_path, safe="")
+        states: Collection = request.app[STATE_COLLECTION_KEY]
+        expires_at = _utc_now() + timedelta(seconds=STATE_TTL_SECONDS)
+        state = _insert_unique(
+            states,
+            lambda: {
+                "_id": secrets.token_urlsafe(24),
+                "issued_at": time.time(),
+                "next": next_path,
+                "expires_at": expires_at,
+            },
+        )
         resp = web.HTTPFound("/login")
         resp.set_cookie(
             NEXT_COOKIE_NAME,
-            next_cookie_value,
+            state,
             httponly=True,
             samesite="Lax",
             secure=_is_https(request),
@@ -2096,17 +2106,48 @@ async def ready(request: web.Request) -> web.Response:
 async def login(request: web.Request) -> web.Response:
     settings: Settings = request.app[SETTINGS_KEY]
     client_id, _client_secret, redirect_uri = _oauth_config(settings)
-    cookie_next = str(request.cookies.get(NEXT_COOKIE_NAME) or "")
-    if cookie_next:
-        cookie_next = urllib.parse.unquote(cookie_next)
-    raw_next = str(request.query.get("next") or "").strip() or cookie_next
-    next_path = _sanitize_next_path(raw_next)
     states: Collection = request.app[STATE_COLLECTION_KEY]
     expires_at = _utc_now() + timedelta(seconds=STATE_TTL_SECONDS)
-    state = _insert_unique(
-        states,
-        lambda: {"_id": secrets.token_urlsafe(24), "issued_at": time.time(), "next": next_path, "expires_at": expires_at},
-    )
+
+    next_param = str(request.query.get("next") or "").strip()
+    cookie_state = str(request.cookies.get(NEXT_COOKIE_NAME) or "").strip()
+    if cookie_state and len(cookie_state) > 128:
+        cookie_state = ""
+
+    next_path = "/"
+    state: str | None = None
+    if next_param:
+        next_path = _sanitize_next_path(next_param)
+        state = _insert_unique(
+            states,
+            lambda: {
+                "_id": secrets.token_urlsafe(24),
+                "issued_at": time.time(),
+                "next": next_path,
+                "expires_at": expires_at,
+            },
+        )
+    elif cookie_state:
+        raw_doc = states.find_one({"_id": cookie_state})
+        doc = raw_doc if isinstance(raw_doc, dict) else None
+        expires_at_value = doc.get("expires_at") if doc else None
+        if isinstance(expires_at_value, datetime) and expires_at_value.tzinfo is None:
+            expires_at_value = expires_at_value.replace(tzinfo=timezone.utc)
+        if doc and isinstance(expires_at_value, datetime) and expires_at_value > _utc_now():
+            next_path = _sanitize_next_path(str(doc.get("next") or "/"))
+            state = cookie_state
+        else:
+            states.delete_one({"_id": cookie_state})
+    if state is None:
+        state = _insert_unique(
+            states,
+            lambda: {
+                "_id": secrets.token_urlsafe(24),
+                "issued_at": time.time(),
+                "next": next_path,
+                "expires_at": expires_at,
+            },
+        )
     authorize_url = _build_authorize_url(
         client_id=client_id,
         redirect_uri=redirect_uri,
