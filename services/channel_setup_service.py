@@ -41,66 +41,66 @@ async def ensure_offside_channels(
     coach_roles = _resolve_coach_roles(guild, config)
     bot_member = guild.me
 
-    dashboard_category = await _ensure_category(guild, DASHBOARD_CATEGORY_NAME, actions=actions)
-    reports_category = await _ensure_category(guild, REPORTS_CATEGORY_NAME, actions=actions)
+    dashboard_category = await _ensure_category(
+        guild,
+        DASHBOARD_CATEGORY_NAME,
+        actions=actions,
+        bot_member=bot_member,
+    )
+    reports_category = await _ensure_category(
+        guild,
+        REPORTS_CATEGORY_NAME,
+        actions=actions,
+        bot_member=bot_member,
+    )
 
     dashboard_channels: list[discord.TextChannel] = []
-    dashboard_channels.append(
-        await _ensure_text_channel(
-            guild,
-            category=dashboard_category,
-            name=STAFF_PORTAL_CHANNEL_NAME,
-            overwrites=_staff_only_overwrites(guild, staff_roles, bot_member),
-            existing_channel_id=_parse_int(config.get("channel_staff_portal_id")),
-            actions=actions,
-        )
-    )
-    dashboard_channels.append(
-        await _ensure_text_channel(
-            guild,
-            category=dashboard_category,
-            name=MANAGER_PORTAL_CHANNEL_NAME,
-            overwrites=_staff_only_overwrites(guild, staff_roles, bot_member),
-            existing_channel_id=_parse_int(config.get("channel_manager_portal_id")),
-            actions=actions,
-        )
-    )
-    dashboard_channels.append(
-        await _ensure_text_channel(
-            guild,
-            category=dashboard_category,
-            name=CLUB_PORTAL_CHANNEL_NAME,
-            overwrites=_public_readonly_overwrites(guild, staff_roles, bot_member),
-            existing_channel_id=_parse_int(config.get("channel_club_portal_id")),
-            actions=actions,
-        )
-    )
-    dashboard_channels.append(
-        await _ensure_text_channel(
-            guild,
-            category=dashboard_category,
-            name=COACH_PORTAL_CHANNEL_NAME,
-            overwrites=_coach_portal_overwrites(guild, staff_roles, coach_roles, bot_member),
-            existing_channel_id=_parse_int(config.get("channel_coach_portal_id")),
-            actions=actions,
-        )
-    )
-    dashboard_channels.append(
-        await _ensure_text_channel(
-            guild,
-            category=dashboard_category,
-            name=RECRUIT_PORTAL_CHANNEL_NAME,
-            overwrites=_public_readonly_overwrites(guild, staff_roles, bot_member),
-            existing_channel_id=_parse_int(config.get("channel_recruit_portal_id")),
-            actions=actions,
-        )
-    )
+    dashboard_specs: list[tuple[str, str, dict[discord.Role | discord.Member | discord.Object, discord.PermissionOverwrite]]] = [
+        (
+            STAFF_PORTAL_CHANNEL_NAME,
+            "channel_staff_portal_id",
+            _staff_only_overwrites(guild, staff_roles, bot_member),
+        ),
+        (
+            MANAGER_PORTAL_CHANNEL_NAME,
+            "channel_manager_portal_id",
+            _staff_only_overwrites(guild, staff_roles, bot_member),
+        ),
+        (
+            CLUB_PORTAL_CHANNEL_NAME,
+            "channel_club_portal_id",
+            _public_readonly_overwrites(guild, staff_roles, bot_member),
+        ),
+        (
+            COACH_PORTAL_CHANNEL_NAME,
+            "channel_coach_portal_id",
+            _coach_portal_overwrites(guild, staff_roles, coach_roles, bot_member),
+        ),
+        (
+            RECRUIT_PORTAL_CHANNEL_NAME,
+            "channel_recruit_portal_id",
+            _public_readonly_overwrites(guild, staff_roles, bot_member),
+        ),
+    ]
 
-    config["channel_staff_portal_id"] = dashboard_channels[0].id
-    config["channel_manager_portal_id"] = dashboard_channels[1].id
-    config["channel_club_portal_id"] = dashboard_channels[2].id
-    config["channel_coach_portal_id"] = dashboard_channels[3].id
-    config["channel_recruit_portal_id"] = dashboard_channels[4].id
+    for name, key, overwrites in dashboard_specs:
+        try:
+            channel = await _ensure_text_channel(
+                guild,
+                category=dashboard_category,
+                name=name,
+                overwrites=overwrites,
+                existing_channel_id=_parse_int(config.get(key)),
+                actions=actions,
+            )
+        except discord.Forbidden:
+            actions.append(
+                f"Could not create `{name}` (missing permissions). "
+                "Ensure the bot has `Manage Channels` and can access the Offside dashboard category."
+            )
+            continue
+        dashboard_channels.append(channel)
+        config[key] = channel.id
 
     reports_channels: list[discord.TextChannel] = []
 
@@ -122,62 +122,55 @@ async def ensure_offside_channels(
                 "Staff monitor cleanup failed (missing permissions). Please delete it manually."
             )
     else:
-        staff_monitor_channel, created = await _ensure_text_channel_with_created(
-            guild,
-            category=reports_category,
-            name=STAFF_MONITOR_CHANNEL_NAME,
-            overwrites=_staff_only_overwrites(guild, staff_roles, bot_member),
-            existing_channel_id=staff_monitor_id,
-            actions=actions,
-        )
-        reports_channels.append(staff_monitor_channel)
-        config["channel_staff_monitor_id"] = staff_monitor_channel.id
-        if created:
-            config[STAFF_MONITOR_MANAGED_KEY] = True
-        else:
-            config[STAFF_MONITOR_MANAGED_KEY] = bool(
-                staff_monitor_managed and staff_monitor_id == staff_monitor_channel.id
+        try:
+            staff_monitor_channel, created = await _ensure_text_channel_with_created(
+                guild,
+                category=reports_category,
+                name=STAFF_MONITOR_CHANNEL_NAME,
+                overwrites=_staff_only_overwrites(guild, staff_roles, bot_member),
+                existing_channel_id=staff_monitor_id,
+                actions=actions,
             )
+        except discord.Forbidden:
+            actions.append(
+                "Could not create staff monitor channel (missing permissions). "
+                "Grant the bot `Manage Channels` and retry."
+            )
+        else:
+            reports_channels.append(staff_monitor_channel)
+            config["channel_staff_monitor_id"] = staff_monitor_channel.id
+            if created:
+                config[STAFF_MONITOR_MANAGED_KEY] = True
+            else:
+                config[STAFF_MONITOR_MANAGED_KEY] = bool(
+                    staff_monitor_managed and staff_monitor_id == staff_monitor_channel.id
+                )
 
-    roster_listing = await _ensure_text_channel(
-        guild,
-        category=reports_category,
-        name=ROSTER_LISTING_CHANNEL_NAME,
-        overwrites=_public_readonly_overwrites(guild, staff_roles, bot_member),
-        existing_channel_id=_parse_int(config.get("channel_roster_listing_id")),
-        actions=actions,
-    )
-    recruit_listing = await _ensure_text_channel(
-        guild,
-        category=reports_category,
-        name=RECRUIT_LISTING_CHANNEL_NAME,
-        overwrites=_public_readonly_overwrites(guild, staff_roles, bot_member),
-        existing_channel_id=_parse_int(config.get("channel_recruit_listing_id")),
-        actions=actions,
-    )
-    club_listing = await _ensure_text_channel(
-        guild,
-        category=reports_category,
-        name=CLUB_LISTING_CHANNEL_NAME,
-        overwrites=_public_readonly_overwrites(guild, staff_roles, bot_member),
-        existing_channel_id=_parse_int(config.get("channel_club_listing_id")),
-        actions=actions,
-    )
-    premium_coaches = await _ensure_text_channel(
-        guild,
-        category=reports_category,
-        name=PREMIUM_COACHES_CHANNEL_NAME,
-        overwrites=_public_readonly_overwrites(guild, staff_roles, bot_member),
-        existing_channel_id=_parse_int(config.get("channel_premium_coaches_id")),
-        actions=actions,
-    )
-
-    reports_channels.extend([roster_listing, recruit_listing, club_listing, premium_coaches])
-
-    config["channel_roster_listing_id"] = roster_listing.id
-    config["channel_recruit_listing_id"] = recruit_listing.id
-    config["channel_club_listing_id"] = club_listing.id
-    config["channel_premium_coaches_id"] = premium_coaches.id
+    reports_specs: list[tuple[str, str]] = [
+        (ROSTER_LISTING_CHANNEL_NAME, "channel_roster_listing_id"),
+        (RECRUIT_LISTING_CHANNEL_NAME, "channel_recruit_listing_id"),
+        (CLUB_LISTING_CHANNEL_NAME, "channel_club_listing_id"),
+        (PREMIUM_COACHES_CHANNEL_NAME, "channel_premium_coaches_id"),
+    ]
+    reports_overwrites = _public_readonly_overwrites(guild, staff_roles, bot_member)
+    for name, key in reports_specs:
+        try:
+            channel = await _ensure_text_channel(
+                guild,
+                category=reports_category,
+                name=name,
+                overwrites=reports_overwrites,
+                existing_channel_id=_parse_int(config.get(key)),
+                actions=actions,
+            )
+        except discord.Forbidden:
+            actions.append(
+                f"Could not create `{name}` (missing permissions). "
+                "Ensure the bot can manage channels in the Offside reports category."
+            )
+            continue
+        reports_channels.append(channel)
+        config[key] = channel.id
 
     await _order_under_category(
         dashboard_category,
@@ -230,14 +223,38 @@ async def cleanup_staff_monitor_channel(
 
 
 async def _ensure_category(
-    guild: discord.Guild, name: str, *, actions: list[str]
+    guild: discord.Guild,
+    name: str,
+    *,
+    actions: list[str],
+    bot_member: discord.Member | None = None,
 ) -> discord.CategoryChannel:
     existing = discord.utils.get(guild.categories, name=name)
     if existing is not None:
+        if bot_member is not None and bot_member.guild_permissions.manage_channels:
+            perms = existing.permissions_for(bot_member)
+            if not (perms.view_channel and perms.manage_channels):
+                repaired_name = _unique_category_name(guild, f"{name} (Offside)")
+                category = await guild.create_category(repaired_name, reason="Offside setup (repair)")
+                actions.append(
+                    f"Existing category `{name}` has restricted permissions; created `{repaired_name}` instead."
+                )
+                return category
         return existing
     category = await guild.create_category(name, reason="Offside setup")
     actions.append(f"Created category `{name}`.")
     return category
+
+
+def _unique_category_name(guild: discord.Guild, base: str) -> str:
+    existing = {cat.name for cat in guild.categories}
+    if base not in existing:
+        return base
+    for idx in range(2, 26):
+        candidate = f"{base} ({idx})"
+        if candidate not in existing:
+            return candidate
+    return f"{base} ({len(existing) + 1})"
 
 
 async def _ensure_text_channel(
