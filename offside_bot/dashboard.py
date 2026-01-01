@@ -12,7 +12,7 @@ import urllib.parse
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Final
+from typing import Any, Final, TypedDict
 
 from aiohttp import ClientSession, web
 from pymongo.collection import Collection
@@ -191,7 +191,13 @@ SESSION_COLLECTION_KEY: Final = web.AppKey("session_collection", Collection)
 STATE_COLLECTION_KEY: Final = web.AppKey("state_collection", Collection)
 USER_COLLECTION_KEY: Final = web.AppKey("user_collection", Collection)
 GUILD_METADATA_CACHE_KEY: Final = web.AppKey("guild_metadata_cache", dict[int, dict[str, Any]])
-HTTP_SESSION_KEY: Final = web.AppKey("http", ClientSession | None)
+HTTP_SESSION_KEY: Final = web.AppKey("http", ClientSession)
+
+
+class GuildSelectorItem(TypedDict):
+    href: str
+    label: str
+    selected: bool
 
 
 @dataclass
@@ -332,7 +338,7 @@ def _app_shell(
     nav_items_override: list[dict[str, Any]] | None = None,
     nav_groups_override: list[dict[str, Any]] | None = None,
     breadcrumbs_override: list[dict[str, str]] | None = None,
-    guild_selector_override: list[dict[str, str]] | None = None,
+    guild_selector_override: list[GuildSelectorItem] | None = None,
 ) -> str:
     from offside_bot.web_templates import render, safe_html
 
@@ -340,7 +346,7 @@ def _app_shell(
     username = f"{user.get('username','')}#{user.get('discriminator','')}".strip("#")
 
     selected_guild_str = str(selected_guild_id) if selected_guild_id is not None else ""
-    guild_selector = [
+    guild_selector: list[GuildSelectorItem] = [
         {
             "href": _guild_section_url(str(g.get("id")), section=section),
             "label": str(g.get("name") or g.get("id") or ""),
@@ -906,74 +912,97 @@ async def session_middleware(request: web.Request, handler):
     session_id = request.cookies.get(COOKIE_NAME)
     request["session_id"] = session_id
     session: SessionData | None = None
+    invalidate_cookie = False
     now = time.time()
     if session_id:
-        sessions: Collection = request.app[SESSION_COLLECTION_KEY]
-        doc = sessions.find_one({"_id": session_id}) or {}
-        created_at = doc.get("created_at")
-        expires_at_dt = doc.get("expires_at")
-        expires_at_ts = expires_at_dt.timestamp() if isinstance(expires_at_dt, datetime) else None
-        last_seen_at = doc.get("last_seen_at", created_at)
-        guilds_fetched_at = doc.get("guilds_fetched_at", created_at)
-        last_guild_id = doc.get("last_guild_id")
-        last_guild_id_value = None
-        if isinstance(last_guild_id, int):
-            last_guild_id_value = last_guild_id
-        elif isinstance(last_guild_id, str) and last_guild_id.isdigit():
-            last_guild_id_value = int(last_guild_id)
+        try:
+            sessions: Collection = request.app[SESSION_COLLECTION_KEY]
+            doc = sessions.find_one({"_id": session_id}) or {}
+            created_at = doc.get("created_at")
+            created_at_ts = float(created_at) if isinstance(created_at, (int, float)) else None
+            expires_at_dt = doc.get("expires_at")
+            expires_at_ts = expires_at_dt.timestamp() if isinstance(expires_at_dt, datetime) else None
+            last_seen_at = doc.get("last_seen_at", created_at)
+            guilds_fetched_at = doc.get("guilds_fetched_at", created_at)
+            last_guild_id = doc.get("last_guild_id")
+            last_guild_id_value = None
+            if isinstance(last_guild_id, int):
+                last_guild_id_value = last_guild_id
+            elif isinstance(last_guild_id, str) and last_guild_id.isdigit():
+                last_guild_id_value = int(last_guild_id)
 
-        within_absolute_ttl = isinstance(created_at, (int, float)) and now - float(created_at) <= SESSION_TTL_SECONDS
-        within_expires_at = expires_at_ts is None or now <= expires_at_ts
-        idle_timeout = max(1, int(SESSION_IDLE_TIMEOUT_SECONDS)) if SESSION_IDLE_TIMEOUT_SECONDS > 0 else None
-        within_idle = (
-            idle_timeout is None
-            or (isinstance(last_seen_at, (int, float)) and now - float(last_seen_at) <= idle_timeout)
-        )
-        guild_cache_ttl = max(1, int(GUILD_METADATA_TTL_SECONDS)) if GUILD_METADATA_TTL_SECONDS > 0 else None
-        within_guild_cache = (
-            guild_cache_ttl is None
-            or (isinstance(guilds_fetched_at, (int, float)) and now - float(guilds_fetched_at) <= guild_cache_ttl)
-        )
+            within_absolute_ttl = created_at_ts is not None and now - created_at_ts <= SESSION_TTL_SECONDS
+            within_expires_at = expires_at_ts is None or now <= expires_at_ts
+            idle_timeout = max(1, int(SESSION_IDLE_TIMEOUT_SECONDS)) if SESSION_IDLE_TIMEOUT_SECONDS > 0 else None
+            last_seen_at_ts = float(last_seen_at) if isinstance(last_seen_at, (int, float)) else None
+            within_idle = idle_timeout is None or (
+                last_seen_at_ts is not None and now - last_seen_at_ts <= idle_timeout
+            )
+            guild_cache_ttl = max(1, int(GUILD_METADATA_TTL_SECONDS)) if GUILD_METADATA_TTL_SECONDS > 0 else None
+            guilds_fetched_at_ts = float(guilds_fetched_at) if isinstance(guilds_fetched_at, (int, float)) else None
+            within_guild_cache = guild_cache_ttl is None or (
+                guilds_fetched_at_ts is not None and now - guilds_fetched_at_ts <= guild_cache_ttl
+            )
 
-        if within_absolute_ttl and within_expires_at and within_idle and within_guild_cache:
-            user = doc.get("user")
-            owner_guilds = doc.get("owner_guilds")
-            all_guilds = doc.get("all_guilds")
-            csrf_token = doc.get("csrf_token")
             if (
-                isinstance(user, dict)
-                and isinstance(owner_guilds, list)
-                and isinstance(csrf_token, str)
-                and csrf_token
+                within_absolute_ttl
+                and within_expires_at
+                and within_idle
+                and within_guild_cache
+                and created_at_ts is not None
             ):
-                if not isinstance(all_guilds, list):
-                    all_guilds = owner_guilds
-                session = SessionData(
-                    created_at=float(created_at),
-                    user=user,
-                    owner_guilds=[g for g in owner_guilds if isinstance(g, dict)],
-                    all_guilds=[g for g in all_guilds if isinstance(g, dict)],
-                    csrf_token=csrf_token,
-                    last_seen_at=float(last_seen_at) if isinstance(last_seen_at, (int, float)) else float(created_at),
-                    guilds_fetched_at=float(guilds_fetched_at)
-                    if isinstance(guilds_fetched_at, (int, float))
-                    else float(created_at),
-                    last_guild_id=last_guild_id_value,
-                )
-        if session is None:
-            sessions.delete_one({"_id": session_id})
-        else:
-            touch_interval = max(1, int(SESSION_TOUCH_INTERVAL_SECONDS))
-            should_touch = now - session.last_seen_at >= touch_interval
-            if should_touch:
-                sessions.update_one({"_id": session_id}, {"$set": {"last_seen_at": now}})
-                session.last_seen_at = now
-            requested_guild_id = _extract_guild_id_from_request(request)
-            if requested_guild_id and requested_guild_id != session.last_guild_id:
-                sessions.update_one({"_id": session_id}, {"$set": {"last_guild_id": requested_guild_id}})
-                session.last_guild_id = requested_guild_id
+                user = doc.get("user")
+                owner_guilds = doc.get("owner_guilds")
+                all_guilds = doc.get("all_guilds")
+                csrf_token = doc.get("csrf_token")
+                if (
+                    isinstance(user, dict)
+                    and isinstance(owner_guilds, list)
+                    and isinstance(csrf_token, str)
+                    and csrf_token
+                ):
+                    if not isinstance(all_guilds, list):
+                        all_guilds = owner_guilds
+                    session = SessionData(
+                        created_at=created_at_ts,
+                        user=user,
+                        owner_guilds=[g for g in owner_guilds if isinstance(g, dict)],
+                        all_guilds=[g for g in all_guilds if isinstance(g, dict)],
+                        csrf_token=csrf_token,
+                        last_seen_at=last_seen_at_ts if last_seen_at_ts is not None else created_at_ts,
+                        guilds_fetched_at=guilds_fetched_at_ts
+                        if guilds_fetched_at_ts is not None
+                        else created_at_ts,
+                        last_guild_id=last_guild_id_value,
+                    )
+
+            if session is None:
+                invalidate_cookie = True
+                sessions.delete_one({"_id": session_id})
+            else:
+                touch_interval = max(1, int(SESSION_TOUCH_INTERVAL_SECONDS))
+                should_touch = now - session.last_seen_at >= touch_interval
+                if should_touch:
+                    sessions.update_one({"_id": session_id}, {"$set": {"last_seen_at": now}})
+                    session.last_seen_at = now
+                requested_guild_id = _extract_guild_id_from_request(request)
+                if requested_guild_id and requested_guild_id != session.last_guild_id:
+                    sessions.update_one({"_id": session_id}, {"$set": {"last_guild_id": requested_guild_id}})
+                    session.last_guild_id = requested_guild_id
+        except Exception:
+            invalidate_cookie = True
+            session = None
+            logging.exception("event=session_load_failed")
     request["session"] = session
-    return await handler(request)
+    try:
+        response = await handler(request)
+    except web.HTTPException as exc:
+        if invalidate_cookie:
+            exc.del_cookie(COOKIE_NAME)
+        raise
+    if invalidate_cookie:
+        response.del_cookie(COOKIE_NAME)
+    return response
 
 
 def _require_session(request: web.Request) -> SessionData:
@@ -1095,7 +1124,7 @@ def _request_guild_id(request: web.Request) -> int | None:
 
 
 def _log_extra(request: web.Request, **extra: object) -> dict[str, object]:
-    data = {"request_id": _request_id(request)}
+    data: dict[str, object] = {"request_id": _request_id(request)}
     data.update(extra)
     return data
 
@@ -1768,7 +1797,7 @@ def _format_admin_dt(value: Any) -> str:
 
 def _admin_actor(session: SessionData) -> tuple[int | None, str | None]:
     user = session.user
-    actor_id = int(user.get("id")) if isinstance(user, dict) and str(user.get("id")).isdigit() else None
+    actor_id = _parse_int(user.get("id")) if isinstance(user, dict) else None
     actor_username = None
     if isinstance(user, dict):
         username = user.get("username")
@@ -2405,7 +2434,7 @@ def _require_owned_guild(
             return gid_int
     try:
         user = session.user
-        actor_id = int(user.get("id")) if isinstance(user, dict) and str(user.get("id")).isdigit() else None
+        actor_id = _parse_int(user.get("id")) if isinstance(user, dict) else None
         actor_username = None
         if isinstance(user, dict):
             username = user.get("username")
@@ -2441,7 +2470,7 @@ def _require_guild_owner(
         return
     try:
         user = session.user
-        actor_id = int(user.get("id")) if isinstance(user, dict) and str(user.get("id")).isdigit() else None
+        actor_id = _parse_int(user.get("id")) if isinstance(user, dict) else None
         actor_username = None
         if isinstance(user, dict):
             username = user.get("username")
@@ -4894,7 +4923,7 @@ async def _on_startup(app: web.Application) -> None:
 
 
 async def _on_cleanup(app: web.Application) -> None:
-    http = app.get("http")
+    http = app.get(HTTP_SESSION_KEY)
     if isinstance(http, ClientSession):
         await http.close()
 
@@ -4924,7 +4953,6 @@ def create_app(*, settings: Settings | None = None) -> web.Application:
         ensure_ops_task_indexes(app_settings)
         ensure_guild_install_indexes(app_settings)
     app[GUILD_METADATA_CACHE_KEY] = {}
-    app[HTTP_SESSION_KEY] = None
     app.on_startup.append(_on_startup)
     app.on_cleanup.append(_on_cleanup)
 
