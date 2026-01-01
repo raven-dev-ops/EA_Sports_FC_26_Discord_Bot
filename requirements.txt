@@ -8,4 +8,4 @@ pymongo==4.15.5
 pytest==8.3.4
 sentry-sdk==2.48.0
 stripe==14.1.0
-tzdata==2025.2
+tzdata==2025.3
