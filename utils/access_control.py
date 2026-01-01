@@ -32,10 +32,13 @@ async def enforce_paid_access(interaction: discord.Interaction) -> bool:
         except discord.DiscordException:
             return True
 
-    if is_staff_user(member, settings, guild_id=guild.id):
-        return True
-
     role_ids = {r.id for r in member.roles if hasattr(r, "id")}
+
+    retired_role_id = resolve_role_id(settings, guild_id=guild.id, field="role_retired_id")
+
+    if is_staff_user(member, settings, guild_id=guild.id):
+        await _maybe_clear_retired_role(member, settings, retired_role_id=retired_role_id)
+        return True
 
     coach_role_ids = {
         resolve_role_id(settings, guild_id=guild.id, field="role_coach_id"),
@@ -44,10 +47,12 @@ async def enforce_paid_access(interaction: discord.Interaction) -> bool:
     }
     coach_role_ids.discard(None)
     if coach_role_ids.intersection(role_ids):
+        await _maybe_clear_retired_role(member, settings, retired_role_id=retired_role_id)
         return True
 
     recruit_role_id = resolve_role_id(settings, guild_id=guild.id, field="role_recruit_id")
     if recruit_role_id and recruit_role_id in role_ids:
+        await _maybe_clear_retired_role(member, settings, retired_role_id=retired_role_id)
         return True
 
     paid_role_ids = {
@@ -55,13 +60,13 @@ async def enforce_paid_access(interaction: discord.Interaction) -> bool:
         resolve_role_id(settings, guild_id=guild.id, field="role_premium_player_id"),
     }
     paid_role_ids.discard(None)
-    retired_role_id = resolve_role_id(settings, guild_id=guild.id, field="role_retired_id")
 
     if not coach_role_ids and not paid_role_ids and not recruit_role_id and not retired_role_id:
         # Access control isn't configured for this guild; fail open.
         return True
 
     if paid_role_ids.intersection(role_ids):
+        await _maybe_clear_retired_role(member, settings, retired_role_id=retired_role_id)
         return True
 
     if retired_role_id and retired_role_id in role_ids:
@@ -130,3 +135,28 @@ async def _maybe_assign_retired_role(
     except discord.DiscordException:
         return False
     return True
+
+
+async def _maybe_clear_retired_role(
+    member: discord.Member,
+    settings: Settings,
+    *,
+    retired_role_id: int | None,
+) -> None:
+    if not retired_role_id:
+        return
+    guild = member.guild
+    bot_member = guild.me
+    if bot_member is None or not bot_member.guild_permissions.manage_roles:
+        return
+    role = guild.get_role(retired_role_id)
+    if role is None:
+        return
+    if role not in member.roles:
+        return
+    if not _can_manage_role(bot_member, role):
+        return
+    try:
+        await member.remove_roles(role, reason="Offside access control: member eligible")
+    except discord.DiscordException:
+        return

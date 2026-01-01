@@ -380,19 +380,38 @@ async def _ensure_text_channel_with_created(
                     )
                     return channel, True
 
-            # Fallback: create the channel without a parent category, then attempt to move it into place.
-            channel = await guild.create_text_channel(
-                name,
-                overwrites=overwrites,
-                reason="Offside setup (fallback: no category)",
-            )
-            actions.append(
-                f"Created <#{channel.id}> outside `{category.name}` (category permissions blocked channel creation)."
-            )
+            # Fallback: create the channel without a parent category (minimally), then attempt to move it into place.
+            try:
+                channel = await guild.create_text_channel(
+                    name,
+                    reason="Offside setup (fallback: no category)",
+                )
+                actions.append(
+                    f"Created <#{channel.id}> outside `{category.name}` (category permissions blocked channel creation)."
+                )
+            except discord.Forbidden:
+                # As a last attempt, try creating under a repair category without custom overwrites.
+                if repaired is not None:
+                    channel = await guild.create_text_channel(
+                        name,
+                        category=repaired,
+                        reason="Offside setup (repair category minimal)",
+                    )
+                    actions.append(
+                        f"Created <#{channel.id}> under `{repaired.name}` without custom permissions (permission overwrites blocked)."
+                    )
+                    return channel, True
+                raise
             try:
                 await channel.edit(category=category, reason="Offside setup: move into category")
             except discord.DiscordException:
                 pass
+            try:
+                await channel.edit(overwrites=overwrites, reason="Offside setup: apply permissions")
+            except discord.DiscordException:
+                actions.append(
+                    f"Could not apply permissions for <#{channel.id}> automatically. Please verify channel permissions."
+                )
             return channel, True
         actions.append(f"Created <#{channel.id}>.")
         return channel, True

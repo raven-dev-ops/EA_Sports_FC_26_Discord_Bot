@@ -8,7 +8,7 @@ COACH_ROLE_NAME = "Coach"
 COACH_PREMIUM_ROLE_NAME = "Coach Premium"
 COACH_PREMIUM_PLUS_ROLE_NAME = "Coach Premium+"
 
-OWNER_ROLE_NAME = "Owner"
+OWNER_ROLE_NAME = "League Owner"
 MANAGER_ROLE_NAME = "Manager"
 FREE_PLAYER_ROLE_NAME = "Free Player"
 PREMIUM_PLAYER_ROLE_NAME = "Premium Player"
@@ -65,7 +65,7 @@ async def ensure_offside_roles(
     owner_role = await _ensure_role(
         guild,
         name=OWNER_ROLE_NAME,
-        aliases=(),
+        aliases=("Owner",),
         existing_role_id=_parse_int(config.get("role_owner_id")),
         actions=actions,
     )
@@ -122,7 +122,55 @@ async def ensure_offside_roles(
         config[STAFF_ROLE_IDS_KEY] = sorted(updated_staff_role_ids)
         actions.append("Updated staff role IDs to include Owner/Manager roles.")
 
+    await _maybe_assign_league_owner_role(guild, owner_role=owner_role, actions=actions)
+
     return config
+
+
+async def _maybe_assign_league_owner_role(
+    guild: discord.Guild,
+    *,
+    owner_role: discord.Role,
+    actions: list[str],
+) -> None:
+    owner_id = getattr(guild, "owner_id", None)
+    if not isinstance(owner_id, int) or not owner_id:
+        return
+
+    me = guild.me
+    if me is None or not me.guild_permissions.manage_roles:
+        actions.append("Could not assign League Owner role (missing Manage Roles permission).")
+        return
+
+    try:
+        manageable = owner_role < me.top_role
+    except TypeError:
+        manageable = owner_role.position < me.top_role.position
+
+    if not manageable and not me.guild_permissions.administrator:
+        actions.append(
+            "Could not assign League Owner role (role is above the bot). "
+            "Move the bot role above it to enable auto-assignment."
+        )
+        return
+
+    member = guild.get_member(owner_id)
+    if member is None:
+        try:
+            member = await guild.fetch_member(owner_id)
+        except discord.DiscordException:
+            return
+
+    if owner_role in getattr(member, "roles", []):
+        return
+
+    try:
+        await member.add_roles(owner_role, reason="Offside setup: guild owner")
+    except discord.DiscordException:
+        actions.append("Could not assign League Owner role to the server owner (missing permissions).")
+        return
+
+    actions.append("Assigned League Owner role to the server owner.")
 
 
 async def _ensure_role(
