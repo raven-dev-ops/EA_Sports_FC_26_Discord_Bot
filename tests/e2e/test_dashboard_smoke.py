@@ -76,7 +76,7 @@ async def test_dashboard_smoke_critical_path(monkeypatch) -> None:
         return True, None
 
     class FakeCheckoutSession:
-        url = "https://checkout.stripe.invalid/session"
+        url = "https://checkout.stripe.com/session"
 
     fake_stripe = types.SimpleNamespace()
     fake_stripe.api_key = ""
@@ -147,7 +147,7 @@ async def test_dashboard_smoke_critical_path(monkeypatch) -> None:
             allow_redirects=False,
         )
         assert resp.status == 302
-        assert resp.headers.get("Location") == "https://checkout.stripe.invalid/session"
+        assert resp.headers.get("Location") == "https://checkout.stripe.com/session"
     finally:
         await client.close()
 

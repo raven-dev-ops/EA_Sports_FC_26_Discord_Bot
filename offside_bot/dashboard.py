@@ -963,8 +963,15 @@ def _require_session(request: web.Request) -> SessionData:
     session = request.get("session")
     if session is None:
         next_path = _sanitize_next_path(request.path_qs)
+        parsed_next = urllib.parse.urlsplit(next_path)
+        if parsed_next.scheme or parsed_next.netloc:
+            next_path = "/"
         query = urllib.parse.urlencode({"next": next_path})
-        raise web.HTTPFound(f"/login?{query}")
+        location = f"/login?{query}"
+        parsed_location = urllib.parse.urlsplit(location)
+        if parsed_location.scheme or parsed_location.netloc or location.startswith("//") or location.startswith("/\\"):
+            location = "/login"
+        raise web.HTTPFound(location)
     return session
 
 
@@ -1241,9 +1248,16 @@ def _sanitize_next_path(raw: str) -> str:
     value = (raw or "").strip()
     if not value:
         return "/"
+    parsed = urllib.parse.urlsplit(value)
+    if parsed.scheme or parsed.netloc:
+        return "/"
     if not value.startswith("/"):
         return "/"
     if value.startswith("//"):
+        return "/"
+    if value.startswith("/\\"):
+        return "/"
+    if "\\" in value:
         return "/"
     return value
 
@@ -2084,14 +2098,23 @@ async def login(request: web.Request) -> web.Response:
         states,
         lambda: {"_id": secrets.token_urlsafe(24), "issued_at": time.time(), "next": next_path, "expires_at": expires_at},
     )
-    raise web.HTTPFound(
-        _build_authorize_url(
-            client_id=client_id,
-            redirect_uri=redirect_uri,
-            state=state,
-            scope="identify guilds",
-        )
+    authorize_url = _build_authorize_url(
+        client_id=client_id,
+        redirect_uri=redirect_uri,
+        state=state,
+        scope="identify guilds",
     )
+    parsed = urllib.parse.urlsplit(authorize_url)
+    oauth_host = (parsed.hostname or "").lower()
+    if parsed.scheme != "https" or oauth_host not in {"discord.com", "canary.discord.com", "ptb.discord.com"}:
+        logging.error(
+            "event=oauth_authorize_url_invalid host=%s path=%s",
+            oauth_host,
+            parsed.path,
+            extra=_log_extra(request),
+        )
+        raise web.HTTPInternalServerError(text="OAuth is misconfigured.")
+    raise web.HTTPFound(authorize_url)
 
 
 async def install(request: web.Request) -> web.Response:
@@ -2112,15 +2135,24 @@ async def install(request: web.Request) -> web.Response:
         states,
         lambda: {"_id": secrets.token_urlsafe(24), "issued_at": time.time(), "next": next_path, "expires_at": expires_at},
     )
-    raise web.HTTPFound(
-        _build_authorize_url(
-            client_id=client_id,
-            redirect_uri=redirect_uri,
-            state=state,
-            scope="identify guilds bot applications.commands",
-            extra_params=extra,
-        )
+    authorize_url = _build_authorize_url(
+        client_id=client_id,
+        redirect_uri=redirect_uri,
+        state=state,
+        scope="identify guilds bot applications.commands",
+        extra_params=extra,
     )
+    parsed = urllib.parse.urlsplit(authorize_url)
+    oauth_host = (parsed.hostname or "").lower()
+    if parsed.scheme != "https" or oauth_host not in {"discord.com", "canary.discord.com", "ptb.discord.com"}:
+        logging.error(
+            "event=oauth_authorize_url_invalid host=%s path=%s",
+            oauth_host,
+            parsed.path,
+            extra=_log_extra(request),
+        )
+        raise web.HTTPInternalServerError(text="OAuth is misconfigured.")
+    raise web.HTTPFound(authorize_url)
 
 
 def _oauth_error_response(
@@ -2174,6 +2206,9 @@ async def oauth_callback(request: web.Request) -> web.Response:
             issued_at = None
         next_path = str(pending_state.get("next") or "/") if pending_state else "/"
         next_path = _sanitize_next_path(next_path)
+        parsed_next = urllib.parse.urlsplit(next_path)
+        if parsed_next.scheme or parsed_next.netloc or next_path.startswith("/\\"):
+            next_path = "/"
 
     if error:
         if error == "access_denied":
@@ -2324,6 +2359,9 @@ async def oauth_callback(request: web.Request) -> web.Response:
         },
     )
 
+    parsed_next = urllib.parse.urlsplit(next_path)
+    if parsed_next.scheme or parsed_next.netloc or not next_path.startswith("/") or next_path.startswith("//") or next_path.startswith("/\\"):
+        next_path = "/"
     resp = web.HTTPFound(next_path)
     resp.set_cookie(
         COOKIE_NAME,
@@ -2818,6 +2856,7 @@ async def guild_settings_page(request: web.Request) -> web.Response:
 async def guild_settings_save(request: web.Request) -> web.Response:
     session = _require_session(request)
     settings: Settings = request.app[SETTINGS_KEY]
+    request_id = _request_id(request)
     guild_id_str = request.match_info["guild_id"]
     guild_id = _require_owned_guild(session, settings=settings, path=request.path_qs, guild_id=guild_id_str)
 
@@ -2966,7 +3005,13 @@ async def guild_settings_save(request: web.Request) -> web.Response:
             source="dashboard",
         )
     except Exception as exc:
-        raise web.HTTPInternalServerError(text=f"Failed to save settings: {exc}") from exc
+        logging.exception(
+            "event=guild_settings_save_failed request_id=%s guild_id=%s",
+            request_id,
+            guild_id,
+            extra=_log_extra(request, guild_id=guild_id),
+        )
+        raise web.HTTPInternalServerError(text="Failed to save settings.") from exc
 
     raise web.HTTPFound(f"/guild/{guild_id}/settings?saved=1")
 
@@ -3892,6 +3937,7 @@ async def guild_permissions_page(request: web.Request) -> web.Response:
 async def guild_audit_page(request: web.Request) -> web.Response:
     session = _require_session(request)
     settings: Settings = request.app[SETTINGS_KEY]
+    request_id = _request_id(request)
     from offside_bot.web_templates import render
 
     guild_id_str = request.match_info["guild_id"]
@@ -3916,7 +3962,13 @@ async def guild_audit_page(request: web.Request) -> web.Response:
         col = get_collection(settings, record_type="audit_event", guild_id=guild_id)
         events = list_audit_events(guild_id=guild_id, limit=limit, collection=col)
     except Exception as exc:
-        raise web.HTTPInternalServerError(text=f"Failed to load audit events: {exc}") from exc
+        logging.exception(
+            "event=guild_audit_load_failed request_id=%s guild_id=%s",
+            request_id,
+            guild_id,
+            extra=_log_extra(request, guild_id=guild_id),
+        )
+        raise web.HTTPInternalServerError(text="Failed to load audit events.") from exc
 
     rows: list[dict[str, str]] = []
     for ev in events:
@@ -3982,6 +4034,7 @@ async def guild_audit_page(request: web.Request) -> web.Response:
 async def guild_audit_csv(request: web.Request) -> web.Response:
     session = _require_session(request)
     settings: Settings = request.app[SETTINGS_KEY]
+    request_id = _request_id(request)
 
     guild_id_str = request.match_info["guild_id"]
     guild_id = _require_owned_guild(session, settings=settings, path=request.path_qs, guild_id=guild_id_str)
@@ -4014,7 +4067,13 @@ async def guild_audit_csv(request: web.Request) -> web.Response:
         col = get_collection(settings, record_type="audit_event", guild_id=guild_id)
         events = list_audit_events(guild_id=guild_id, limit=limit, collection=col)
     except Exception as exc:
-        raise web.HTTPInternalServerError(text=f"Failed to load audit events: {exc}") from exc
+        logging.exception(
+            "event=guild_audit_load_failed request_id=%s guild_id=%s",
+            request_id,
+            guild_id,
+            extra=_log_extra(request, guild_id=guild_id),
+        )
+        raise web.HTTPInternalServerError(text="Failed to load audit events.") from exc
 
     output = io.StringIO(newline="")
     writer = csv.writer(output)
@@ -4463,6 +4522,7 @@ async def guild_discord_metadata_json(request: web.Request) -> web.Response:
 
 async def billing_webhook(request: web.Request) -> web.Response:
     settings: Settings = request.app[SETTINGS_KEY]
+    request_id = _request_id(request)
     if not settings.mongodb_uri:
         raise web.HTTPInternalServerError(text="MongoDB is not configured.")
 
@@ -4483,7 +4543,12 @@ async def billing_webhook(request: web.Request) -> web.Response:
             secret=secret,
         )
     except ValueError as exc:
-        raise web.HTTPBadRequest(text=str(exc)) from exc
+        logging.warning(
+            "event=stripe_webhook_validation_failed request_id=%s",
+            request_id,
+            extra=_log_extra(request),
+        )
+        raise web.HTTPBadRequest(text="Invalid webhook request.") from exc
     except Exception as exc:
         logging.exception("Stripe webhook processing failed (event unknown).")
         raise web.HTTPInternalServerError(text="Webhook processing failed.") from exc
@@ -4629,7 +4694,18 @@ async def billing_portal(request: web.Request) -> web.Response:
     url = getattr(portal, "url", None) or (portal.get("url") if isinstance(portal, dict) else None)
     if not url:
         raise web.HTTPInternalServerError(text="Stripe did not return a billing portal URL.")
-    raise web.HTTPFound(str(url))
+    redirect_url = str(url)
+    parsed = urllib.parse.urlsplit(redirect_url)
+    redirect_host = (parsed.hostname or "").lower()
+    if parsed.scheme != "https" or redirect_host not in {"billing.stripe.com"}:
+        logging.error(
+            "event=stripe_portal_redirect_invalid host=%s path=%s",
+            redirect_host,
+            parsed.path,
+            extra=_log_extra(request),
+        )
+        raise web.HTTPInternalServerError(text="Stripe did not return a valid billing portal URL.")
+    raise web.HTTPFound(redirect_url)
 
 
 async def billing_checkout(request: web.Request) -> web.Response:
@@ -4676,7 +4752,18 @@ async def billing_checkout(request: web.Request) -> web.Response:
     url = getattr(checkout, "url", None) or (checkout.get("url") if isinstance(checkout, dict) else None)
     if not url:
         raise web.HTTPInternalServerError(text="Stripe did not return a checkout URL.")
-    raise web.HTTPFound(str(url))
+    redirect_url = str(url)
+    parsed = urllib.parse.urlsplit(redirect_url)
+    redirect_host = (parsed.hostname or "").lower()
+    if parsed.scheme != "https" or redirect_host not in {"checkout.stripe.com"}:
+        logging.error(
+            "event=stripe_checkout_redirect_invalid host=%s path=%s",
+            redirect_host,
+            parsed.path,
+            extra=_log_extra(request),
+        )
+        raise web.HTTPInternalServerError(text="Stripe did not return a valid checkout URL.")
+    raise web.HTTPFound(redirect_url)
 
 
 async def billing_success(request: web.Request) -> web.Response:
