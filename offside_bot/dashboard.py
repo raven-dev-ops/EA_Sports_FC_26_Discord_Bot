@@ -1460,8 +1460,10 @@ async def terms_page(_request: web.Request) -> web.Response:
         raise web.HTTPNotFound(text="TERMS_OF_SERVICE.md not found.")
     html = _markdown_to_html(text)
     content = f"""
-      <p><a href="/">&larr; Back</a></p>
-      <h1>Terms of Service</h1>
+      <div class="card hero-card">
+        <p class="mt-0"><a href="/">&larr; Back</a></p>
+        <h1 class="mt-6 text-hero-sm">Terms of Service</h1>
+      </div>
       <div class="card prose">{html}</div>
     """
     from offside_bot.web_templates import render, safe_html
@@ -1476,8 +1478,10 @@ async def privacy_page(_request: web.Request) -> web.Response:
         raise web.HTTPNotFound(text="PRIVACY_POLICY.md not found.")
     html = _markdown_to_html(text)
     content = f"""
-      <p><a href="/">&larr; Back</a></p>
-      <h1>Privacy Policy</h1>
+      <div class="card hero-card">
+        <p class="mt-0"><a href="/">&larr; Back</a></p>
+        <h1 class="mt-6 text-hero-sm">Privacy Policy</h1>
+      </div>
       <div class="card prose">{html}</div>
     """
     from offside_bot.web_templates import render, safe_html
@@ -1492,8 +1496,10 @@ async def product_copy_page(_request: web.Request) -> web.Response:
         raise web.HTTPNotFound(text="docs/product-copy.md not found.")
     html = _markdown_to_html(text)
     content = f"""
-      <p><a href="/">&larr; Back</a></p>
-      <h1>Product</h1>
+      <div class="card hero-card">
+        <p class="mt-0"><a href="/">&larr; Back</a></p>
+        <h1 class="mt-6 text-hero-sm">Product</h1>
+      </div>
       <div class="card prose">{html}</div>
     """
     from offside_bot.web_templates import render, safe_html
@@ -1524,8 +1530,10 @@ async def docs_page(request: web.Request) -> web.Response:
         raise web.HTTPNotFound(text=f"{doc['path']} not found.")
     html = _markdown_to_html(text)
     content = f"""
-      <p><a href="/docs">&larr; Back to docs</a></p>
-      <h1>{_escape_html(doc["title"])}</h1>
+      <div class="card hero-card">
+        <p class="mt-0"><a href="/docs">&larr; Back to docs</a></p>
+        <h1 class="mt-6 text-hero-sm">{_escape_html(doc["title"])}</h1>
+      </div>
       <div class="card prose">{html}</div>
     """
     from offside_bot.web_templates import render, safe_html
@@ -1675,13 +1683,16 @@ async def support_page(_request: web.Request) -> web.Response:
     else:
         issue_items.append("<li><span class='muted'>GitHub links unavailable (set PUBLIC_REPO_URL)</span></li>")
 
-    content = f"""
-      <p><a href="/">&larr; Back</a></p>
-      <h1>Support</h1>
-      <div class="row">
-        <div class="card">
-          <p><strong>Get help</strong></p>
-          <p class="muted mt-6">Reach the team directly for support requests.</p>
+        content = f"""
+          <div class="card hero-card">
+            <p class="mt-0"><a href="/">&larr; Back</a></p>
+            <h1 class="mt-6 text-hero-sm">Support</h1>
+            <p class="muted mt-10">Docs, contact options, and issue reporting.</p>
+          </div>
+          <div class="row">
+            <div class="card">
+              <p><strong>Get help</strong></p>
+              <p class="muted mt-6">Reach the team directly for support requests.</p>
           <ul>
             {"".join(support_items)}
           </ul>

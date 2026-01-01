@@ -121,7 +121,16 @@ a:hover {
 }
 
 .link-arrow::after {
-  content: " \u2192";
+  content: " →";
+}
+
+.link-arrow {
+  color: var(--link);
+  font-weight: 700;
+}
+
+.card-link:hover .link-arrow {
+  color: var(--text);
 }
 
 .muted {
@@ -171,7 +180,7 @@ ul {
 }
 
 .checklist li::before {
-  content: "\u2713";
+  content: "✓";
   position: absolute;
   left: 0;
   top: 0;
@@ -814,6 +823,59 @@ pre code {
 
 .copy-input:focus {
   outline: none;
+}
+
+.command-card {
+  padding: 0;
+}
+
+.command-card > summary {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  cursor: pointer;
+  padding: 14px 16px;
+  list-style: none;
+  border-radius: var(--radius-md);
+}
+
+.command-card > summary::-webkit-details-marker {
+  display: none;
+}
+
+.command-card > summary::marker {
+  content: "";
+}
+
+.command-card:hover {
+  border-color: rgba(255, 255, 255, 0.16);
+}
+
+.command-card[open] > summary {
+  border-bottom: 1px solid var(--border);
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.command-summary-main {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.command-sig {
+  overflow-wrap: anywhere;
+}
+
+.command-desc {
+  font-size: 13px;
+}
+
+.command-body {
+  padding: 0 16px 16px;
 }
 
 .card-plain {
