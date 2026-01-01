@@ -1,5 +1,10 @@
 # Monitoring
 
+## Production endpoints
+
+- https://official-offside-bot-214b205fba71.herokuapp.com/health
+- https://official-offside-bot-214b205fba71.herokuapp.com/ready
+
 ## Web health
 
 - `GET /health` returns `200` when the web process is alive.

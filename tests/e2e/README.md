@@ -1,5 +1,7 @@
 ## End-to-end harness (optional)
 
+Backend health (prod): https://official-offside-bot-214b205fba71.herokuapp.com/health (web), https://official-offside-bot-214b205fba71.herokuapp.com/ready (DB + worker). See `docs/monitoring.md`.
+
 These are manual/automation-ready scenarios that can be exercised with mocked credentials or in a staging guild. They are meant to guide end-to-end validation without hitting production:
 
 0) **Web dashboard smoke**

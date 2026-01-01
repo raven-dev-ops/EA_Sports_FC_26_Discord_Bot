@@ -33,26 +33,31 @@ def _portal_footer() -> str:
 def _coach_help_embed() -> discord.Embed:
     embed = discord.Embed(
         title="Coach Guide",
-        description="How coaches create and submit rosters.",
+        description="Quick steps for roster creation and submission.",
         color=discord.Color.green(),
     )
     embed.add_field(
         name="Create & Manage",
         value=(
-            "1) Open the roster dashboard and create your roster.\n"
-            "2) Use the buttons to add/remove players and view the roster.\n"
-            "3) Submit the roster to staff; it locks until staff acts."
+            "- Open the roster dashboard and create your roster.\n"
+            "- Add/remove players and review your roster.\n"
+            "- Submit to staff; the roster locks until staff acts."
         ),
         inline=False,
     )
     embed.add_field(
         name="Player details",
-        value="Discord mention/ID, Gamertag/PSN, EA ID, Console (PS/XBOX/PC/SWITCH).",
+        value=(
+            "- Discord mention or ID\n"
+            "- Gamertag/PSN\n"
+            "- EA ID\n"
+            "- Console (PS/XBOX/PC/SWITCH)"
+        ),
         inline=False,
     )
     embed.add_field(
         name="After submit",
-        value="Roster is locked; staff can unlock for edits.",
+        value="Roster is locked for review. Staff must unlock if changes are needed.",
         inline=False,
     )
     return embed
@@ -63,12 +68,14 @@ def build_admin_intro_embed() -> discord.Embed:
         title="Staff Portal Overview",
         description=(
             "**Purpose**\n"
-            "Review roster submissions and manage tournament operations.\n\n"
-            "**Who should use this**\n"
-            "- Staff only.\n\n"
-            "**Key rules**\n"
+            "Run staff workflows and tournament operations in one place.\n\n"
+            "**Use this portal for**\n"
+            "- Reviewing roster submissions\n"
+            "- Managing tournament flow and staff tools\n"
+            "- Running setup checks and portal reposts\n\n"
+            "**Guardrails**\n"
             "- Approve/reject with clear feedback.\n"
-            "- Unlock only after rejection (use Club Managers portal).\n"
+            "- Unlock rosters only after rejection (Club Managers portal).\n"
             "- Approved rosters are final once posted to the roster listing channel."
         ),
         color=DEFAULT_COLOR,
@@ -79,38 +86,58 @@ def build_admin_intro_embed() -> discord.Embed:
 def build_admin_embed() -> discord.Embed:
     embed = make_embed(
         title="Admin Control Panel",
-        description="Use the buttons below. All responses are ephemeral (only you can see them).",
+        description=(
+            "Pick a panel below. Buttons are staff-only and responses are ephemeral."
+        ),
         color=DEFAULT_COLOR,
         footer=_portal_footer(),
     )
     embed.add_field(
         name="Tournaments",
-        value="Lifecycle, rules, fixtures.",
+        value=(
+            "- Create/state tournaments\n"
+            "- Register teams and publish brackets\n"
+            "- Run match flow and disputes"
+        ),
         inline=False,
     )
     embed.add_field(
         name="Club Managers",
-        value="Coach tiers, unlocks, premium listing refresh.",
+        value=(
+            "- Assign coach tiers and caps\n"
+            "- Unlock rosters after rejection\n"
+            "- Refresh premium coach listings"
+        ),
         inline=False,
     )
     embed.add_field(
         name="Players",
-        value="Player eligibility and ban checks.",
+        value=(
+            "- Eligibility checks\n"
+            "- Ban list validation\n"
+            "- Player data cleanup"
+        ),
         inline=False,
     )
     embed.add_field(
         name="DB Analytics",
-        value="Data checks, health, and exports.",
+        value=(
+            "- Health checks and data exports\n"
+            "- Audit review and metrics snapshots"
+        ),
         inline=False,
     )
     embed.add_field(
         name="Verify Setup (staff)",
-        value="Re-run auto-setup for this guild and report any changes (channels/roles/permissions).",
+        value=(
+            "- Re-run auto-setup\n"
+            "- Validate channels, roles, and permissions"
+        ),
         inline=False,
     )
     embed.add_field(
         name="Repost Portal (staff)",
-        value="Clean up and repost this portal message set.",
+        value="- Clean up and repost the staff portal messages",
         inline=False,
     )
     return embed
@@ -119,15 +146,21 @@ def build_admin_embed() -> discord.Embed:
 def tournaments_embed() -> discord.Embed:
     embed = discord.Embed(
         title="Tournaments",
-        description="Tournament lifecycle controls and match flow (staff).",
+        description="Staff-only tournament lifecycle controls and match flow.",
         color=discord.Color.dark_blue(),
     )
     embed.add_field(
-        name="Usage",
+        name="Core commands",
         value=(
-            "- Create/state: `/tournament_create`, `/tournament_state DRAFT|REG_OPEN|IN_PROGRESS|COMPLETED`.\n"
-            "- Registration/bracket: `/tournament_register`, `/tournament_bracket`, `/advance_round`.\n"
-            "- Matches: `/match_report`, `/match_confirm`, `/match_deadline`, `/match_forfeit`.\n"
+            "- Create/state: `/tournament_create`, `/tournament_state`.\n"
+            "- Register/bracket: `/tournament_register`, `/tournament_bracket`, `/advance_round`."
+        ),
+        inline=False,
+    )
+    embed.add_field(
+        name="Match flow",
+        value=(
+            "- Reporting: `/match_report`, `/match_confirm`, `/match_deadline`, `/match_forfeit`.\n"
             "- Reschedules/disputes: `/match_reschedule`, `/dispute_add`, `/dispute_resolve`."
         ),
         inline=False,
@@ -136,8 +169,8 @@ def tournaments_embed() -> discord.Embed:
         name="Notes",
         value=(
             "- Bracket generation is single-elimination scaffold.\n"
-            "- Forfeits immediately complete a match; advance winners to create next round.\n"
-            "- Use disputes for conflict resolution; add deadline notes for scheduling."
+            "- Forfeits immediately complete a match.\n"
+            "- Use disputes for conflict resolution and deadlines for scheduling."
         ),
         inline=False,
     )
@@ -148,21 +181,24 @@ def tournaments_embed() -> discord.Embed:
 def coaches_embed() -> discord.Embed:
     embed = discord.Embed(
         title="Coaches & Rosters",
-        description="Coach eligibility, help, and unlocks.",
+        description="Coach eligibility, guidance, and unlocks.",
         color=discord.Color.dark_teal(),
     )
     embed.add_field(
         name="Actions",
         value=(
-            "- Open coach dashboard for create/add/remove/view/submit.\n"
-            "- Show coach instructions.\n"
-            "- Unlock a roster for edits."
+            "- Open coach dashboard (create/add/remove/view/submit)\n"
+            "- Show coach instructions\n"
+            "- Unlock a roster for edits"
         ),
         inline=False,
     )
     embed.add_field(
         name="Caps & Roles",
-        value="Caps resolved from coach roles; ineligible coaches cannot create rosters.",
+        value=(
+            "- Caps resolve from coach roles\n"
+            "- Ineligible coaches cannot create rosters"
+        ),
         inline=False,
     )
     embed.set_footer(text="Ephemeral responses only.")
@@ -178,16 +214,16 @@ def rosters_embed() -> discord.Embed:
     embed.add_field(
         name="Flow",
         value=(
-            "1) Coach opens `/roster` and creates roster.\n"
-            "2) Coach adds players, then submits (locks roster).\n"
-            "3) Staff approve/reject via submission buttons.\n"
-            "4) Staff can unlock via `/unlock_roster`."
+            "- Coach opens `/roster` and creates a roster.\n"
+            "- Coach adds players, then submits (locks roster).\n"
+            "- Staff approve/reject via submission buttons.\n"
+            "- Staff can unlock via `/unlock_roster`."
         ),
         inline=False,
     )
     embed.add_field(
         name="Audit",
-        value="Approvals/rejections/unlocks are logged to the audit collection.",
+        value="- Approvals/rejections/unlocks are logged to the audit collection.",
         inline=False,
     )
     embed.set_footer(text="Ephemeral responses only.")
@@ -197,12 +233,17 @@ def rosters_embed() -> discord.Embed:
 def players_embed() -> discord.Embed:
     embed = discord.Embed(
         title="Players",
-        description="Add/remove validation and ban checks.",
+        description="Eligibility validation and ban checks.",
         color=discord.Color.dark_green(),
     )
     embed.add_field(
-        name="Add Player modal fields",
-        value="Discord ID/mention, Gamertag/PSN, EA ID, Console (PS/XBOX/PC/SWITCH).",
+        name="Player fields",
+        value=(
+            "- Discord ID/mention\n"
+            "- Gamertag/PSN\n"
+            "- EA ID\n"
+            "- Console (PS/XBOX/PC/SWITCH)"
+        ),
         inline=False,
     )
     embed.add_field(
@@ -211,7 +252,7 @@ def players_embed() -> discord.Embed:
         inline=False,
     )
     embed.add_field(
-        name="Common errors",
+        name="Common issues",
         value="- Duplicate player, cap reached, invalid console, banned player.",
         inline=False,
     )
@@ -222,22 +263,30 @@ def players_embed() -> discord.Embed:
 def db_embed() -> discord.Embed:
     embed = discord.Embed(
         title="DB & Analytics",
-        description="MongoDB storage and future metrics/exports.",
+        description="MongoDB storage and analytics hooks.",
         color=discord.Color.dark_gold(),
     )
     embed.add_field(
         name="Collections",
-        value="tournament_cycle, team_roster, roster_player, submission_message, roster_audit.",
+        value=(
+            "- tournament_cycle\n"
+            "- team_roster / roster_player\n"
+            "- submission_message / roster_audit"
+        ),
         inline=False,
     )
     embed.add_field(
         name="Indexes",
-        value="Uniq roster per coach/cycle, roster player, submission message, audit idx.",
+        value=(
+            "- Unique roster per coach/cycle\n"
+            "- Roster player + submission message indexes\n"
+            "- Audit log indexes"
+        ),
         inline=False,
     )
     embed.add_field(
-        name="Future hooks",
-        value="Health checks, exports, analytics dashboards.",
+        name="Next up",
+        value="- Health checks, exports, analytics dashboards.",
         inline=False,
     )
     embed.set_footer(text="Ephemeral responses only.")

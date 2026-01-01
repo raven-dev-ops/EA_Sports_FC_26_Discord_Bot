@@ -20,21 +20,26 @@ def _portal_footer() -> str:
 def build_coach_help_embed() -> discord.Embed:
     embed = make_embed(
         title="Coach Guide",
-        description="How to create, edit, and submit your roster.",
+        description="Quick steps for creating, editing, and submitting your roster.",
         color=DEFAULT_COLOR,
     )
     embed.add_field(
         name="Create & manage",
         value=(
-            "1) Open the roster dashboard.\n"
-            "2) Add/remove players and review your roster.\n"
-            "3) Submit; your roster locks until staff acts."
+            "- Open the roster dashboard.\n"
+            "- Add/remove players and review your roster.\n"
+            "- Submit; your roster locks until staff acts."
         ),
         inline=False,
     )
     embed.add_field(
         name="Player fields",
-        value="Discord ID/mention, gamertag, EA ID, console (PS/XBOX/PC/SWITCH).",
+        value=(
+            "- Discord ID/mention\n"
+            "- Gamertag/PSN\n"
+            "- EA ID\n"
+            "- Console (PS/XBOX/PC/SWITCH)"
+        ),
         inline=False,
     )
     embed.add_field(
@@ -50,10 +55,10 @@ def build_coach_intro_embed() -> discord.Embed:
         title="Coach Portal Overview",
         description=(
             "**Purpose**\n"
-            "Create and submit your roster for the current tournament cycle.\n\n"
+            "Build and submit your roster for the current tournament cycle.\n\n"
             "**Who should use this**\n"
             "- Coaches only (Coach / Coach Premium / Coach Premium+).\n\n"
-            "**Key rules**\n"
+            "**Quick rules**\n"
             "- Minimum 8 players to submit.\n"
             "- Caps: Coach=16, Premium=22, Premium+=25.\n"
             "- After submit, your roster locks until staff approves/rejects.\n"
@@ -67,23 +72,29 @@ def build_coach_intro_embed() -> discord.Embed:
 def build_coach_portal_embed() -> discord.Embed:
     embed = make_embed(
         title="Coach Roster Portal",
-        description="Use the buttons below. All responses are ephemeral (only you can see them).",
+        description=(
+            "Use the buttons below to manage your roster. Responses are ephemeral."
+        ),
         color=DEFAULT_COLOR,
         footer=_portal_footer(),
     )
     embed.add_field(
         name="Open Roster Dashboard",
-        value="Open your roster dashboard to create/add/remove/view/submit.",
+        value=(
+            "- Create or rename your roster\n"
+            "- Add/remove players and review details\n"
+            "- Submit for staff review"
+        ),
         inline=False,
     )
     embed.add_field(
         name="Coach Help",
-        value="View the coach guide (tips + requirements).",
+        value="- View the coach guide (tips + requirements).",
         inline=False,
     )
     embed.add_field(
         name="Repost Portal (staff)",
-        value="Clean up and repost this portal message set.",
+        value="- Clean up and repost this portal message set.",
         inline=False,
     )
     return embed

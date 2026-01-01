@@ -27,9 +27,10 @@ def build_club_intro_embed() -> discord.Embed:
             "Create a club ad so recruits can find you.\n\n"
             "**Who should use this**\n"
             "- Club staff/coaches posting ads.\n\n"
-            "**Key rules**\n"
+            "**Quick rules**\n"
             "- Keep positions needed and keywords consistent so recruits can search.\n"
-            "- Descriptions must be at least 30 characters."
+            "- Descriptions must be at least 30 characters.\n"
+            "- Use a clear tryout time format when provided."
         ),
         color=DEFAULT_COLOR,
         footer=_portal_footer(),
@@ -39,33 +40,33 @@ def build_club_intro_embed() -> discord.Embed:
 def build_club_portal_embed() -> discord.Embed:
     embed = make_embed(
         title="Club Portal",
-        description="Use the buttons below. All responses are ephemeral (only you can see them).",
+        description="Use the buttons below to manage your club ad. Responses are ephemeral.",
         color=DEFAULT_COLOR,
         footer=_portal_footer(),
     )
     embed.add_field(
         name="Register / Edit",
-        value="Opens a short 2-step form (modal).",
+        value="- Opens a short 2-step form (modal).",
         inline=False,
     )
     embed.add_field(
         name="Preview",
-        value="Shows what your public club listing embed will look like.",
+        value="- Shows what your public club listing embed will look like.",
         inline=False,
     )
     embed.add_field(
         name="Unregister",
-        value="Deletes your stored club ad and removes your listing posts when possible.",
+        value="- Deletes your stored club ad and removes listing posts when possible.",
         inline=False,
     )
     embed.add_field(
         name="Help",
-        value="Guidance and tips for making your club ad clear and searchable.",
+        value="- Guidance and tips for making your club ad clear and searchable.",
         inline=False,
     )
     embed.add_field(
         name="Repost Portal (staff)",
-        value="Clean up and repost this portal message set.",
+        value="- Clean up and repost this portal message set.",
         inline=False,
     )
     return embed
@@ -75,7 +76,7 @@ def build_club_help_embed() -> discord.Embed:
     return make_embed(
         title="Club Ads Help",
         description=(
-            "Tips:\n"
+            "**Tips**\n"
             "- Keep positions needed and keywords consistent so coaches can filter/search.\n"
             "- Descriptions must be at least 30 characters.\n"
             "- If you provide a tryout time, use the format YYYY-MM-DD HH:MM.\n"

@@ -51,7 +51,7 @@ def build_manager_intro_embed() -> discord.Embed:
             "Manage coach tiers, roster unlocks, and premium coach listings.\n\n"
             "**Who should use this**\n"
             "- Staff / club managers only.\n\n"
-            "**Key rules**\n"
+            "**Quick rules**\n"
             "- The bot needs `Manage Roles` for tier changes.\n"
             "- Cap downgrades will not reduce below current roster size."
         ),
@@ -63,48 +63,62 @@ def build_manager_intro_embed() -> discord.Embed:
 def build_manager_embed() -> discord.Embed:
     embed = make_embed(
         title="Club Managers Control Panel",
-        description="Use the buttons below. All responses are ephemeral (only you can see them).",
+        description=(
+            "Use the buttons below to manage tiers and listings. Responses are ephemeral."
+        ),
         color=DEFAULT_COLOR,
         footer=_portal_footer(),
     )
     embed.add_field(
         name="Set Coach Tier",
-        value="Assign Coach / Premium / Premium+ to a coach and (optionally) sync their roster cap.",
+        value=(
+            "- Assign Coach / Premium / Premium+\n"
+            "- Optionally sync roster cap to the tier"
+        ),
         inline=False,
     )
     embed.add_field(
         name="Unlock Roster",
-        value="Unlock a coach roster for edits after rejection (clears stale submissions).",
+        value=(
+            "- Unlock a roster after rejection\n"
+            "- Clears stale submission cards"
+        ),
         inline=False,
     )
     embed.add_field(
         name="Refresh Premium Coaches",
-        value="Update the Premium Coaches report embed.",
+        value="- Update the Premium Coaches report embed.",
         inline=False,
     )
     embed.add_field(
         name="Toggle Premium Pin",
-        value="Pin/unpin the Premium Coaches embed (if the bot has permission).",
+        value="- Pin/unpin the Premium Coaches embed (if permitted).",
         inline=False,
     )
     embed.add_field(
         name="Force Rebuild Premium",
-        value="Delete stale bot messages in the Premium Coaches channel and rebuild the report.",
+        value=(
+            "- Delete stale bot messages in the Premium Coaches channel\n"
+            "- Rebuild the report"
+        ),
         inline=False,
     )
     embed.add_field(
         name="Sync Caps (Active Cycle)",
-        value="Sync all active rosters' caps to match coach tier roles (safe downgrade rules apply).",
+        value=(
+            "- Sync active roster caps to coach tier roles\n"
+            "- Safe downgrade rules apply"
+        ),
         inline=False,
     )
     embed.add_field(
         name="Delete Roster",
-        value="Delete a roster (administrator-only; last resort).",
+        value="- Delete a roster (administrator-only; last resort).",
         inline=False,
     )
     embed.add_field(
         name="Repost Portal (staff)",
-        value="Clean up and repost this portal message set.",
+        value="- Clean up and repost this portal message set.",
         inline=False,
     )
     return embed

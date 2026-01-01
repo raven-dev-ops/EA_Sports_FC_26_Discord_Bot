@@ -17,6 +17,7 @@ from services.roster_service import (
     get_roster_for_coach,
     roster_is_locked,
 )
+from utils.embeds import DEFAULT_COLOR
 
 
 def build_roster_dashboard(
@@ -59,7 +60,16 @@ def build_roster_dashboard(
         team_name = roster.get("team_name", "Unnamed Team")
         is_locked = roster_is_locked(roster)
 
-    embed = discord.Embed(title="Roster Dashboard")
+    embed = discord.Embed(
+        title="Roster Dashboard",
+        description=(
+            "Use the buttons below to manage your roster.\n"
+            "- Create or rename your roster\n"
+            "- Add/remove players\n"
+            "- Submit when ready (locks roster)"
+        ),
+        color=DEFAULT_COLOR,
+    )
     embed.add_field(name="Tournament", value=cycle.get("name", "Unknown"), inline=False)
     embed.add_field(name="Team", value=team_name, inline=False)
     embed.add_field(name="Status", value=status, inline=True)

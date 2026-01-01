@@ -36,9 +36,10 @@ def build_recruit_intro_embed() -> discord.Embed:
             "Create a recruit profile so clubs/coaches can find you.\n\n"
             "**Who should use this**\n"
             "- Players/recruits.\n\n"
-            "**Key rules**\n"
+            "**Quick rules**\n"
             "- Set Availability to publish to the listing channel.\n"
-            "- Keep positions/archetypes consistent so coaches can filter/search."
+            "- Keep positions/archetypes consistent so coaches can filter/search.\n"
+            "- Update your profile when availability changes."
         ),
         color=DEFAULT_COLOR,
         footer=_portal_footer(),
@@ -49,39 +50,39 @@ def build_recruit_portal_embed() -> discord.Embed:
     embed = make_embed(
         title="Recruitment Portal",
         description=(
-            "Use the buttons below. All responses are ephemeral (only you can see them)."
+            "Use the buttons below to manage your profile. Responses are ephemeral."
         ),
         color=DEFAULT_COLOR,
         footer=_portal_footer(),
     )
     embed.add_field(
         name="Register / Edit",
-        value="Opens a short 2-step form (modal).",
+        value="- Opens a short 2-step form (modal).",
         inline=False,
     )
     embed.add_field(
         name="Preview",
-        value="Shows what your listing embed will look like.",
+        value="- Shows what your listing embed will look like.",
         inline=False,
     )
     embed.add_field(
         name="Availability",
-        value="Pick days and hours using a selector (no free text).",
+        value="- Pick days and hours using a selector (no free text).",
         inline=False,
     )
     embed.add_field(
         name="Unregister",
-        value="Deletes your stored profile and removes your listing posts when possible.",
+        value="- Deletes your stored profile and removes listing posts when possible.",
         inline=False,
     )
     embed.add_field(
         name="Help",
-        value="Guidance and tips for keeping your profile high-signal.",
+        value="- Guidance and tips for keeping your profile high-signal.",
         inline=False,
     )
     embed.add_field(
         name="Repost Portal (staff)",
-        value="Clean up and repost this portal message set.",
+        value="- Clean up and repost this portal message set.",
         inline=False,
     )
     return embed
@@ -91,10 +92,10 @@ def build_recruit_help_embed() -> discord.Embed:
     return make_embed(
         title="Recruitment Help",
         description=(
-            "Tips:\n"
+            "**Tips**\n"
             "- Set Availability to publish your listing.\n"
             "- Keep positions/archetypes consistent so coaches can filter/search.\n"
-            "- Avoid putting invites or mass mentions in notes.\n"
+            "- Avoid invites or mass mentions in notes.\n"
             "- Update your profile whenever availability changes.\n"
             "- Profile edits are rate-limited to prevent spam."
         ),
