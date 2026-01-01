@@ -237,7 +237,7 @@ staff monitor channel (`channel_staff_monitor_id`) only.
 ## Documentation
 
 - Security policy: `SECURITY.md`
-- License: All rights reserved (see `LICENSING.md`)
+- License: All rights reserved (see `LICENSE`)
 - Changelog: `CHANGELOG.md`
 - Release playbook: `docs/release-playbook.md`
 - Disaster recovery: `docs/disaster-recovery.md`
