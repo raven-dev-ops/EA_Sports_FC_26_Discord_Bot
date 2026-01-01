@@ -2,7 +2,7 @@
 {% from "macros/ui.html" import button %}
 
 {% block body %}
-  <div class="topbar">
+  <div class="topbar max-w-1100">
     <div class="flex gap-14 items-center flex-wrap">
       <a class="brand" href="/">
         <img
@@ -31,7 +31,7 @@
     </div>
   </div>
 
-  <main class="content max-w-980" id="main-content" tabindex="-1">
+  <main class="content max-w-1100" id="main-content" tabindex="-1">
     {% block content %}{% endblock %}
   </main>
 {% endblock %}

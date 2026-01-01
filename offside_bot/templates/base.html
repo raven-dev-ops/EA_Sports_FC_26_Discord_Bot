@@ -1,20 +1,32 @@
 <!doctype html>
-<html lang="en">
+<html class="dark" lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>{{ title }}</title>
+    {% set full_title = title %}
+    {% if not full_title or full_title == "Offside" %}
+      {% set full_title = "Offside - EA Sports FC 26 Discord Bot" %}
+    {% else %}
+      {% set full_title = full_title ~ " - Offside" %}
+    {% endif %}
+    <title>{{ full_title }}</title>
     {% set meta_description = description|default("Offside turns your EA Sports FC Discord into an ops dashboard: rosters, recruiting, clubs, tournaments, and analytics.") %}
     <meta name="description" content="{{ meta_description }}" />
-    <meta name="theme-color" content="#5865F2" />
+    <meta name="theme-color" content="#00E0FF" />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Offside" />
-    <meta property="og:title" content="{{ og_title|default(title) }}" />
+    <meta property="og:title" content="{{ og_title|default(full_title) }}" />
     <meta property="og:description" content="{{ og_description|default(meta_description) }}" />
     <meta property="og:image" content="{{ og_image|default(static_url('brand/offside_bot_banner.png')) }}" />
     <meta property="og:image:width" content="1215" />
     <meta property="og:image:height" content="543" />
     <meta name="twitter:card" content="summary_large_image" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
     <link rel="icon" href="{{ static_url('brand/favicon.svg') }}" type="image/svg+xml" />
     <link rel="stylesheet" href="{{ static_url('app.css') }}" />
     <script src="{{ static_url('app.js') }}" defer></script>
