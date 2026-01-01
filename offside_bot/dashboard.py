@@ -1023,7 +1023,7 @@ async def security_headers_middleware(request: web.Request, handler):
     except web.HTTPException as exc:
         response = exc
 
-    if not isinstance(response, web.StreamResponse):
+    if not isinstance(response, (web.StreamResponse, web.HTTPException)):
         return response
 
     if request.path.startswith("/static/"):
@@ -1053,6 +1053,8 @@ async def security_headers_middleware(request: web.Request, handler):
     if _is_https(request):
         response.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
 
+    if isinstance(response, web.HTTPException):
+        raise response
     return response
 
 
