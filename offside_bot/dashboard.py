@@ -4622,7 +4622,6 @@ async def billing_checkout(request: web.Request) -> web.Response:
 
     guild_id = _require_owned_guild(session, settings=settings, path=request.path_qs, guild_id=str(data.get("guild_id") or ""))
     _require_guild_owner(session, guild_id=guild_id, settings=settings, path=request.path_qs)
-    _require_guild_owner(session, guild_id=guild_id, settings=settings, path=request.path_qs)
     plan = str(data.get("plan") or "pro").strip().lower()
     if plan != entitlements_service.PLAN_PRO:
         raise web.HTTPBadRequest(text="Unsupported plan.")
@@ -4785,7 +4784,6 @@ async def billing_cancel(request: web.Request) -> web.Response:
     guild_id = _require_owned_guild(session, settings=settings, path=request.path_qs, guild_id=gid) if gid else 0
     if not guild_id:
         raise web.HTTPBadRequest(text="Missing guild_id.")
-    _require_guild_owner(session, guild_id=guild_id, settings=settings, path=request.path_qs)
     _require_guild_owner(session, guild_id=guild_id, settings=settings, path=request.path_qs)
     raise web.HTTPFound(f"/app/billing?guild_id={guild_id}&status=cancelled")
 

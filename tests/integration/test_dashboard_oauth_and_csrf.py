@@ -15,7 +15,7 @@ from offside_bot import dashboard
 from services import entitlements_service, subscription_service
 
 
-def _settings() -> Settings:
+def _settings(*, mongodb_per_guild_db: bool = False) -> Settings:
     return Settings(
         discord_token="token",
         discord_application_id=1,
@@ -41,7 +41,7 @@ def _settings() -> Settings:
         mongodb_uri="mongodb://localhost",
         mongodb_db_name="testdb",
         mongodb_collection="testcol",
-        mongodb_per_guild_db=False,
+        mongodb_per_guild_db=mongodb_per_guild_db,
         mongodb_guild_db_prefix="",
         banlist_sheet_id=None,
         banlist_range=None,
@@ -1333,5 +1333,144 @@ async def test_run_full_setup_enqueues_tasks(monkeypatch) -> None:
         actions = {doc.get("action") for doc in ops_tasks.find({"guild_id": 123})}
         assert "run_setup" in actions
         assert "repost_portals" in actions
+    finally:
+        await client.close()
+
+
+@pytest.mark.asyncio
+async def test_ops_run_setup_enqueues_task(monkeypatch) -> None:
+    from aiohttp.test_utils import TestClient, TestServer
+
+    monkeypatch.setattr(database, "MongoClient", mongomock.MongoClient)
+    monkeypatch.setattr(database, "_CLIENT", None)
+
+    async def fake_detect_installed(*_args, **_kwargs):
+        return True, None
+
+    monkeypatch.setattr(dashboard, "_detect_bot_installed", fake_detect_installed)
+
+    settings = _settings()
+    app = dashboard.create_app(settings=settings)
+    sessions = app["session_collection"]
+    sessions.insert_one(
+        {
+            "_id": "sess1",
+            "created_at": time.time(),
+            "expires_at": datetime.now(timezone.utc) + timedelta(hours=6),
+            "user": {"id": "1", "username": "alice"},
+            "owner_guilds": [{"id": "123", "name": "Managed"}],
+            "all_guilds": [{"id": "123", "name": "Managed"}],
+            "csrf_token": "csrf_good",
+        }
+    )
+
+    client = TestClient(TestServer(app))
+    await client.start_server()
+    try:
+        resp = await client.post(
+            "/api/guild/123/ops/run_setup",
+            data={"csrf": "csrf_good"},
+            headers={"Cookie": f"{dashboard.COOKIE_NAME}=sess1"},
+            allow_redirects=False,
+        )
+        assert resp.status == 302
+        assert resp.headers.get("Location") == "/guild/123/overview"
+
+        ops_tasks = database.get_global_collection(settings, name="ops_tasks")
+        doc = ops_tasks.find_one({"guild_id": 123, "action": "run_setup"})
+        assert doc is not None
+    finally:
+        await client.close()
+
+
+@pytest.mark.asyncio
+async def test_ops_repost_portals_enqueues_task(monkeypatch) -> None:
+    from aiohttp.test_utils import TestClient, TestServer
+
+    monkeypatch.setattr(database, "MongoClient", mongomock.MongoClient)
+    monkeypatch.setattr(database, "_CLIENT", None)
+
+    async def fake_detect_installed(*_args, **_kwargs):
+        return True, None
+
+    monkeypatch.setattr(dashboard, "_detect_bot_installed", fake_detect_installed)
+
+    settings = _settings()
+    app = dashboard.create_app(settings=settings)
+    sessions = app["session_collection"]
+    sessions.insert_one(
+        {
+            "_id": "sess1",
+            "created_at": time.time(),
+            "expires_at": datetime.now(timezone.utc) + timedelta(hours=6),
+            "user": {"id": "1", "username": "alice"},
+            "owner_guilds": [{"id": "123", "name": "Managed"}],
+            "all_guilds": [{"id": "123", "name": "Managed"}],
+            "csrf_token": "csrf_good",
+        }
+    )
+
+    client = TestClient(TestServer(app))
+    await client.start_server()
+    try:
+        resp = await client.post(
+            "/api/guild/123/ops/repost_portals",
+            data={"csrf": "csrf_good"},
+            headers={"Cookie": f"{dashboard.COOKIE_NAME}=sess1"},
+            allow_redirects=False,
+        )
+        assert resp.status == 302
+        assert resp.headers.get("Location") == "/guild/123/overview"
+
+        ops_tasks = database.get_global_collection(settings, name="ops_tasks")
+        doc = ops_tasks.find_one({"guild_id": 123, "action": "repost_portals"})
+        assert doc is not None
+    finally:
+        await client.close()
+
+
+@pytest.mark.asyncio
+async def test_ops_schedule_delete_data_enqueues_task(monkeypatch) -> None:
+    from aiohttp.test_utils import TestClient, TestServer
+
+    monkeypatch.setattr(database, "MongoClient", mongomock.MongoClient)
+    monkeypatch.setattr(database, "_CLIENT", None)
+    monkeypatch.setattr(
+        entitlements_service,
+        "get_guild_plan",
+        lambda *_args, **_kwargs: entitlements_service.PLAN_PRO,
+    )
+
+    settings = _settings(mongodb_per_guild_db=True)
+    app = dashboard.create_app(settings=settings)
+    sessions = app["session_collection"]
+    sessions.insert_one(
+        {
+            "_id": "sess1",
+            "created_at": time.time(),
+            "expires_at": datetime.now(timezone.utc) + timedelta(hours=6),
+            "user": {"id": "1", "username": "alice"},
+            "owner_guilds": [{"id": "123", "name": "Managed"}],
+            "all_guilds": [{"id": "123", "name": "Managed"}],
+            "csrf_token": "csrf_good",
+        }
+    )
+
+    client = TestClient(TestServer(app))
+    await client.start_server()
+    try:
+        resp = await client.post(
+            "/api/guild/123/ops/schedule_delete_data",
+            data={"csrf": "csrf_good", "confirm": "DELETE 123"},
+            headers={"Cookie": f"{dashboard.COOKIE_NAME}=sess1"},
+            allow_redirects=False,
+        )
+        assert resp.status == 302
+        assert resp.headers.get("Location") == "/guild/123/ops"
+
+        ops_tasks = database.get_global_collection(settings, name="ops_tasks")
+        doc = ops_tasks.find_one({"guild_id": 123, "action": "delete_guild_data"})
+        assert doc is not None
+        assert "run_after" in doc
     finally:
         await client.close()
