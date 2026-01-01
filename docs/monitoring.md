@@ -2,8 +2,8 @@
 
 ## Production endpoints
 
-- https://official-offside-bot-214b205fba71.herokuapp.com/health
-- https://official-offside-bot-214b205fba71.herokuapp.com/ready
+- ![Web health](https://img.shields.io/website?url=https%3A%2F%2Fofficial-offside-bot-214b205fba71.herokuapp.com%2Fhealth&label=web&up_message=up&down_message=down)
+- ![DB + worker](https://img.shields.io/website?url=https%3A%2F%2Fofficial-offside-bot-214b205fba71.herokuapp.com%2Fready&label=db%2Bworker&up_message=passing&down_message=failing)
 
 ## Web health
 
