@@ -464,8 +464,8 @@ async def test_billing_checkout_requires_csrf(monkeypatch) -> None:
             "created_at": time.time(),
             "expires_at": datetime.now(timezone.utc) + timedelta(hours=6),
             "user": {"id": "1", "username": "alice"},
-            "owner_guilds": [{"id": "123", "name": "Managed"}],
-            "all_guilds": [{"id": "123", "name": "Managed"}],
+            "owner_guilds": [{"id": "123", "name": "Managed", "owner": True}],
+            "all_guilds": [{"id": "123", "name": "Managed", "owner": True}],
             "csrf_token": "csrf_good",
         }
     )
@@ -517,8 +517,8 @@ async def test_billing_checkout_blocks_duplicate_subscription(monkeypatch) -> No
             "created_at": time.time(),
             "expires_at": datetime.now(timezone.utc) + timedelta(hours=6),
             "user": {"id": "1", "username": "alice"},
-            "owner_guilds": [{"id": "123", "name": "Managed"}],
-            "all_guilds": [{"id": "123", "name": "Managed"}],
+            "owner_guilds": [{"id": "123", "name": "Managed", "owner": True}],
+            "all_guilds": [{"id": "123", "name": "Managed", "owner": True}],
             "csrf_token": "csrf_good",
         }
     )
@@ -545,6 +545,7 @@ async def test_guild_access_denied_is_logged(monkeypatch) -> None:
 
     monkeypatch.setattr(database, "MongoClient", mongomock.MongoClient)
     monkeypatch.setattr(database, "_CLIENT", None)
+    entitlements_service.invalidate_all()
 
     app = dashboard.create_app(settings=_settings())
     sessions = app[dashboard.SESSION_COLLECTION_KEY]
@@ -595,8 +596,8 @@ async def test_billing_portal_requires_csrf(monkeypatch) -> None:
             "created_at": time.time(),
             "expires_at": datetime.now(timezone.utc) + timedelta(hours=6),
             "user": {"id": "1", "username": "alice"},
-            "owner_guilds": [{"id": "123", "name": "Managed"}],
-            "all_guilds": [{"id": "123", "name": "Managed"}],
+            "owner_guilds": [{"id": "123", "name": "Managed", "owner": True}],
+            "all_guilds": [{"id": "123", "name": "Managed", "owner": True}],
             "csrf_token": "csrf_good",
         }
     )
@@ -656,8 +657,8 @@ async def test_billing_success_syncs_subscription(monkeypatch) -> None:
             "created_at": time.time(),
             "expires_at": datetime.now(timezone.utc) + timedelta(hours=6),
             "user": {"id": "1", "username": "alice"},
-            "owner_guilds": [{"id": "123", "name": "Managed"}],
-            "all_guilds": [{"id": "123", "name": "Managed"}],
+            "owner_guilds": [{"id": "123", "name": "Managed", "owner": True}],
+            "all_guilds": [{"id": "123", "name": "Managed", "owner": True}],
             "csrf_token": "csrf_good",
         }
     )
@@ -691,8 +692,8 @@ async def test_billing_webhook_is_idempotent(monkeypatch) -> None:
 
     monkeypatch.setattr(database, "MongoClient", mongomock.MongoClient)
     monkeypatch.setattr(database, "_CLIENT", None)
-    monkeypatch.setenv("STRIPE_WEBHOOK_SECRET", "whsec_test")
     entitlements_service.invalidate_all()
+    monkeypatch.setenv("STRIPE_WEBHOOK_SECRET", "whsec_test")
 
     event = {
         "id": "evt_idempotent",
@@ -770,8 +771,8 @@ async def test_dashboard_shows_pro_expired_notice(monkeypatch) -> None:
             "created_at": time.time(),
             "expires_at": datetime.now(timezone.utc) + timedelta(hours=6),
             "user": {"id": "1", "username": "alice"},
-            "owner_guilds": [{"id": "123", "name": "Managed"}],
-            "all_guilds": [{"id": "123", "name": "Managed"}],
+            "owner_guilds": [{"id": "123", "name": "Managed", "owner": True}],
+            "all_guilds": [{"id": "123", "name": "Managed", "owner": True}],
             "csrf_token": "csrf_good",
         }
     )
@@ -800,6 +801,7 @@ async def test_settings_blocks_when_bot_not_installed(monkeypatch) -> None:
 
     monkeypatch.setattr(database, "MongoClient", mongomock.MongoClient)
     monkeypatch.setattr(database, "_CLIENT", None)
+    entitlements_service.invalidate_all()
 
     async def fake_bot_get_json(*_args, url: str, **_kwargs):
         if url.endswith("/guilds/123"):
@@ -816,8 +818,8 @@ async def test_settings_blocks_when_bot_not_installed(monkeypatch) -> None:
             "created_at": time.time(),
             "expires_at": datetime.now(timezone.utc) + timedelta(hours=6),
             "user": {"id": "1", "username": "alice"},
-            "owner_guilds": [{"id": "123", "name": "Managed"}],
-            "all_guilds": [{"id": "123", "name": "Managed"}],
+            "owner_guilds": [{"id": "123", "name": "Managed", "owner": True}],
+            "all_guilds": [{"id": "123", "name": "Managed", "owner": True}],
             "csrf_token": "csrf_good",
         }
     )
@@ -910,8 +912,8 @@ async def test_permissions_page_renders(monkeypatch) -> None:
             "created_at": time.time(),
             "expires_at": datetime.now(timezone.utc) + timedelta(hours=6),
             "user": {"id": "1", "username": "alice"},
-            "owner_guilds": [{"id": "123", "name": "Managed"}],
-            "all_guilds": [{"id": "123", "name": "Managed"}],
+            "owner_guilds": [{"id": "123", "name": "Managed", "owner": True}],
+            "all_guilds": [{"id": "123", "name": "Managed", "owner": True}],
             "csrf_token": "csrf_good",
         }
     )
@@ -939,6 +941,7 @@ async def test_overview_page_renders(monkeypatch) -> None:
 
     monkeypatch.setattr(database, "MongoClient", mongomock.MongoClient)
     monkeypatch.setattr(database, "_CLIENT", None)
+    entitlements_service.invalidate_all()
 
     async def fake_bot_get_json(*_args, url: str, **_kwargs):
         if url.endswith("/guilds/123"):
@@ -996,8 +999,8 @@ async def test_overview_page_renders(monkeypatch) -> None:
             "created_at": time.time(),
             "expires_at": datetime.now(timezone.utc) + timedelta(hours=6),
             "user": {"id": "1", "username": "alice"},
-            "owner_guilds": [{"id": "123", "name": "Managed"}],
-            "all_guilds": [{"id": "123", "name": "Managed"}],
+            "owner_guilds": [{"id": "123", "name": "Managed", "owner": True}],
+            "all_guilds": [{"id": "123", "name": "Managed", "owner": True}],
             "csrf_token": "csrf_good",
         }
     )
@@ -1027,6 +1030,7 @@ async def test_audit_page_is_locked_for_free_plan(monkeypatch) -> None:
 
     monkeypatch.setattr(database, "MongoClient", mongomock.MongoClient)
     monkeypatch.setattr(database, "_CLIENT", None)
+    entitlements_service.invalidate_all()
 
     async def fake_bot_get_json(*_args, url: str, **_kwargs):
         if url.endswith("/guilds/123"):
@@ -1043,8 +1047,8 @@ async def test_audit_page_is_locked_for_free_plan(monkeypatch) -> None:
             "created_at": time.time(),
             "expires_at": datetime.now(timezone.utc) + timedelta(hours=6),
             "user": {"id": "1", "username": "alice"},
-            "owner_guilds": [{"id": "123", "name": "Managed"}],
-            "all_guilds": [{"id": "123", "name": "Managed"}],
+            "owner_guilds": [{"id": "123", "name": "Managed", "owner": True}],
+            "all_guilds": [{"id": "123", "name": "Managed", "owner": True}],
             "csrf_token": "csrf_good",
         }
     )
@@ -1059,7 +1063,7 @@ async def test_audit_page_is_locked_for_free_plan(monkeypatch) -> None:
         )
         assert resp.status == 200
         html = await resp.text()
-        assert "Pro feature" in html
+        assert "Audit Log is available on the Pro plan." in html
         assert "Upgrade to Pro" in html
         assert "/app/upgrade?guild_id=123" in html
     finally:
@@ -1097,8 +1101,8 @@ async def test_audit_page_allows_pro_plan(monkeypatch) -> None:
             "created_at": time.time(),
             "expires_at": datetime.now(timezone.utc) + timedelta(hours=6),
             "user": {"id": "1", "username": "alice"},
-            "owner_guilds": [{"id": "123", "name": "Managed"}],
-            "all_guilds": [{"id": "123", "name": "Managed"}],
+            "owner_guilds": [{"id": "123", "name": "Managed", "owner": True}],
+            "all_guilds": [{"id": "123", "name": "Managed", "owner": True}],
             "csrf_token": "csrf_good",
         }
     )
@@ -1134,8 +1138,8 @@ async def test_upgrade_redirect_records_audit_event(monkeypatch) -> None:
             "created_at": time.time(),
             "expires_at": datetime.now(timezone.utc) + timedelta(hours=6),
             "user": {"id": "1", "username": "alice"},
-            "owner_guilds": [{"id": "123", "name": "Managed"}],
-            "all_guilds": [{"id": "123", "name": "Managed"}],
+            "owner_guilds": [{"id": "123", "name": "Managed", "owner": True}],
+            "all_guilds": [{"id": "123", "name": "Managed", "owner": True}],
             "csrf_token": "csrf_good",
         }
     )
@@ -1166,6 +1170,7 @@ async def test_settings_save_blocks_fc25_override_for_free(monkeypatch) -> None:
 
     monkeypatch.setattr(database, "MongoClient", mongomock.MongoClient)
     monkeypatch.setattr(database, "_CLIENT", None)
+    entitlements_service.invalidate_all()
 
     async def fake_detect_installed(*_args, **_kwargs):
         return True, None
@@ -1185,8 +1190,8 @@ async def test_settings_save_blocks_fc25_override_for_free(monkeypatch) -> None:
             "created_at": time.time(),
             "expires_at": datetime.now(timezone.utc) + timedelta(hours=6),
             "user": {"id": "1", "username": "alice"},
-            "owner_guilds": [{"id": "123", "name": "Managed"}],
-            "all_guilds": [{"id": "123", "name": "Managed"}],
+            "owner_guilds": [{"id": "123", "name": "Managed", "owner": True}],
+            "all_guilds": [{"id": "123", "name": "Managed", "owner": True}],
             "csrf_token": "csrf_good",
         }
     )

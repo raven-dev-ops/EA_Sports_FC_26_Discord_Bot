@@ -69,7 +69,7 @@ async def test_dashboard_smoke_critical_path(monkeypatch) -> None:
         if url == dashboard.ME_URL:
             return {"id": "1", "username": "alice", "discriminator": "0001"}
         if url == dashboard.MY_GUILDS_URL:
-            return [{"id": "123", "name": "Managed", "owner": False, "permissions": str(1 << 5)}]
+            return [{"id": "123", "name": "Managed", "owner": True, "permissions": str(1 << 5)}]
         raise AssertionError(f"Unexpected Discord URL: {url}")
 
     async def fake_detect_installed(*_args, **_kwargs):

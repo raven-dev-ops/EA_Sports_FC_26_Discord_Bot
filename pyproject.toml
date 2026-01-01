@@ -52,3 +52,6 @@ exclude = ["tests/.*", "scripts/.*"]
 
 [tool.pytest.ini_options]
 asyncio_default_fixture_loop_scope = "function"
+filterwarnings = [
+  "ignore:datetime\\.datetime\\.utcnow\\(\\) is deprecated:DeprecationWarning:mongomock\\.helpers",
+]

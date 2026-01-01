@@ -199,6 +199,47 @@ code {
   flex-wrap: wrap;
 }
 
+.hero {
+  display: flex;
+  gap: 20px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.hero-copy {
+  flex: 1 1 320px;
+  min-width: 260px;
+}
+
+.hero-media {
+  flex: 1 1 320px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.hero-banner {
+  width: 100%;
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  object-fit: cover;
+}
+
+.hero-portrait-wrap {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.hero-portrait {
+  width: 100%;
+  max-width: 220px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  object-fit: cover;
+}
+
 .row > .card {
   flex: 1 1 320px;
 }

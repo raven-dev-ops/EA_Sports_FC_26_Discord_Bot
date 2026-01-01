@@ -211,7 +211,7 @@ _RATE_LIMIT_LAST_SWEEP: float = 0.0
 
 
 def _utc_now() -> datetime:
-    return datetime.utcnow()
+    return datetime.now(timezone.utc)
 
 
 def _ensure_dashboard_collections(settings: Settings) -> tuple[Collection, Collection, Collection]:

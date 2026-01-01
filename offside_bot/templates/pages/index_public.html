@@ -3,17 +3,35 @@
 
 {% block content %}
   <div class="card">
-    <h1 class="mt-0 text-hero">Offside</h1>
-    <p class="muted text-lg">
-      Offside turns your EA Sports FC Discord into an ops dashboard: rosters, recruiting, clubs, tournaments, and analytics.
-    </p>
-    <div class="flex gap-10 flex-wrap mt-14">
-      {{ button("Add to Discord", "/install", "blue") }}
-      {{ button("Open Dashboard", "/app", "secondary") }}
-      {{ button("Features", "/features", "secondary") }}
+    <div class="hero">
+      <div class="hero-copy">
+        <h1 class="mt-0 text-hero">Offside</h1>
+        <p class="muted text-lg">
+          Offside turns your EA Sports FC Discord into an ops dashboard: rosters, recruiting, clubs, tournaments, and analytics.
+        </p>
+        <div class="flex gap-10 flex-wrap mt-14">
+          {{ button("Add to Discord", "/install", "blue") }}
+          {{ button("Open Dashboard", "/app", "secondary") }}
+          {{ button("Features", "/features", "secondary") }}
+        </div>
+        <p class="muted mt-14">Direct invite URL:</p>
+        <p><a href="{{ invite_href }}">{{ invite_href }}</a></p>
+      </div>
+      <div class="hero-media">
+        <img
+          class="hero-banner"
+          src="{{ static_url('brand/offside_bot_banner.png') }}"
+          alt="Offside dashboard banner"
+        />
+        <div class="hero-portrait-wrap">
+          <img
+            class="hero-portrait"
+            src="{{ static_url('brand/offside_bot_portrait.png') }}"
+            alt="Offside bot portrait"
+          />
+        </div>
+      </div>
     </div>
-    <p class="muted mt-14">Direct invite URL:</p>
-    <p><a href="{{ invite_href }}">{{ invite_href }}</a></p>
   </div>
 
   <h2>How it works</h2>
