@@ -285,6 +285,26 @@ def _unique_category_name(guild: discord.Guild, base: str) -> str:
     return f"{base} ({len(existing) + 1})"
 
 
+async def _ensure_repair_category(
+    guild: discord.Guild,
+    *,
+    base_name: str,
+    actions: list[str],
+) -> discord.CategoryChannel | None:
+    for cat in guild.categories:
+        if cat.name == base_name or cat.name.startswith(f"{base_name} ("):
+            return cat
+
+    repaired_name = _unique_category_name(guild, base_name)
+    try:
+        category = await guild.create_category(repaired_name, reason="Offside setup (repair category)")
+    except discord.DiscordException:
+        return None
+
+    actions.append(f"Created category `{category.name}` (repair).")
+    return category
+
+
 async def _ensure_text_channel(
     guild: discord.Guild,
     *,
@@ -329,12 +349,51 @@ async def _ensure_text_channel_with_created(
         channel = discord.utils.get(guild.text_channels, name=name)
 
     if channel is None:
-        channel = await guild.create_text_channel(
-            name,
-            category=category,
-            overwrites=overwrites,
-            reason="Offside setup",
-        )
+        try:
+            channel = await guild.create_text_channel(
+                name,
+                category=category,
+                overwrites=overwrites,
+                reason="Offside setup",
+            )
+        except discord.Forbidden:
+            # Some guilds restrict the category such that a bot can manage channels in the guild
+            # but cannot create new channels under the intended category.
+            repaired = await _ensure_repair_category(
+                guild,
+                base_name=f"{category.name} (Offside)",
+                actions=actions,
+            )
+            if repaired is not None:
+                try:
+                    channel = await guild.create_text_channel(
+                        name,
+                        category=repaired,
+                        overwrites=overwrites,
+                        reason="Offside setup (repair category)",
+                    )
+                except discord.DiscordException:
+                    channel = None
+                else:
+                    actions.append(
+                        f"Created <#{channel.id}> under `{repaired.name}` (original category permissions blocked channel creation)."
+                    )
+                    return channel, True
+
+            # Fallback: create the channel without a parent category, then attempt to move it into place.
+            channel = await guild.create_text_channel(
+                name,
+                overwrites=overwrites,
+                reason="Offside setup (fallback: no category)",
+            )
+            actions.append(
+                f"Created <#{channel.id}> outside `{category.name}` (category permissions blocked channel creation)."
+            )
+            try:
+                await channel.edit(category=category, reason="Offside setup: move into category")
+            except discord.DiscordException:
+                pass
+            return channel, True
         actions.append(f"Created <#{channel.id}>.")
         return channel, True
 

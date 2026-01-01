@@ -36,6 +36,7 @@ from services.recovery_service import run_startup_recovery
 from services.role_setup_service import ensure_offside_roles
 from services.scheduler import Scheduler
 from services.subscription_service import ensure_subscription_indexes
+from utils.access_control import enforce_paid_access
 from utils.command_registry import validate_command_tree
 from utils.discord_wrappers import fetch_channel, send_message
 from utils.errors import log_interaction_error, new_error_id, send_interaction_error
@@ -184,6 +185,7 @@ class OffsideCommandTree(discord.app_commands.CommandTree):
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         for check in (
             set_guild_db_context,
+            enforce_paid_access,
             mark_command_start,
             enforce_safe_inputs,
             enforce_command_permissions,

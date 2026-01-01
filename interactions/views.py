@@ -36,6 +36,7 @@ from services.submission_service import (
     get_submission_by_roster,
     update_submission_status,
 )
+from utils.access_control import enforce_paid_access
 from utils.channel_routing import resolve_channel_id
 from utils.discord_wrappers import delete_message, fetch_channel, send_message
 from utils.errors import log_interaction_error, send_interaction_error
@@ -43,6 +44,9 @@ from utils.formatting import format_roster_line, format_submission_message
 
 
 class SafeView(discord.ui.View):
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:  # type: ignore[override]
+        return await enforce_paid_access(interaction)
+
     async def on_error(
         self,
         interaction: discord.Interaction,

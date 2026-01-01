@@ -12,6 +12,8 @@ OWNER_ROLE_NAME = "Owner"
 MANAGER_ROLE_NAME = "Manager"
 FREE_PLAYER_ROLE_NAME = "Free Player"
 PREMIUM_PLAYER_ROLE_NAME = "Premium Player"
+RECRUIT_ROLE_NAME = "Recruit"
+RETIRED_ROLE_NAME = "Retired"
 
 STAFF_ROLE_IDS_KEY = "staff_role_ids"
 
@@ -88,6 +90,20 @@ async def ensure_offside_roles(
         existing_role_id=_parse_int(config.get("role_premium_player_id")),
         actions=actions,
     )
+    recruit_role = await _ensure_role(
+        guild,
+        name=RECRUIT_ROLE_NAME,
+        aliases=(),
+        existing_role_id=_parse_int(config.get("role_recruit_id")),
+        actions=actions,
+    )
+    retired_role = await _ensure_role(
+        guild,
+        name=RETIRED_ROLE_NAME,
+        aliases=(),
+        existing_role_id=_parse_int(config.get("role_retired_id")),
+        actions=actions,
+    )
 
     config["role_coach_id"] = coach_role.id
     config["role_coach_premium_id"] = premium_role.id
@@ -96,6 +112,8 @@ async def ensure_offside_roles(
     config["role_manager_id"] = manager_role.id
     config["role_free_player_id"] = free_player_role.id
     config["role_premium_player_id"] = premium_player_role.id
+    config["role_recruit_id"] = recruit_role.id
+    config["role_retired_id"] = retired_role.id
 
     staff_role_ids = _parse_int_set(config.get(STAFF_ROLE_IDS_KEY))
     updated_staff_role_ids = set(staff_role_ids)
