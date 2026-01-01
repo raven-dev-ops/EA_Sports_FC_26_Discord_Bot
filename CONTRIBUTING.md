@@ -25,6 +25,7 @@ Thanks for helping improve Offside! This guide covers local setup, coding standa
 - Lint/format: `ruff check .` (and `ruff format .` if you want formatting applied).
 - Type check: `mypy .`
 - Tests: `python -m pytest`
+- Docs sync: `python -m scripts.generate_docs --check`
 - Pre-commit (optional but recommended): `pre-commit install` then commits will run hooks automatically.
 
 ## Docker
@@ -50,3 +51,11 @@ docker run --env-file .env offside-bot
 - Keep PRs small and focused; include tests for new logic.
 - Update README/CHANGELOG when behavior or setup changes.
 - Describe testing performed (e.g., `pytest`, `ruff`, `mypy`).
+- If you touch commands, make sure `docs/commands.md` is up to date.
+- For security issues, follow `SECURITY.md` and do not open a public issue.
+
+## Contributions and Licensing
+
+This repo is "all rights reserved." By submitting a pull request, you agree that
+your contribution may be used, modified, and distributed by Raven Development Operations
+and incorporated into this repository under the same "all rights reserved" terms.

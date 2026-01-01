@@ -1,5 +1,7 @@
 # Offside Discord Bot
 
+Status: ![CI](https://github.com/raven-dev-ops/EA_Sports_FC_26_Discord_Bot/actions/workflows/ci.yml/badge.svg)
+
 Roster management and staff review bot for Discord tournaments.
 
 ## Getting Started (Tournament Operators)
@@ -235,7 +237,7 @@ staff monitor channel (`channel_staff_monitor_id`) only.
 ## Documentation
 
 - Security policy: `SECURITY.md`
-- License: `LICENSING.md`
+- License: All rights reserved (see `LICENSING.md`)
 - Changelog: `CHANGELOG.md`
 - Release playbook: `docs/release-playbook.md`
 - Disaster recovery: `docs/disaster-recovery.md`
