@@ -980,7 +980,7 @@ async def session_middleware(request: web.Request, handler):
 def _require_session(request: web.Request) -> SessionData:
     session = request.get("session")
     if session is None:
-        next_path = _sanitize_next_path(request.path_qs)
+        next_path = _sanitize_next_path(request.path)
         if len(next_path) > 1024:
             next_path = "/"
         states: Collection = request.app[STATE_COLLECTION_KEY]
@@ -2126,7 +2126,7 @@ async def login(request: web.Request) -> web.Response:
     next_path = "/"
     state: str | None = None
     if next_param:
-        next_path = _sanitize_next_path(next_param)
+        next_path = _sanitize_next_path(next_param).split("?", 1)[0]
         state = _insert_oauth_state(states=states, next_path=next_path, expires_at=expires_at)
     elif cookie_state:
         raw_doc = states.find_one({"_id": cookie_state})

@@ -80,7 +80,7 @@ async def test_protected_routes_redirect_to_login_with_next(monkeypatch) -> None
         states = app[dashboard.STATE_COLLECTION_KEY]
         doc = states.find_one({"_id": next_cookie.value})
         assert isinstance(doc, dict)
-        assert doc.get("next") == "/app/billing?guild_id=123"
+        assert doc.get("next") == "/app/billing"
     finally:
         await client.close()
 
