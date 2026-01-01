@@ -980,7 +980,7 @@ async def session_middleware(request: web.Request, handler):
 def _require_session(request: web.Request) -> SessionData:
     session = request.get("session")
     if session is None:
-        next_path = _next_redirect_destination(request.path)
+        next_path = "/app"
         if len(next_path) > 1024:
             next_path = "/"
         states: Collection = request.app[STATE_COLLECTION_KEY]
@@ -2130,24 +2130,20 @@ async def login(request: web.Request) -> web.Response:
     states: Collection = request.app[STATE_COLLECTION_KEY]
     expires_at = _utc_now() + timedelta(seconds=STATE_TTL_SECONDS)
 
-    next_param = str(request.query.get("next") or "").strip()
     cookie_state = str(request.cookies.get(NEXT_COOKIE_NAME) or "").strip()
     if cookie_state and len(cookie_state) > 128:
         cookie_state = ""
 
-    next_path = "/"
+    next_path = "/app"
     state: str | None = None
-    if next_param:
-        next_path = _next_redirect_destination(next_param)
-        state = _insert_oauth_state(states=states, next_path=next_path, expires_at=expires_at)
-    elif cookie_state:
+    if cookie_state:
         raw_doc = states.find_one({"_id": cookie_state})
         doc = raw_doc if isinstance(raw_doc, dict) else None
         expires_at_value = doc.get("expires_at") if doc else None
         if isinstance(expires_at_value, datetime) and expires_at_value.tzinfo is None:
             expires_at_value = expires_at_value.replace(tzinfo=timezone.utc)
         if doc and isinstance(expires_at_value, datetime) and expires_at_value > _utc_now():
-            next_path = _sanitize_next_path(str(doc.get("next") or "/"))
+            next_path = _sanitize_next_path(str(doc.get("next") or "/app"))
             state = cookie_state
         else:
             states.delete_one({"_id": cookie_state})
@@ -2406,16 +2402,7 @@ async def oauth_callback(request: web.Request) -> web.Response:
         },
     )
 
-    safe_next_path = "/"
-    candidate_next_path = next_path
-    if (
-        candidate_next_path.startswith("/")
-        and not candidate_next_path.startswith("//")
-        and not candidate_next_path.startswith("/\\")
-        and "\\" not in candidate_next_path
-    ):
-        safe_next_path = candidate_next_path
-    resp = web.HTTPFound(safe_next_path)
+    resp = web.HTTPFound("/app")
     resp.set_cookie(
         COOKIE_NAME,
         session_id,
