@@ -1,7 +1,7 @@
 # Offside Discord Bot
 
 Status: ![CI](https://github.com/raven-dev-ops/EA_Sports_FC_26_Discord_Bot/actions/workflows/ci.yml/badge.svg) ![Backend health](https://img.shields.io/website?url=https%3A%2F%2Fofficial-offside-bot-214b205fba71.herokuapp.com%2Fhealth&label=backend%20health)
-Backend health: https://official-offside-bot-214b205fba71.herokuapp.com/health (web), https://official-offside-bot-214b205fba71.herokuapp.com/ready (DB + worker). See `docs/monitoring.md`.
+Backend health: ![Web health](https://img.shields.io/website?url=https%3A%2F%2Fofficial-offside-bot-214b205fba71.herokuapp.com%2Fhealth&label=web&up_message=up&down_message=down) ![DB + worker](https://img.shields.io/website?url=https%3A%2F%2Fofficial-offside-bot-214b205fba71.herokuapp.com%2Fready&label=db%2Bworker&up_message=passing&down_message=failing). See `docs/monitoring.md`.
 
 Roster management and staff review bot for Discord tournaments.
 
