@@ -243,6 +243,23 @@ def _insert_unique(col: Collection, doc_factory) -> str:
     raise RuntimeError("Failed to insert a unique document after multiple attempts.")
 
 
+def _insert_oauth_state(*, states: Collection, next_path: str, expires_at: datetime) -> str:
+    for _ in range(5):
+        state = secrets.token_urlsafe(24)
+        doc = {
+            "_id": state,
+            "issued_at": time.time(),
+            "next": next_path,
+            "expires_at": expires_at,
+        }
+        try:
+            states.insert_one(doc)
+            return state
+        except DuplicateKeyError:
+            continue
+    raise RuntimeError("Failed to insert a unique OAuth state after multiple attempts.")
+
+
 def _html_page(*, title: str, body: str) -> str:
     from offside_bot.web_templates import render, safe_html
 
@@ -968,15 +985,7 @@ def _require_session(request: web.Request) -> SessionData:
             next_path = "/"
         states: Collection = request.app[STATE_COLLECTION_KEY]
         expires_at = _utc_now() + timedelta(seconds=STATE_TTL_SECONDS)
-        state = _insert_unique(
-            states,
-            lambda: {
-                "_id": secrets.token_urlsafe(24),
-                "issued_at": time.time(),
-                "next": next_path,
-                "expires_at": expires_at,
-            },
-        )
+        state = _insert_oauth_state(states=states, next_path=next_path, expires_at=expires_at)
         resp = web.HTTPFound("/login")
         resp.set_cookie(
             NEXT_COOKIE_NAME,
@@ -2118,15 +2127,7 @@ async def login(request: web.Request) -> web.Response:
     state: str | None = None
     if next_param:
         next_path = _sanitize_next_path(next_param)
-        state = _insert_unique(
-            states,
-            lambda: {
-                "_id": secrets.token_urlsafe(24),
-                "issued_at": time.time(),
-                "next": next_path,
-                "expires_at": expires_at,
-            },
-        )
+        state = _insert_oauth_state(states=states, next_path=next_path, expires_at=expires_at)
     elif cookie_state:
         raw_doc = states.find_one({"_id": cookie_state})
         doc = raw_doc if isinstance(raw_doc, dict) else None
@@ -2139,15 +2140,7 @@ async def login(request: web.Request) -> web.Response:
         else:
             states.delete_one({"_id": cookie_state})
     if state is None:
-        state = _insert_unique(
-            states,
-            lambda: {
-                "_id": secrets.token_urlsafe(24),
-                "issued_at": time.time(),
-                "next": next_path,
-                "expires_at": expires_at,
-            },
-        )
+        state = _insert_oauth_state(states=states, next_path=next_path, expires_at=expires_at)
     authorize_url = _build_authorize_url(
         client_id=client_id,
         redirect_uri=redirect_uri,
@@ -2181,10 +2174,7 @@ async def install(request: web.Request) -> web.Response:
 
     states: Collection = request.app[STATE_COLLECTION_KEY]
     expires_at = _utc_now() + timedelta(seconds=STATE_TTL_SECONDS)
-    state = _insert_unique(
-        states,
-        lambda: {"_id": secrets.token_urlsafe(24), "issued_at": time.time(), "next": next_path, "expires_at": expires_at},
-    )
+    state = _insert_oauth_state(states=states, next_path=next_path, expires_at=expires_at)
     authorize_url = _build_authorize_url(
         client_id=client_id,
         redirect_uri=redirect_uri,
