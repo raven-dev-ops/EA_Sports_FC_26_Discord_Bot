@@ -4,7 +4,7 @@ This repo's workflows run on a **self-hosted** runner to avoid GitHub-hosted run
 
 ## Self-hosted runner requirement
 
-- Workflows: `.github/workflows/ci.yml` and `.github/workflows/release.yml`
+- Workflows: `.github/workflows/ci.yml`, `.github/workflows/release.yml`, and `.github/workflows/codeql.yml`
 - Required runner labels: `self-hosted`, `Windows`, `X64`, `offside`
 
 If the runner is offline, CI and tag releases will queue indefinitely.
