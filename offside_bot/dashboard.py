@@ -67,6 +67,7 @@ ME_URL = f"{DISCORD_API_BASE}/users/@me"
 MY_GUILDS_URL = f"{DISCORD_API_BASE}/users/@me/guilds"
 
 COOKIE_NAME = "offside_dashboard_session"
+NEXT_COOKIE_NAME = "offside_dashboard_next"
 REQUEST_ID_HEADER = "X-Request-Id"
 SESSION_TTL_SECONDS = int(os.environ.get("DASHBOARD_SESSION_TTL_SECONDS", "21600").strip() or "21600")
 SESSION_IDLE_TIMEOUT_SECONDS = int(
@@ -963,15 +964,18 @@ def _require_session(request: web.Request) -> SessionData:
     session = request.get("session")
     if session is None:
         next_path = _sanitize_next_path(request.path_qs)
-        parsed_next = urllib.parse.urlsplit(next_path)
-        if parsed_next.scheme or parsed_next.netloc:
+        if len(next_path) > 1024:
             next_path = "/"
-        query = urllib.parse.urlencode({"next": next_path})
-        location = f"/login?{query}"
-        parsed_location = urllib.parse.urlsplit(location)
-        if parsed_location.scheme or parsed_location.netloc or location.startswith("//") or location.startswith("/\\"):
-            location = "/login"
-        raise web.HTTPFound(location)
+        resp = web.HTTPFound("/login")
+        resp.set_cookie(
+            NEXT_COOKIE_NAME,
+            next_path,
+            httponly=True,
+            samesite="Lax",
+            secure=_is_https(request),
+            max_age=STATE_TTL_SECONDS,
+        )
+        raise resp
     return session
 
 
@@ -2091,7 +2095,8 @@ async def ready(request: web.Request) -> web.Response:
 async def login(request: web.Request) -> web.Response:
     settings: Settings = request.app[SETTINGS_KEY]
     client_id, _client_secret, redirect_uri = _oauth_config(settings)
-    next_path = _sanitize_next_path(request.query.get("next", ""))
+    raw_next = str(request.query.get("next") or "").strip() or str(request.cookies.get(NEXT_COOKIE_NAME) or "")
+    next_path = _sanitize_next_path(raw_next)
     states: Collection = request.app[STATE_COLLECTION_KEY]
     expires_at = _utc_now() + timedelta(seconds=STATE_TTL_SECONDS)
     state = _insert_unique(
@@ -2104,17 +2109,17 @@ async def login(request: web.Request) -> web.Response:
         state=state,
         scope="identify guilds",
     )
-    parsed = urllib.parse.urlsplit(authorize_url)
-    oauth_host = (parsed.hostname or "").lower()
-    if parsed.scheme != "https" or oauth_host not in {"discord.com", "canary.discord.com", "ptb.discord.com"}:
-        logging.error(
-            "event=oauth_authorize_url_invalid host=%s path=%s",
-            oauth_host,
-            parsed.path,
-            extra=_log_extra(request),
-        )
+    parsed = urllib.parse.urlparse(authorize_url)
+    if (
+        parsed.scheme != "https"
+        or parsed.netloc not in {"discord.com", "canary.discord.com", "ptb.discord.com"}
+        or parsed.path != "/oauth2/authorize"
+    ):
+        logging.error("event=oauth_authorize_url_invalid", extra=_log_extra(request))
         raise web.HTTPInternalServerError(text="OAuth is misconfigured.")
-    raise web.HTTPFound(authorize_url)
+    resp = web.HTTPFound(authorize_url)
+    resp.del_cookie(NEXT_COOKIE_NAME)
+    raise resp
 
 
 async def install(request: web.Request) -> web.Response:
@@ -2142,15 +2147,13 @@ async def install(request: web.Request) -> web.Response:
         scope="identify guilds bot applications.commands",
         extra_params=extra,
     )
-    parsed = urllib.parse.urlsplit(authorize_url)
-    oauth_host = (parsed.hostname or "").lower()
-    if parsed.scheme != "https" or oauth_host not in {"discord.com", "canary.discord.com", "ptb.discord.com"}:
-        logging.error(
-            "event=oauth_authorize_url_invalid host=%s path=%s",
-            oauth_host,
-            parsed.path,
-            extra=_log_extra(request),
-        )
+    parsed = urllib.parse.urlparse(authorize_url)
+    if (
+        parsed.scheme != "https"
+        or parsed.netloc not in {"discord.com", "canary.discord.com", "ptb.discord.com"}
+        or parsed.path != "/oauth2/authorize"
+    ):
+        logging.error("event=oauth_authorize_url_invalid", extra=_log_extra(request))
         raise web.HTTPInternalServerError(text="OAuth is misconfigured.")
     raise web.HTTPFound(authorize_url)
 
@@ -2206,9 +2209,6 @@ async def oauth_callback(request: web.Request) -> web.Response:
             issued_at = None
         next_path = str(pending_state.get("next") or "/") if pending_state else "/"
         next_path = _sanitize_next_path(next_path)
-        parsed_next = urllib.parse.urlsplit(next_path)
-        if parsed_next.scheme or parsed_next.netloc or next_path.startswith("/\\"):
-            next_path = "/"
 
     if error:
         if error == "access_denied":
@@ -2359,10 +2359,16 @@ async def oauth_callback(request: web.Request) -> web.Response:
         },
     )
 
-    parsed_next = urllib.parse.urlsplit(next_path)
-    if parsed_next.scheme or parsed_next.netloc or not next_path.startswith("/") or next_path.startswith("//") or next_path.startswith("/\\"):
-        next_path = "/"
-    resp = web.HTTPFound(next_path)
+    safe_next_path = "/"
+    candidate_next_path = next_path
+    if (
+        candidate_next_path.startswith("/")
+        and not candidate_next_path.startswith("//")
+        and not candidate_next_path.startswith("/\\")
+        and "\\" not in candidate_next_path
+    ):
+        safe_next_path = candidate_next_path
+    resp = web.HTTPFound(safe_next_path)
     resp.set_cookie(
         COOKIE_NAME,
         session_id,
@@ -4698,12 +4704,7 @@ async def billing_portal(request: web.Request) -> web.Response:
     parsed = urllib.parse.urlsplit(redirect_url)
     redirect_host = (parsed.hostname or "").lower()
     if parsed.scheme != "https" or redirect_host not in {"billing.stripe.com"}:
-        logging.error(
-            "event=stripe_portal_redirect_invalid host=%s path=%s",
-            redirect_host,
-            parsed.path,
-            extra=_log_extra(request),
-        )
+        logging.error("event=stripe_portal_redirect_invalid", extra=_log_extra(request))
         raise web.HTTPInternalServerError(text="Stripe did not return a valid billing portal URL.")
     raise web.HTTPFound(redirect_url)
 
@@ -4756,12 +4757,7 @@ async def billing_checkout(request: web.Request) -> web.Response:
     parsed = urllib.parse.urlsplit(redirect_url)
     redirect_host = (parsed.hostname or "").lower()
     if parsed.scheme != "https" or redirect_host not in {"checkout.stripe.com"}:
-        logging.error(
-            "event=stripe_checkout_redirect_invalid host=%s path=%s",
-            redirect_host,
-            parsed.path,
-            extra=_log_extra(request),
-        )
+        logging.error("event=stripe_checkout_redirect_invalid", extra=_log_extra(request))
         raise web.HTTPInternalServerError(text="Stripe did not return a valid checkout URL.")
     raise web.HTTPFound(redirect_url)
 
