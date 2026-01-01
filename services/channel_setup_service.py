@@ -14,6 +14,8 @@ MANAGER_PORTAL_CHANNEL_NAME = "club-managers-portal"
 CLUB_PORTAL_CHANNEL_NAME = "club-portal"
 COACH_PORTAL_CHANNEL_NAME = "coach-portal"
 RECRUIT_PORTAL_CHANNEL_NAME = "recruit-portal"
+FREE_PLAYER_PORTAL_CHANNEL_NAME = "free-player-portal"
+PREMIUM_PLAYER_PORTAL_CHANNEL_NAME = "premium-player-portal"
 
 STAFF_MONITOR_CHANNEL_NAME = "staff-monitor"
 ROSTER_LISTING_CHANNEL_NAME = "roster-listing"
@@ -37,9 +39,15 @@ async def ensure_offside_channels(
     config: dict[str, Any] = dict(existing_config or {})
     actions: list[str] = []
 
-    staff_roles = _resolve_staff_roles(guild, settings)
-    coach_roles = _resolve_coach_roles(guild, config)
     bot_member = guild.me
+    staff_roles = _resolve_staff_roles(
+        guild,
+        settings,
+        config=config,
+        bot_member=bot_member,
+        actions=actions,
+    )
+    coach_roles = _resolve_coach_roles(guild, config)
 
     dashboard_category = await _ensure_category(
         guild,
@@ -80,6 +88,26 @@ async def ensure_offside_channels(
             RECRUIT_PORTAL_CHANNEL_NAME,
             "channel_recruit_portal_id",
             _public_readonly_overwrites(guild, staff_roles, bot_member),
+        ),
+        (
+            FREE_PLAYER_PORTAL_CHANNEL_NAME,
+            "channel_free_player_portal_id",
+            _role_portal_overwrites(
+                guild,
+                staff_roles=staff_roles,
+                target_roles=_resolve_portal_roles(guild, config, key="role_free_player_id"),
+                bot_member=bot_member,
+            ),
+        ),
+        (
+            PREMIUM_PLAYER_PORTAL_CHANNEL_NAME,
+            "channel_premium_player_portal_id",
+            _role_portal_overwrites(
+                guild,
+                staff_roles=staff_roles,
+                target_roles=_resolve_portal_roles(guild, config, key="role_premium_player_id"),
+                bot_member=bot_member,
+            ),
         ),
     ]
 
@@ -340,21 +368,135 @@ async def _order_under_category(
             continue
 
 
-def _resolve_staff_roles(guild: discord.Guild, settings: Settings) -> list[discord.Role]:
+def _resolve_staff_roles(
+    guild: discord.Guild,
+    settings: Settings,
+    *,
+    config: dict[str, Any],
+    bot_member: discord.Member | None,
+    actions: list[str],
+) -> list[discord.Role]:
+    role_ids: set[int] = set()
+
+    # Prefer explicit env configuration.
+    role_ids.update(settings.staff_role_ids)
+
+    # If unset, fall back to per-guild config (auto-setup can populate this).
+    if not role_ids:
+        role_ids |= _parse_int_set(config.get("staff_role_ids"))
+
+    # If still unset, infer via permissions.
+    if not role_ids:
+        for role in guild.roles:
+            if role.is_default():
+                continue
+            if role.permissions.administrator or role.permissions.manage_guild:
+                role_ids.add(role.id)
+
+    # Always include owner/manager roles (if present) when env staff roles aren't configured.
+    if not settings.staff_role_ids:
+        for key in ("role_owner_id", "role_manager_id"):
+            role_id = _parse_int(config.get(key))
+            if role_id:
+                role_ids.add(role_id)
+
     roles: list[discord.Role] = []
-    if settings.staff_role_ids:
-        for role_id in sorted(settings.staff_role_ids):
-            role = guild.get_role(role_id)
-            if role is not None and not role.is_default():
-                roles.append(role)
+    for role_id in sorted(role_ids):
+        resolved_role = guild.get_role(role_id)
+        if resolved_role is not None and not resolved_role.is_default():
+            roles.append(resolved_role)
+
+    return _filter_roles_for_overwrites(roles, bot_member=bot_member, actions=actions)
+
+
+def _filter_roles_for_overwrites(
+    roles: list[discord.Role],
+    *,
+    bot_member: discord.Member | None,
+    actions: list[str],
+) -> list[discord.Role]:
+    if bot_member is None:
+        return roles
+    if bot_member.guild_permissions.administrator:
         return roles
 
-    for role in guild.roles:
-        if role.is_default():
+    top_role = bot_member.top_role
+    filtered: list[discord.Role] = []
+    for role in roles:
+        if role.permissions.administrator:
+            # Administrator roles can already view channels and are not needed in overwrites.
             continue
-        if role.permissions.administrator or role.permissions.manage_guild:
-            roles.append(role)
-    return roles
+        try:
+            manageable = role < top_role
+        except TypeError:
+            manageable = role.position < top_role.position
+        if manageable:
+            filtered.append(role)
+            continue
+        actions.append(
+            f"Staff role `{role.name}` is above the bot; skipped in channel permissions. "
+            "Move the bot role above it or set `staff_role_ids` to manageable roles."
+        )
+    return filtered
+
+
+def _resolve_portal_roles(guild: discord.Guild, config: dict[str, Any], *, key: str) -> list[discord.Role]:
+    role_id = _parse_int(config.get(key))
+    if role_id:
+        resolved_role = guild.get_role(role_id)
+        if resolved_role is not None and not resolved_role.is_default():
+            return [resolved_role]
+
+    fallback_names = {
+        "role_free_player_id": "Free Player",
+        "role_premium_player_id": "Premium Player",
+    }
+    fallback_name = fallback_names.get(key)
+    if fallback_name:
+        resolved_role = discord.utils.get(guild.roles, name=fallback_name)
+        if resolved_role is not None and not resolved_role.is_default():
+            return [resolved_role]
+
+    return []
+
+
+def _role_portal_overwrites(
+    guild: discord.Guild,
+    *,
+    staff_roles: list[discord.Role],
+    target_roles: list[discord.Role],
+    bot_member: discord.Member | None,
+) -> dict[discord.Role | discord.Member | discord.Object, discord.PermissionOverwrite]:
+    if not target_roles:
+        return _public_readonly_overwrites(guild, staff_roles, bot_member)
+
+    overwrites: dict[discord.Role | discord.Member | discord.Object, discord.PermissionOverwrite] = {
+        guild.default_role: discord.PermissionOverwrite(view_channel=False)
+    }
+    for role in target_roles:
+        overwrites[role] = discord.PermissionOverwrite(
+            view_channel=True,
+            send_messages=False,
+            read_message_history=True,
+        )
+    for role in staff_roles:
+        overwrites[role] = discord.PermissionOverwrite(
+            view_channel=True,
+            read_message_history=True,
+            send_messages=False,
+            manage_messages=True,
+        )
+    if bot_member is not None:
+        overwrites[bot_member] = discord.PermissionOverwrite(
+            view_channel=True,
+            send_messages=True,
+            read_message_history=True,
+            manage_channels=True,
+            manage_messages=True,
+            embed_links=True,
+            attach_files=True,
+        )
+    return overwrites
 
 
 def _staff_only_overwrites(
@@ -532,3 +674,42 @@ def _parse_int(value: Any) -> int | None:
         return int(value)
     except (TypeError, ValueError):
         return None
+
+
+def _parse_int_set(value: Any) -> set[int]:
+    if value is None:
+        return set()
+    if isinstance(value, bool):
+        return set()
+    if isinstance(value, int):
+        return {value}
+    out: set[int] = set()
+    if isinstance(value, str):
+        for part in value.split(","):
+            token = part.strip()
+            if not token:
+                continue
+            try:
+                parsed = int(token)
+            except ValueError:
+                continue
+            if parsed and not isinstance(parsed, bool):
+                out.add(parsed)
+        return out
+    if isinstance(value, (list, tuple, set)):
+        for item in value:
+            if isinstance(item, bool):
+                continue
+            if isinstance(item, int):
+                out.add(item)
+                continue
+            if isinstance(item, str):
+                token = item.strip()
+                if not token:
+                    continue
+                try:
+                    out.add(int(token))
+                except ValueError:
+                    continue
+        return out
+    return set()

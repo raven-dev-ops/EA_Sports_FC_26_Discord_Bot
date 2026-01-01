@@ -434,6 +434,16 @@ class OffsideBot(commands.AutoShardedBot):
             logging.info("Bot ready as %s (ID: %s).", user, user.id)
         else:
             logging.info("Bot ready (user not available yet).")
+        try:
+            await self.change_presence(
+                status=discord.Status.online,
+                activity=discord.Activity(
+                    type=discord.ActivityType.watching,
+                    name="Offside dashboards",
+                ),
+            )
+        except discord.DiscordException:
+            pass
         settings = getattr(self, "settings", None)
         if settings is not None and settings.mongodb_uri:
             try:

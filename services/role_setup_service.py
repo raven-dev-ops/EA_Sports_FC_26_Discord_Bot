@@ -8,6 +8,13 @@ COACH_ROLE_NAME = "Coach"
 COACH_PREMIUM_ROLE_NAME = "Coach Premium"
 COACH_PREMIUM_PLUS_ROLE_NAME = "Coach Premium+"
 
+OWNER_ROLE_NAME = "Owner"
+MANAGER_ROLE_NAME = "Manager"
+FREE_PLAYER_ROLE_NAME = "Free Player"
+PREMIUM_PLAYER_ROLE_NAME = "Premium Player"
+
+STAFF_ROLE_IDS_KEY = "staff_role_ids"
+
 LEGACY_COACH_ROLE_NAMES = ("Super League Coach",)
 LEGACY_COACH_PREMIUM_PLUS_ROLE_NAMES = ("Coach Premium Plus",)
 
@@ -19,7 +26,7 @@ async def ensure_offside_roles(
     actions: list[str],
 ) -> dict[str, Any]:
     """
-    Ensure Offside coach roles exist and return an updated guild config payload.
+    Ensure Offside roles exist and return an updated guild config payload.
     """
     config: dict[str, Any] = dict(existing_config or {})
 
@@ -53,9 +60,49 @@ async def ensure_offside_roles(
         actions=actions,
     )
 
+    owner_role = await _ensure_role(
+        guild,
+        name=OWNER_ROLE_NAME,
+        aliases=(),
+        existing_role_id=_parse_int(config.get("role_owner_id")),
+        actions=actions,
+    )
+    manager_role = await _ensure_role(
+        guild,
+        name=MANAGER_ROLE_NAME,
+        aliases=(),
+        existing_role_id=_parse_int(config.get("role_manager_id")),
+        actions=actions,
+    )
+    free_player_role = await _ensure_role(
+        guild,
+        name=FREE_PLAYER_ROLE_NAME,
+        aliases=(),
+        existing_role_id=_parse_int(config.get("role_free_player_id")),
+        actions=actions,
+    )
+    premium_player_role = await _ensure_role(
+        guild,
+        name=PREMIUM_PLAYER_ROLE_NAME,
+        aliases=(),
+        existing_role_id=_parse_int(config.get("role_premium_player_id")),
+        actions=actions,
+    )
+
     config["role_coach_id"] = coach_role.id
     config["role_coach_premium_id"] = premium_role.id
     config["role_coach_premium_plus_id"] = premium_plus_role.id
+    config["role_owner_id"] = owner_role.id
+    config["role_manager_id"] = manager_role.id
+    config["role_free_player_id"] = free_player_role.id
+    config["role_premium_player_id"] = premium_player_role.id
+
+    staff_role_ids = _parse_int_set(config.get(STAFF_ROLE_IDS_KEY))
+    updated_staff_role_ids = set(staff_role_ids)
+    updated_staff_role_ids.update({owner_role.id, manager_role.id})
+    if updated_staff_role_ids != staff_role_ids:
+        config[STAFF_ROLE_IDS_KEY] = sorted(updated_staff_role_ids)
+        actions.append("Updated staff role IDs to include Owner/Manager roles.")
 
     return config
 
@@ -148,3 +195,42 @@ def _parse_int(value: Any) -> int | None:
         return int(value)
     except (TypeError, ValueError):
         return None
+
+
+def _parse_int_set(value: Any) -> set[int]:
+    if value is None:
+        return set()
+    if isinstance(value, bool):
+        return set()
+    if isinstance(value, int):
+        return {value}
+    out: set[int] = set()
+    if isinstance(value, str):
+        for part in value.split(","):
+            token = part.strip()
+            if not token:
+                continue
+            try:
+                parsed = int(token)
+            except ValueError:
+                continue
+            if parsed and not isinstance(parsed, bool):
+                out.add(parsed)
+        return out
+    if isinstance(value, (list, tuple, set)):
+        for item in value:
+            if isinstance(item, bool):
+                continue
+            if isinstance(item, int):
+                out.add(item)
+                continue
+            if isinstance(item, str):
+                token = item.strip()
+                if not token:
+                    continue
+                try:
+                    out.add(int(token))
+                except ValueError:
+                    continue
+        return out
+    return set()
