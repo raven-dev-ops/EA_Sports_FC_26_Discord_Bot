@@ -67,7 +67,6 @@ ME_URL = f"{DISCORD_API_BASE}/users/@me"
 MY_GUILDS_URL = f"{DISCORD_API_BASE}/users/@me/guilds"
 
 COOKIE_NAME = "offside_dashboard_session"
-NEXT_COOKIE_NAME = "offside_dashboard_next"
 REQUEST_ID_HEADER = "X-Request-Id"
 SESSION_TTL_SECONDS = int(os.environ.get("DASHBOARD_SESSION_TTL_SECONDS", "21600").strip() or "21600")
 SESSION_IDLE_TIMEOUT_SECONDS = int(
@@ -980,22 +979,7 @@ async def session_middleware(request: web.Request, handler):
 def _require_session(request: web.Request) -> SessionData:
     session = request.get("session")
     if session is None:
-        next_path = "/app"
-        if len(next_path) > 1024:
-            next_path = "/"
-        states: Collection = request.app[STATE_COLLECTION_KEY]
-        expires_at = _utc_now() + timedelta(seconds=STATE_TTL_SECONDS)
-        state = _insert_oauth_state(states=states, next_path=next_path, expires_at=expires_at)
-        resp = web.HTTPFound("/login")
-        resp.set_cookie(
-            NEXT_COOKIE_NAME,
-            state,
-            httponly=True,
-            samesite="Lax",
-            secure=_is_https(request),
-            max_age=STATE_TTL_SECONDS,
-        )
-        raise resp
+        raise web.HTTPFound("/login")
     return session
 
 
@@ -2129,26 +2113,8 @@ async def login(request: web.Request) -> web.Response:
     client_id, _client_secret, redirect_uri = _oauth_config(settings)
     states: Collection = request.app[STATE_COLLECTION_KEY]
     expires_at = _utc_now() + timedelta(seconds=STATE_TTL_SECONDS)
-
-    cookie_state = str(request.cookies.get(NEXT_COOKIE_NAME) or "").strip()
-    if cookie_state and len(cookie_state) > 128:
-        cookie_state = ""
-
     next_path = "/app"
-    state: str | None = None
-    if cookie_state:
-        raw_doc = states.find_one({"_id": cookie_state})
-        doc = raw_doc if isinstance(raw_doc, dict) else None
-        expires_at_value = doc.get("expires_at") if doc else None
-        if isinstance(expires_at_value, datetime) and expires_at_value.tzinfo is None:
-            expires_at_value = expires_at_value.replace(tzinfo=timezone.utc)
-        if doc and isinstance(expires_at_value, datetime) and expires_at_value > _utc_now():
-            next_path = _sanitize_next_path(str(doc.get("next") or "/app"))
-            state = cookie_state
-        else:
-            states.delete_one({"_id": cookie_state})
-    if state is None:
-        state = _insert_oauth_state(states=states, next_path=next_path, expires_at=expires_at)
+    state = _insert_oauth_state(states=states, next_path=next_path, expires_at=expires_at)
     authorize_url = _build_authorize_url(
         client_id=client_id,
         redirect_uri=redirect_uri,
@@ -2163,9 +2129,7 @@ async def login(request: web.Request) -> web.Response:
     ):
         logging.error("event=oauth_authorize_url_invalid", extra=_log_extra(request))
         raise web.HTTPInternalServerError(text="OAuth is misconfigured.")
-    resp = web.HTTPFound(authorize_url)
-    resp.del_cookie(NEXT_COOKIE_NAME)
-    raise resp
+    raise web.HTTPFound(authorize_url)
 
 
 async def install(request: web.Request) -> web.Response:

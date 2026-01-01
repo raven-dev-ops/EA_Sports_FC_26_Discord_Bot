@@ -75,12 +75,6 @@ async def test_protected_routes_redirect_to_login_with_next(monkeypatch) -> None
         assert location is not None
         parsed = urlparse(location)
         assert parsed.path == "/login"
-        next_cookie = resp.cookies.get(dashboard.NEXT_COOKIE_NAME)
-        assert next_cookie is not None
-        states = app[dashboard.STATE_COLLECTION_KEY]
-        doc = states.find_one({"_id": next_cookie.value})
-        assert isinstance(doc, dict)
-        assert doc.get("next") == "/app"
     finally:
         await client.close()
 
@@ -104,12 +98,6 @@ async def test_app_requires_login_redirects_with_next(monkeypatch) -> None:
         assert location is not None
         parsed = urlparse(location)
         assert parsed.path == "/login"
-        next_cookie = resp.cookies.get(dashboard.NEXT_COOKIE_NAME)
-        assert next_cookie is not None
-        states = app[dashboard.STATE_COLLECTION_KEY]
-        doc = states.find_one({"_id": next_cookie.value})
-        assert isinstance(doc, dict)
-        assert doc.get("next") == "/app"
     finally:
         await client.close()
 
@@ -362,12 +350,6 @@ async def test_session_idle_timeout_forces_relogin(monkeypatch) -> None:
         assert resp.status == 302
         parsed = urlparse(resp.headers["Location"])
         assert parsed.path == "/login"
-        next_cookie = resp.cookies.get(dashboard.NEXT_COOKIE_NAME)
-        assert next_cookie is not None
-        states = app[dashboard.STATE_COLLECTION_KEY]
-        doc = states.find_one({"_id": next_cookie.value})
-        assert isinstance(doc, dict)
-        assert doc.get("next") == "/app"
         assert sessions.find_one({"_id": "sess_idle"}) is None
     finally:
         await client.close()
@@ -407,12 +389,6 @@ async def test_guild_list_cache_ttl_forces_relogin(monkeypatch) -> None:
         assert resp.status == 302
         parsed = urlparse(resp.headers["Location"])
         assert parsed.path == "/login"
-        next_cookie = resp.cookies.get(dashboard.NEXT_COOKIE_NAME)
-        assert next_cookie is not None
-        states = app[dashboard.STATE_COLLECTION_KEY]
-        doc = states.find_one({"_id": next_cookie.value})
-        assert isinstance(doc, dict)
-        assert doc.get("next") == "/app"
         assert sessions.find_one({"_id": "sess_stale_guilds"}) is None
     finally:
         await client.close()
