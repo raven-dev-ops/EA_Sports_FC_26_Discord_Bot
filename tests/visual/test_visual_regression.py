@@ -3,7 +3,6 @@ from __future__ import annotations
 import os
 import sys
 import types
-from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from urllib.parse import parse_qs, urlencode, urlparse
 
@@ -98,18 +97,12 @@ async def test_visual_regression(monkeypatch) -> None:
 
     monkeypatch.setenv("DISCORD_CLIENT_SECRET", "secret")
     monkeypatch.setenv("DASHBOARD_REDIRECT_URI", "http://localhost:8080/oauth/callback")
-    monkeypatch.setenv("GOOGLE_CLIENT_ID", "google-client")
-    monkeypatch.setenv("GOOGLE_CLIENT_SECRET", "google-secret")
-    monkeypatch.setenv("GOOGLE_REDIRECT_URI", "http://localhost:8080/oauth/google/callback")
     monkeypatch.setenv("STRIPE_MODE", "test")
     monkeypatch.setenv("STRIPE_SECRET_KEY", "sk_test_123")
     monkeypatch.setenv("STRIPE_PRICE_PRO_ID", "price_test_123")
 
-    async def fake_google_exchange_code(*_args, **_kwargs):
-        return {"access_token": "google_access"}
-
-    async def fake_google_userinfo(*_args, **_kwargs):
-        return {"sub": "google_sub_1", "email": "user@example.com", "email_verified": True, "name": "User"}
+    async def fake_exchange_code(*_args, **_kwargs):
+        return {"access_token": "access_token"}
 
     async def fake_discord_get_json(*_args, url: str, **_kwargs):
         if url == dashboard.ME_URL:
@@ -128,23 +121,11 @@ async def test_visual_regression(monkeypatch) -> None:
     )
     monkeypatch.setitem(sys.modules, "stripe", fake_stripe)
 
-    monkeypatch.setattr(dashboard, "_google_exchange_code", fake_google_exchange_code)
-    monkeypatch.setattr(dashboard, "_google_get_userinfo", fake_google_userinfo)
+    monkeypatch.setattr(dashboard, "_exchange_code", fake_exchange_code)
     monkeypatch.setattr(dashboard, "_discord_get_json", fake_discord_get_json)
     monkeypatch.setattr(dashboard, "_detect_bot_installed", fake_detect_installed)
 
     app = dashboard.create_app(settings=_settings())
-    users = app[dashboard.USER_COLLECTION_KEY]
-    users.insert_one(
-        {
-            "google_sub": "google_sub_1",
-            "email": "user@example.com",
-            "discord_user_id": "1",
-            "discord_access_token": "access_token",
-            "discord_token_expires_at": datetime.now(timezone.utc) + timedelta(hours=1),
-            "updated_at": datetime.now(timezone.utc),
-        }
-    )
     server = TestServer(app)
     client = TestClient(server)
     await client.start_server()
@@ -155,7 +136,7 @@ async def test_visual_regression(monkeypatch) -> None:
         assert auth_location
         state = parse_qs(urlparse(auth_location).query).get("state", [""])[0]
         assert state
-        resp = await client.get(f"/oauth/google/callback?code=abc&state={state}", allow_redirects=False)
+        resp = await client.get(f"/oauth/callback?code=abc&state={state}", allow_redirects=False)
         cookie = resp.cookies.get(dashboard.COOKIE_NAME)
         assert cookie is not None
         base_url = str(server.make_url("/")).rstrip("/")
