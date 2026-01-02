@@ -6,22 +6,23 @@
     <div class="hero">
       <div class="hero-copy">
         <div class="kicker">EA SPORTS FC 26 DISCORD BOT</div>
-        <h1 class="mt-6 text-hero">Your Ultimate FC 26 Companion</h1>
+        <h1 class="mt-6 text-hero">Run your EA Sports FC 26 league on Discord</h1>
         <p class="muted text-lg mt-10">
-          Offside turns your EA Sports FC Discord into an ops dashboard: rosters, recruiting, clubs, tournaments, and analytics.
+          Offside is the EA Sports FC 26 Discord bot for Pro Clubs leagues. Automate rosters, recruiting, clubs, tournaments,
+          and analytics with guided setup dashboards.
         </p>
         <ul class="checklist mt-12">
-          <li>Guided setup wizard and dashboards</li>
-          <li>Roster + recruiting workflows</li>
-          <li>Clubs, tournaments, and analytics</li>
+          <li>Guided setup wizard plus Discord dashboards</li>
+          <li>Roster and recruiting workflows for coaches and staff</li>
+          <li>Clubs, tournaments, and analytics for league operations</li>
         </ul>
         <div class="flex gap-10 flex-wrap mt-16">
           {{ button("Add to Discord", "/install", "blue") }}
           {{ button("Open Dashboard", "/app", "secondary") }}
         </div>
         <div class="mt-16">
-          <div class="muted">Direct invite URL</div>
-          {{ copy_field(invite_href, label="Direct invite URL") }}
+          <div class="muted">Direct invite link</div>
+          {{ copy_field(invite_href, label="Direct invite link") }}
         </div>
       </div>
       <div class="hero-media">
@@ -54,15 +55,15 @@
   <div class="row">
     <div class="card">
       <strong>1) Invite</strong>
-      <div class="muted mt-6">Add the bot to your server with the right permissions.</div>
+      <div class="muted mt-6">Add the bot to your Discord server with the right permissions.</div>
     </div>
     <div class="card">
       <strong>2) Configure</strong>
-      <div class="muted mt-6">Run setup, confirm roles/channels, and post dashboards.</div>
+      <div class="muted mt-6">Run setup in the dashboard, confirm roles/channels, and post portals.</div>
     </div>
     <div class="card">
       <strong>3) Run</strong>
-      <div class="muted mt-6">Manage rosters and recruiting while Offside tracks your data.</div>
+      <div class="muted mt-6">Manage rosters and recruiting while Offside tracks league activity.</div>
     </div>
   </div>
 
@@ -74,19 +75,19 @@
     </div>
     <div class="card">
       <strong>Recruiting</strong>
-      <div class="muted mt-6">Streamline recruiting workflows and listing channels.</div>
+      <div class="muted mt-6">Streamline recruiting workflows, free-agent listings, and availability.</div>
     </div>
     <div class="card">
       <strong>Clubs</strong>
-      <div class="muted mt-6">Organize clubs and staff operations across the server.</div>
+      <div class="muted mt-6">Organize clubs, managers, and staff operations across the server.</div>
     </div>
     <div class="card">
       <strong>Tournaments</strong>
-      <div class="muted mt-6">Tournament automation tooling for staff (Pro).</div>
+      <div class="muted mt-6">Automate brackets, fixtures, and results (Pro).</div>
     </div>
     <div class="card">
       <strong>Analytics</strong>
-      <div class="muted mt-6">See what your server produces, by collection and record type.</div>
+      <div class="muted mt-6">See activity by module, collection, and record type.</div>
     </div>
   </div>
 
@@ -95,18 +96,22 @@
     <p><strong>What permissions are needed?</strong></p>
     <p class="muted">Offside needs permissions to create/manage roles and channels during setup, and to post embeds.</p>
     <p class="mt-14"><strong>How does pricing work?</strong></p>
-    <p class="muted">Start on Free. Upgrade to Pro for premium features and advanced modules. See <a href="/pricing">pricing</a>.</p>
+    <p class="muted">
+      Start on Free. Upgrade to Pro for premium coach tiers, stats, and automation. See <a href="/pricing">pricing</a>.
+    </p>
     <p class="mt-14"><strong>Where is data stored?</strong></p>
     <p class="muted">Data is stored per-server in MongoDB (configurable) and is isolated by guild.</p>
     <p class="mt-14"><strong>How do I get support?</strong></p>
-    <p class="muted">Visit the <a href="/support">Support page</a> for docs and contact options.</p>
+    <p class="muted">
+      Visit the <a href="/help">Help center</a> or <a href="/support">Support page</a> for docs and contact options.
+    </p>
   </div>
 
   <div class="card cta-card">
     <div class="flex justify-between items-center gap-12 flex-wrap">
       <div>
         <div><strong>Ready to get started?</strong></div>
-        <div class="muted mt-6">Invite the bot, then log in to run setup and manage your server.</div>
+        <div class="muted mt-6">Invite the bot, then log in to run setup and manage your league.</div>
       </div>
       <div class="flex gap-10 flex-wrap">
         {{ button("Add to Discord", "/install", "blue") }}

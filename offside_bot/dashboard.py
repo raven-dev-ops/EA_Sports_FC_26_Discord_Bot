@@ -1332,7 +1332,15 @@ async def index(request: web.Request) -> web.Response:
     invite_href = _invite_url(settings)
     from offside_bot.web_templates import render
 
-    html = render("pages/index_public.html", title="Offside", invite_href=invite_href)
+    html = render(
+        "pages/index_public.html",
+        title="Offside",
+        description=(
+            "Offside is the EA Sports FC 26 Discord bot for Pro Clubs leagues. "
+            "Automate rosters, recruiting, clubs, tournaments, and analytics with guided setup dashboards."
+        ),
+        invite_href=invite_href,
+    )
     return web.Response(text=html, content_type="text/html")
 
 
@@ -1488,7 +1496,12 @@ async def terms_page(_request: web.Request) -> web.Response:
     """
     from offside_bot.web_templates import render, safe_html
 
-    page = render("pages/markdown_page.html", title="Terms", content=safe_html(content))
+    page = render(
+        "pages/markdown_page.html",
+        title="Terms of Service",
+        description="Terms of Service for Offside, the EA Sports FC 26 Discord bot.",
+        content=safe_html(content),
+    )
     return web.Response(text=page, content_type="text/html")
 
 
@@ -1506,7 +1519,12 @@ async def privacy_page(_request: web.Request) -> web.Response:
     """
     from offside_bot.web_templates import render, safe_html
 
-    page = render("pages/markdown_page.html", title="Privacy", content=safe_html(content))
+    page = render(
+        "pages/markdown_page.html",
+        title="Privacy Policy",
+        description="Privacy Policy for Offside, the EA Sports FC 26 Discord bot.",
+        content=safe_html(content),
+    )
     return web.Response(text=page, content_type="text/html")
 
 
@@ -1524,7 +1542,12 @@ async def product_copy_page(_request: web.Request) -> web.Response:
     """
     from offside_bot.web_templates import render, safe_html
 
-    page = render("pages/markdown_page.html", title="Product", content=safe_html(content))
+    page = render(
+        "pages/markdown_page.html",
+        title="Product overview",
+        description="Product overview for Offside, the EA Sports FC 26 Discord bot.",
+        content=safe_html(content),
+    )
     return web.Response(text=page, content_type="text/html")
 
 
@@ -1534,7 +1557,11 @@ async def docs_index_page(_request: web.Request) -> web.Response:
     docs = _build_docs_index_entries(base_path="/docs")
     page_html = render(
         "pages/docs_index.html",
-        title="Docs",
+        title="Docs for FC 26 Discord bot",
+        description=(
+            "Documentation for Offside, the EA Sports FC 26 Discord bot: server setup, billing, "
+            "data lifecycle, FAQ, and commands."
+        ),
         docs=docs,
         active_nav="support",
     )
@@ -1644,6 +1671,11 @@ def _render_doc_page(doc: dict[str, str], *, back_href: str, back_label: str) ->
     if text is None:
         raise web.HTTPNotFound(text=f"{doc['path']} not found.")
     html = _markdown_to_html(text)
+    summary = str(doc.get("summary") or "").strip()
+    if summary:
+        description = f"{summary} Offside help for EA Sports FC 26 Discord servers."
+    else:
+        description = "Offside help for EA Sports FC 26 Discord servers."
     content = f"""
       <div class="card hero-card">
         <p class="mt-0"><a href="{_escape_html(back_href)}">&larr; {_escape_html(back_label)}</a></p>
@@ -1656,6 +1688,7 @@ def _render_doc_page(doc: dict[str, str], *, back_href: str, back_label: str) ->
     page_html = render(
         "pages/markdown_page.html",
         title=doc["title"],
+        description=description,
         content=safe_html(content),
         active_nav="support",
     )
@@ -1670,7 +1703,16 @@ async def commands_page(_request: web.Request) -> web.Response:
     categories = _parse_commands_markdown(text)
     from offside_bot.web_templates import render
 
-    page = render("pages/commands.html", title="Commands", categories=categories, active_nav="support")
+    page = render(
+        "pages/commands.html",
+        title="FC 26 Discord bot commands",
+        description=(
+            "Command reference for Offside, the EA Sports FC 26 Discord bot. "
+            "Browse slash commands by category."
+        ),
+        categories=categories,
+        active_nav="support",
+    )
     return web.Response(text=page, content_type="text/html")
 
 
@@ -1680,9 +1722,13 @@ async def help_index_page(_request: web.Request) -> web.Response:
     docs = _build_docs_index_entries(base_path="/help")
     page_html = render(
         "pages/docs_index.html",
-        title="Help center",
+        title="Help center for FC 26 Discord bot",
+        description=(
+            "Help center for Offside, the EA Sports FC 26 Discord bot. "
+            "Setup guides, billing info, data lifecycle, FAQ, and commands."
+        ),
         heading="Help center",
-        subtitle="Guides, checklists, and answers for Offside.",
+        subtitle="Setup guides, billing info, and answers for Offside.",
         docs=docs,
         active_nav="support",
     )
@@ -1703,7 +1749,15 @@ async def help_page(request: web.Request) -> web.Response:
 async def features_page(_request: web.Request) -> web.Response:
     from offside_bot.web_templates import render
 
-    page = render("pages/features.html", title="Features", active_nav="features")
+    page = render(
+        "pages/features.html",
+        title="FC 26 Discord bot features",
+        description=(
+            "Explore Offside features for EA Sports FC 26 Discord servers: setup wizard, rosters, "
+            "recruiting, clubs, tournaments, and analytics."
+        ),
+        active_nav="features",
+    )
     return web.Response(text=page, content_type="text/html")
 
 
@@ -1753,7 +1807,7 @@ async def support_page(_request: web.Request) -> web.Response:
       <div class="card hero-card">
         <p class="mt-0"><a href="/">&larr; Back</a></p>
         <h1 class="mt-6 text-hero-sm">Support</h1>
-        <p class="muted mt-10">Docs, contact options, and issue reporting.</p>
+        <p class="muted mt-10">Help center, contact options, and issue reporting.</p>
       </div>
       <div class="row">
         <div class="card">
@@ -1784,6 +1838,7 @@ async def support_page(_request: web.Request) -> web.Response:
     page = render(
         "pages/markdown_page.html",
         title="Support",
+        description="Support options for Offside: help center, Discord support, and GitHub issue reporting.",
         content=safe_html(content),
         active_nav="support",
     )
@@ -2008,6 +2063,7 @@ async def enterprise_page(_request: web.Request) -> web.Response:
     page = render(
         "pages/enterprise.html",
         title="Enterprise",
+        description="Enterprise onboarding and billing for large EA Sports FC 26 Discord communities.",
         contact_email=contact_email,
         mailto_href=mailto,
         support_discord=support_discord,
@@ -2064,7 +2120,7 @@ async def pricing_page(request: web.Request) -> web.Response:
             "enterprise": True,
         },
         {
-            "name": "FC25 stats integration",
+            "name": "FC stats integration",
             "description": "Link accounts and refresh player stats (feature flagged).",
             "free": False,
             "pro": entitlements_service.FEATURE_FC25_STATS in entitlements_service.PRO_FEATURE_KEYS,
@@ -2090,7 +2146,11 @@ async def pricing_page(request: web.Request) -> web.Response:
 
     html = render(
         "pages/pricing.html",
-        title="Pricing",
+        title="FC 26 Discord bot pricing",
+        description=(
+            "Offside pricing for EA Sports FC 26 Discord servers. Start free, upgrade to Pro for "
+            "premium coach tiers, stats, banlist checks, and tournaments."
+        ),
         billing=billing,
         toggle_monthly_href="/pricing?billing=monthly",
         toggle_yearly_href="/pricing?billing=yearly",

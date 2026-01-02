@@ -4,7 +4,8 @@ This document is the source of truth for Offside product positioning and plan ga
 
 ## Tagline
 
-Offside turns your EA Sports FC Discord into an ops dashboard: rosters, recruiting, clubs, tournaments, and analytics.
+Offside is the EA Sports FC 26 Discord bot for Pro Clubs leagues. Automate rosters, recruiting, clubs, tournaments, and
+analytics with guided setup dashboards.
 
 ## Value (3 bullets)
 
@@ -64,7 +65,9 @@ Public:
 - `/enterprise` - enterprise contact CTA
 - `/product` - product copy source
 - `/support` - support channels (Discord + email) + docs
-- `/docs` - index of allowlisted docs (setup, billing, data lifecycle, environments, admin console, localization, disaster recovery, monitoring, QA, release)
+- `/help` - help center and allowlisted docs
+- `/help/<slug>` - allowlisted markdown docs rendered for self-serve
+- `/docs` - index of allowlisted docs (setup, billing, data lifecycle, FAQ, FC stats policy)
 - `/docs/<slug>` - allowlisted markdown docs rendered for self-serve
 - `/commands` - command reference
 - `/terms`, `/privacy` - legal pages
