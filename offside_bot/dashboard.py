@@ -1345,6 +1345,7 @@ async def index(request: web.Request) -> web.Response:
             "Offside is the EA Sports FC 26 Discord bot for Pro Clubs leagues. "
             "Automate rosters, recruiting, clubs, tournaments, and analytics with guided setup dashboards."
         ),
+        session=request.get("session"),
         invite_href=invite_href,
     )
     return web.Response(text=html, content_type="text/html")
@@ -1538,7 +1539,7 @@ def _get_cached_stats(app: web.Application, settings: Settings) -> dict[str, Any
     return payload
 
 
-async def terms_page(_request: web.Request) -> web.Response:
+async def terms_page(request: web.Request) -> web.Response:
     text = _repo_read_text("TERMS_OF_SERVICE.md")
     if text is None:
         raise web.HTTPNotFound(text="TERMS_OF_SERVICE.md not found.")
@@ -1556,12 +1557,13 @@ async def terms_page(_request: web.Request) -> web.Response:
         "pages/markdown_page.html",
         title="Terms of Service",
         description="Terms of Service for Offside, the EA Sports FC 26 Discord bot.",
+        session=request.get("session"),
         content=safe_html(content),
     )
     return web.Response(text=page, content_type="text/html")
 
 
-async def privacy_page(_request: web.Request) -> web.Response:
+async def privacy_page(request: web.Request) -> web.Response:
     text = _repo_read_text("PRIVACY_POLICY.md")
     if text is None:
         raise web.HTTPNotFound(text="PRIVACY_POLICY.md not found.")
@@ -1579,12 +1581,13 @@ async def privacy_page(_request: web.Request) -> web.Response:
         "pages/markdown_page.html",
         title="Privacy Policy",
         description="Privacy Policy for Offside, the EA Sports FC 26 Discord bot.",
+        session=request.get("session"),
         content=safe_html(content),
     )
     return web.Response(text=page, content_type="text/html")
 
 
-async def product_copy_page(_request: web.Request) -> web.Response:
+async def product_copy_page(request: web.Request) -> web.Response:
     text = _repo_read_text("docs/public/product-copy.md")
     if text is None:
         raise web.HTTPNotFound(text="docs/public/product-copy.md not found.")
@@ -1602,12 +1605,13 @@ async def product_copy_page(_request: web.Request) -> web.Response:
         "pages/markdown_page.html",
         title="Product overview",
         description="Product overview for Offside, the EA Sports FC 26 Discord bot.",
+        session=request.get("session"),
         content=safe_html(content),
     )
     return web.Response(text=page, content_type="text/html")
 
 
-async def docs_index_page(_request: web.Request) -> web.Response:
+async def docs_index_page(request: web.Request) -> web.Response:
     from offside_bot.web_templates import render
 
     docs = _build_docs_index_entries(base_path="/docs")
@@ -1618,6 +1622,7 @@ async def docs_index_page(_request: web.Request) -> web.Response:
             "Documentation for Offside, the EA Sports FC 26 Discord bot: server setup, billing, "
             "data lifecycle, FAQ, and commands."
         ),
+        session=request.get("session"),
         docs=docs,
         active_nav="support",
     )
@@ -1629,7 +1634,12 @@ async def docs_page(request: web.Request) -> web.Response:
     doc = DOCS_BY_SLUG.get(slug)
     if not doc:
         raise web.HTTPNotFound(text="Doc not found.")
-    return _render_doc_page(doc, back_href="/docs", back_label="Back to docs")
+    return _render_doc_page(
+        doc,
+        back_href="/docs",
+        back_label="Back to docs",
+        session=request.get("session"),
+    )
 
 
 def _commands_group_for_category(category: str) -> str:
@@ -1722,7 +1732,13 @@ def _build_docs_index_entries(*, base_path: str) -> list[dict[str, str]]:
     return docs
 
 
-def _render_doc_page(doc: dict[str, str], *, back_href: str, back_label: str) -> web.Response:
+def _render_doc_page(
+    doc: dict[str, str],
+    *,
+    back_href: str,
+    back_label: str,
+    session: SessionData | None,
+) -> web.Response:
     text = _repo_read_text(doc["path"])
     if text is None:
         raise web.HTTPNotFound(text=f"{doc['path']} not found.")
@@ -1745,13 +1761,14 @@ def _render_doc_page(doc: dict[str, str], *, back_href: str, back_label: str) ->
         "pages/markdown_page.html",
         title=doc["title"],
         description=description,
+        session=session,
         content=safe_html(content),
         active_nav="support",
     )
     return web.Response(text=page_html, content_type="text/html")
 
 
-async def commands_page(_request: web.Request) -> web.Response:
+async def commands_page(request: web.Request) -> web.Response:
     text = _repo_read_text("docs/public/commands.md")
     if text is None:
         raise web.HTTPNotFound(text="docs/public/commands.md not found.")
@@ -1766,13 +1783,14 @@ async def commands_page(_request: web.Request) -> web.Response:
             "Command reference for Offside, the EA Sports FC 26 Discord bot. "
             "Browse slash commands by category."
         ),
+        session=request.get("session"),
         categories=categories,
         active_nav="support",
     )
     return web.Response(text=page, content_type="text/html")
 
 
-async def help_index_page(_request: web.Request) -> web.Response:
+async def help_index_page(request: web.Request) -> web.Response:
     from offside_bot.web_templates import render
 
     docs = _build_docs_index_entries(base_path="/help")
@@ -1783,6 +1801,7 @@ async def help_index_page(_request: web.Request) -> web.Response:
             "Help center for Offside, the EA Sports FC 26 Discord bot. "
             "Setup guides, billing info, data lifecycle, FAQ, and commands."
         ),
+        session=request.get("session"),
         heading="Help center",
         subtitle="Setup guides, billing info, and answers for Offside.",
         docs=docs,
@@ -1799,10 +1818,15 @@ async def help_page(request: web.Request) -> web.Response:
     doc = DOCS_BY_SLUG.get(slug)
     if not doc:
         raise web.HTTPNotFound(text="Help doc not found.")
-    return _render_doc_page(doc, back_href="/help", back_label="Back to help")
+    return _render_doc_page(
+        doc,
+        back_href="/help",
+        back_label="Back to help",
+        session=request.get("session"),
+    )
 
 
-async def features_page(_request: web.Request) -> web.Response:
+async def features_page(request: web.Request) -> web.Response:
     from offside_bot.web_templates import render
 
     page = render(
@@ -1812,12 +1836,13 @@ async def features_page(_request: web.Request) -> web.Response:
             "Explore Offside features for EA Sports FC 26 Discord servers: setup wizard, rosters, "
             "recruiting, clubs, tournaments, and analytics."
         ),
+        session=request.get("session"),
         active_nav="features",
     )
     return web.Response(text=page, content_type="text/html")
 
 
-async def support_page(_request: web.Request) -> web.Response:
+async def support_page(request: web.Request) -> web.Response:
     support_discord = os.environ.get("SUPPORT_DISCORD_INVITE_URL", "").strip()
     support_email = os.environ.get("SUPPORT_EMAIL", "").strip()
     repo = _public_repo_url()
@@ -1895,6 +1920,7 @@ async def support_page(_request: web.Request) -> web.Response:
         "pages/markdown_page.html",
         title="Support",
         description="Support options for Offside: help center, Discord support, and GitHub issue reporting.",
+        session=request.get("session"),
         content=safe_html(content),
         active_nav="support",
     )
@@ -2107,7 +2133,7 @@ async def admin_stripe_resync(request: web.Request) -> web.Response:
     raise web.HTTPFound("/admin?status=resync_ok")
 
 
-async def enterprise_page(_request: web.Request) -> web.Response:
+async def enterprise_page(request: web.Request) -> web.Response:
     support_discord = os.environ.get("SUPPORT_DISCORD_INVITE_URL", "").strip()
     support_email = os.environ.get("SUPPORT_EMAIL", "").strip()
     sales_email = os.environ.get("SALES_EMAIL", "").strip()
@@ -2120,6 +2146,7 @@ async def enterprise_page(_request: web.Request) -> web.Response:
         "pages/enterprise.html",
         title="Enterprise",
         description="Enterprise onboarding and billing for large EA Sports FC 26 Discord communities.",
+        session=request.get("session"),
         contact_email=contact_email,
         mailto_href=mailto,
         support_discord=support_discord,
@@ -2207,6 +2234,7 @@ async def pricing_page(request: web.Request) -> web.Response:
             "Offside pricing for EA Sports FC 26 Discord servers. Start free, upgrade to Pro for "
             "premium coach tiers, stats, banlist checks, and tournaments."
         ),
+        session=session,
         billing=billing,
         toggle_monthly_href="/pricing?billing=monthly",
         toggle_yearly_href="/pricing?billing=yearly",

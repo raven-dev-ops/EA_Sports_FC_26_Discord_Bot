@@ -25,7 +25,11 @@
         {{ right_cta|safe }}
       {% else %}
         {{ button("Add to Discord", "/install", "blue") }}
-        {{ button("Open Dashboard", "/app", "secondary") }}
+        {% if session %}
+          {{ button("Open Dashboard", "/app", "secondary") }}
+        {% else %}
+          {{ button("Login", "/login", "secondary") }}
+        {% endif %}
       {% endif %}
     </div>
   </div>
