@@ -7,7 +7,7 @@ from zoneinfo import ZoneInfo
 import discord
 
 from utils.availability import Availability, format_days, next_availability_start
-from utils.embeds import DEFAULT_COLOR, make_embed
+from utils.embeds import DEFAULT_COLOR, apply_embed_footer, make_embed
 
 
 def build_recruit_profile_embed(
@@ -122,11 +122,12 @@ def build_recruit_profile_embed(
 
     updated_at = profile.get("updated_at") or profile.get("created_at")
     if isinstance(updated_at, datetime):
-        embed.set_footer(
-            text=(
+        apply_embed_footer(
+            embed,
+            (
                 f"Updated: {discord.utils.format_dt(updated_at, style='R')} | "
                 "Long text may be truncated"
-            )
+            ),
         )
 
     return embed

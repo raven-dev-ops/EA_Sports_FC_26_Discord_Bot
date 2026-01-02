@@ -5,7 +5,7 @@ import discord
 from interactions.roster_embeds import build_roster_listing_embed
 
 
-def test_roster_listing_embed_uses_relative_timestamp_footer() -> None:
+def test_roster_listing_embed_uses_relative_timestamp() -> None:
     roster = {
         "team_name": "A-Team",
         "coach_discord_id": 123,
@@ -14,4 +14,4 @@ def test_roster_listing_embed_uses_relative_timestamp_footer() -> None:
     }
     embed = build_roster_listing_embed(roster, [], approved=True)
     expected = f"Updated: {discord.utils.format_dt(roster['updated_at'], style='R')}"
-    assert embed.footer.text == expected
+    assert expected in (embed.description or "")

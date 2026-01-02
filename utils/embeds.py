@@ -9,6 +9,19 @@ WARNING_COLOR = 0xD69E2E  # amber for warnings
 ERROR_COLOR = 0xC53030    # red for errors
 
 
+def _apply_footer(embed: discord.Embed, footer: str | None) -> None:
+    if not footer:
+        return
+    if "<t:" in footer:
+        base = embed.description or ""
+        if base:
+            embed.description = f"{base}\n\n{footer}"
+        else:
+            embed.description = footer
+        return
+    embed.set_footer(text=footer)
+
+
 def make_embed(
     *,
     title: str,
@@ -17,6 +30,9 @@ def make_embed(
     footer: str | None = None,
 ) -> discord.Embed:
     embed = discord.Embed(title=title, description=description or "", color=color)
-    if footer:
-        embed.set_footer(text=footer)
+    _apply_footer(embed, footer)
     return embed
+
+
+def apply_embed_footer(embed: discord.Embed, footer: str | None) -> None:
+    _apply_footer(embed, footer)

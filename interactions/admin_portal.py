@@ -22,7 +22,7 @@ from services.roster_service import (
 from services.submission_service import delete_submission_by_roster
 from utils.channel_routing import resolve_channel_id
 from utils.discord_wrappers import fetch_channel, send_message
-from utils.embeds import DEFAULT_COLOR, make_embed
+from utils.embeds import DEFAULT_COLOR, apply_embed_footer, make_embed
 from utils.errors import send_interaction_error
 
 
@@ -507,7 +507,7 @@ class AdminPortalView(SafeView):
             value=("\n".join(f"- {a}" for a in actions) or "- No changes needed.")[:1024],
             inline=False,
         )
-        embed.set_footer(text=_portal_footer())
+        apply_embed_footer(embed, _portal_footer())
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
     async def on_repost_portal(self, interaction: discord.Interaction) -> None:

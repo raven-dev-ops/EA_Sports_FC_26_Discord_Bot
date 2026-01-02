@@ -6,7 +6,7 @@ from typing import Any
 import discord
 
 from repositories.tournament_repo import get_cycle_by_id
-from utils.embeds import DEFAULT_COLOR, SUCCESS_COLOR, make_embed
+from utils.embeds import DEFAULT_COLOR, SUCCESS_COLOR, apply_embed_footer, make_embed
 
 
 def build_roster_listing_embed(
@@ -80,7 +80,7 @@ def build_roster_listing_embed(
     if isinstance(updated_at, datetime):
         if updated_at.tzinfo is None:
             updated_at = updated_at.replace(tzinfo=timezone.utc)
-        embed.set_footer(text=f"Updated: {discord.utils.format_dt(updated_at, style='R')}")
+        apply_embed_footer(embed, f"Updated: {discord.utils.format_dt(updated_at, style='R')}")
 
     return embed
 

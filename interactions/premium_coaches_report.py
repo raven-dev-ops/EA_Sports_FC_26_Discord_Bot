@@ -14,6 +14,7 @@ from services import entitlements_service
 from services.guild_config_service import get_guild_config, set_guild_config
 from utils.channel_routing import resolve_channel_id
 from utils.discord_wrappers import edit_message, fetch_channel, send_message
+from utils.embeds import apply_embed_footer
 
 PREMIUM_CAPS = {22, 25}
 
@@ -47,7 +48,7 @@ def _build_embed(
             value="No pro rosters found yet.",
             inline=False,
         )
-        embed.set_footer(text=f"Last updated: {discord.utils.format_dt(updated_at, style='R')}")
+        apply_embed_footer(embed, f"Last updated: {discord.utils.format_dt(updated_at, style='R')}")
         return embed
 
     if premium_plus_listings:
@@ -56,7 +57,7 @@ def _build_embed(
     footer = f"Last updated: {discord.utils.format_dt(updated_at, style='R')} | Club Manager=22"
     if premium_plus_listings:
         footer = f"{footer} | Legacy Pro+=25"
-    embed.set_footer(text=footer)
+    apply_embed_footer(embed, footer)
     return embed
 
 

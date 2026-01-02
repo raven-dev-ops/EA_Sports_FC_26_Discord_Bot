@@ -5,7 +5,7 @@ from typing import Any
 
 import discord
 
-from utils.embeds import DEFAULT_COLOR, make_embed
+from utils.embeds import DEFAULT_COLOR, apply_embed_footer, make_embed
 
 
 def build_club_ad_embed(ad: dict[str, Any]) -> discord.Embed:
@@ -63,11 +63,12 @@ def build_club_ad_embed(ad: dict[str, Any]) -> discord.Embed:
 
     updated_at = ad.get("updated_at") or ad.get("created_at")
     if isinstance(updated_at, datetime):
-        embed.set_footer(
-            text=(
+        apply_embed_footer(
+            embed,
+            (
                 f"Updated: {discord.utils.format_dt(updated_at, style='R')} | "
                 "Long text may be truncated"
-            )
+            ),
         )
 
     return embed
