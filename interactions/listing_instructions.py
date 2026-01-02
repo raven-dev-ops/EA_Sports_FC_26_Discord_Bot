@@ -161,9 +161,9 @@ async def post_listing_channel_instructions(
             ),
             (
                 "channel_recruit_listing_id",
-                "recruit-listing",
+                "recruitment-boards",
                 _build_listing_about_embed(
-                    title="About: recruit-listing",
+                    title="About: recruitment-boards",
                     description="Recruit profiles are posted here automatically when a player registers/updates.",
                     portal_ref=_format_channel_ref(recruit_portal_id, fallback_name="recruit-portal"),
                 ),
@@ -205,7 +205,13 @@ async def post_listing_channel_instructions(
                     bot,
                     channel,
                     embed=embed,
-                    legacy_titles=["About: premium-coaches"] if fallback_name == "pro-coaches" else None,
+                    legacy_titles=(
+                        ["About: premium-coaches"]
+                        if fallback_name == "pro-coaches"
+                        else ["About: recruit-listing"]
+                        if fallback_name == "recruitment-boards"
+                        else None
+                    ),
                 )
             except Exception:
                 logging.exception("Failed to upsert listing instructions (guild=%s channel=%s).", guild.id, channel_id)

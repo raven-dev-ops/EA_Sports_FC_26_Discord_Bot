@@ -53,7 +53,7 @@ Dashboard channels:
 
 Report channels:
 - `roster-listing`
-- `recruit-listing`
+- `recruitment-boards`
 - `club-listing`
 - `pro-coaches`
 
@@ -70,7 +70,7 @@ This is the default intent for auto-created channels:
 - `club-managers-portal`: staff-only (staff can post)
 - `coach-portal`: coaches-only (read-only; use buttons)
 - `recruit-portal`, `club-portal`: public read-only (use buttons)
-- `roster-listing`, `recruit-listing`, `club-listing`, `pro-coaches`: public read-only (bot-managed listings)
+- `roster-listing`, `recruitment-boards`, `club-listing`, `pro-coaches`: public read-only (bot-managed listings)
 - `staff-monitor`: staff-only (test mode only)
 
 Notes:

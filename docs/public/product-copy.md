@@ -26,7 +26,7 @@ analytics with guided setup dashboards.
 | --- | --- | --- |
 | Dashboards + Setup Wizard | owners + staff | guided setup checks, portal dashboards, and idempotent reposting |
 | Rosters | coaches + staff | roster lifecycle: create, add/remove, caps, submit, review, approve/reject/unlock |
-| Recruiting | staff | recruit profiles + player pool search; recruit listings and availability workflows |
+| Recruiting | staff | recruit profiles + player pool search; recruitment boards and availability workflows |
 | Clubs | managers + staff | club ads, club listings, premium coach workflows and reporting |
 | Tournaments | staff | tournament creation, registration, brackets, fixtures, match/dispute flows |
 | Analytics | owners + staff | per-guild collection analytics + operational visibility |

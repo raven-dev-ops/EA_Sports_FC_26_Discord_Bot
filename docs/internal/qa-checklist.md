@@ -8,7 +8,7 @@ See also: `docs/public/server-setup-checklist.md`
 - Verify portals are posted:
   - `staff-portal`, `club-managers-portal`, `club-portal`, `coach-portal`, `recruit-portal`
 - Verify reports channels exist:
-  - `staff-monitor` (test mode only), `roster-listing`, `recruit-listing`, `club-listing`, `pro-coaches`
+  - `staff-monitor` (test mode only), `roster-listing`, `recruitment-boards`, `club-listing`, `pro-coaches`
 - With `TEST_MODE=false`, confirm `coach-portal` is only visible to coaches + staff
 - Confirm listing channels have a pinned "About" embed (instructions + no-chat policy)
 - In `staff-portal`, run **Verify Setup (staff)** and confirm the report is clean
@@ -28,7 +28,7 @@ See also: `docs/public/server-setup-checklist.md`
   - Submit the 2-step modal
   - If availability is not set, confirm the bot instructs you to set it before publishing
 - Set availability via `Availability`:
-  - Confirm listing is posted/updated in `recruit-listing`
+  - Confirm listing is posted/updated in `recruitment-boards`
   - Confirm staff copy is posted/updated (staff portal channel in production; staff-monitor in test mode)
 - Edit profile:
   - Confirm existing listing message is edited (not duplicated)
@@ -41,7 +41,7 @@ See also: `docs/public/server-setup-checklist.md`
 - Link:
   - Use `Link FC25 Stats` button in `recruit-portal`
   - Confirm verification checks member name and saves a snapshot
-  - Confirm recruit listing shows the verified stats section
+- Confirm recruitment boards show the verified stats section
   - Confirm staff log message includes user mention + platform + club ID + status
 - Unlink:
   - Use `Unlink FC25 Stats`

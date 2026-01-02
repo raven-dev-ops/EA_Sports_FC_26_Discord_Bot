@@ -48,7 +48,7 @@ Roster management and staff review bot for Discord tournaments.
 - **Recruit Portal** (`channel_recruit_portal_id`): recruit profile register/edit/preview/unregister (buttons; responses are ephemeral).
 - **Club Portal** (`channel_club_portal_id`): club ad register/edit/preview/unregister (buttons; responses are ephemeral).
 - **Roster Listing** (`channel_roster_listing_id`): approved roster embeds reposted here after staff approval.
-- **Recruit Listing** (`channel_recruit_listing_id`): recruit profile listing embeds.
+- **Recruitment Boards** (`channel_recruit_listing_id`): recruit profile listing embeds.
 - **Club Listing** (`channel_club_listing_id`): club ad listing embeds.
 - **Pro coaches** (`channel_premium_coaches_id`): pro coach roster listings (openings + practice times).
 

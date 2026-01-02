@@ -22,7 +22,7 @@ GUILD_CHANNEL_FIELDS: list[tuple[str, str]] = [
     ("channel_recruit_portal_id", "Recruit portal channel"),
     ("channel_staff_monitor_id", "Staff monitor channel"),
     ("channel_roster_listing_id", "Roster listing channel"),
-    ("channel_recruit_listing_id", "Recruit listing channel"),
+    ("channel_recruit_listing_id", "Recruitment boards channel"),
     ("channel_club_listing_id", "Club listing channel"),
     ("channel_premium_coaches_id", "Pro coaches channel"),
 ]
