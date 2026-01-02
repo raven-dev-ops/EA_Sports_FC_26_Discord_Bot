@@ -108,6 +108,12 @@ DOCS_PAGES: list[dict[str, str]] = [
         "summary": "Stripe setup, pricing, and subscription details.",
     },
     {
+        "slug": "faq",
+        "title": "FAQ",
+        "path": "docs/faq.md",
+        "summary": "Common questions about setup, pricing, and data.",
+    },
+    {
         "slug": "data-lifecycle",
         "title": "Data lifecycle",
         "path": "docs/data-lifecycle.md",
@@ -128,6 +134,11 @@ DOCS_EXTRAS = [
         "href": "/commands",
     }
 ]
+_HELP_ALIASES = {
+    "setup": "server-setup-checklist",
+    "billing": "billing",
+    "faq": "faq",
+}
 
 DASHBOARD_SESSIONS_COLLECTION = "dashboard_sessions"
 DASHBOARD_OAUTH_STATES_COLLECTION = "dashboard_oauth_states"
@@ -1520,12 +1531,13 @@ async def product_copy_page(_request: web.Request) -> web.Response:
 async def docs_index_page(_request: web.Request) -> web.Response:
     from offside_bot.web_templates import render
 
-    docs = [
-        {"title": page["title"], "summary": page["summary"], "href": f"/docs/{page['slug']}"}
-        for page in DOCS_PAGES
-    ]
-    docs.extend(DOCS_EXTRAS)
-    page_html = render("pages/docs_index.html", title="Docs", docs=docs, active_nav="support")
+    docs = _build_docs_index_entries(base_path="/docs")
+    page_html = render(
+        "pages/docs_index.html",
+        title="Docs",
+        docs=docs,
+        active_nav="support",
+    )
     return web.Response(text=page_html, content_type="text/html")
 
 
@@ -1534,26 +1546,7 @@ async def docs_page(request: web.Request) -> web.Response:
     doc = DOCS_BY_SLUG.get(slug)
     if not doc:
         raise web.HTTPNotFound(text="Doc not found.")
-    text = _repo_read_text(doc["path"])
-    if text is None:
-        raise web.HTTPNotFound(text=f"{doc['path']} not found.")
-    html = _markdown_to_html(text)
-    content = f"""
-      <div class="card hero-card">
-        <p class="mt-0"><a href="/docs">&larr; Back to docs</a></p>
-        <h1 class="mt-6 text-hero-sm">{_escape_html(doc["title"])}</h1>
-      </div>
-      <div class="card prose">{html}</div>
-    """
-    from offside_bot.web_templates import render, safe_html
-
-    page_html = render(
-        "pages/markdown_page.html",
-        title=doc["title"],
-        content=safe_html(content),
-        active_nav="support",
-    )
-    return web.Response(text=page_html, content_type="text/html")
+    return _render_doc_page(doc, back_href="/docs", back_label="Back to docs")
 
 
 def _commands_group_for_category(category: str) -> str:
@@ -1633,6 +1626,42 @@ def _parse_commands_markdown(text: str) -> list[dict[str, Any]]:
     return [c for c in categories if c.get("commands")]
 
 
+def _build_docs_index_entries(*, base_path: str) -> list[dict[str, str]]:
+    docs = [
+        {"title": page["title"], "summary": page["summary"], "href": f"{base_path}/{page['slug']}"}
+        for page in DOCS_PAGES
+    ]
+    for item in DOCS_EXTRAS:
+        entry = dict(item)
+        if base_path != "/docs" and entry["href"].startswith("/docs"):
+            entry["href"] = entry["href"].replace("/docs", base_path, 1)
+        docs.append(entry)
+    return docs
+
+
+def _render_doc_page(doc: dict[str, str], *, back_href: str, back_label: str) -> web.Response:
+    text = _repo_read_text(doc["path"])
+    if text is None:
+        raise web.HTTPNotFound(text=f"{doc['path']} not found.")
+    html = _markdown_to_html(text)
+    content = f"""
+      <div class="card hero-card">
+        <p class="mt-0"><a href="{_escape_html(back_href)}">&larr; {_escape_html(back_label)}</a></p>
+        <h1 class="mt-6 text-hero-sm">{_escape_html(doc["title"])}</h1>
+      </div>
+      <div class="card prose">{html}</div>
+    """
+    from offside_bot.web_templates import render, safe_html
+
+    page_html = render(
+        "pages/markdown_page.html",
+        title=doc["title"],
+        content=safe_html(content),
+        active_nav="support",
+    )
+    return web.Response(text=page_html, content_type="text/html")
+
+
 async def commands_page(_request: web.Request) -> web.Response:
     text = _repo_read_text("docs/commands.md")
     if text is None:
@@ -1643,6 +1672,32 @@ async def commands_page(_request: web.Request) -> web.Response:
 
     page = render("pages/commands.html", title="Commands", categories=categories, active_nav="support")
     return web.Response(text=page, content_type="text/html")
+
+
+async def help_index_page(_request: web.Request) -> web.Response:
+    from offside_bot.web_templates import render
+
+    docs = _build_docs_index_entries(base_path="/help")
+    page_html = render(
+        "pages/docs_index.html",
+        title="Help center",
+        heading="Help center",
+        subtitle="Guides, checklists, and answers for Offside.",
+        docs=docs,
+        active_nav="support",
+    )
+    return web.Response(text=page_html, content_type="text/html")
+
+
+async def help_page(request: web.Request) -> web.Response:
+    slug = str(request.match_info.get("slug") or "").strip()
+    if slug == "commands":
+        raise web.HTTPFound(location="/commands")
+    slug = _HELP_ALIASES.get(slug, slug)
+    doc = DOCS_BY_SLUG.get(slug)
+    if not doc:
+        raise web.HTTPNotFound(text="Help doc not found.")
+    return _render_doc_page(doc, back_href="/help", back_label="Back to help")
 
 
 async def features_page(_request: web.Request) -> web.Response:
@@ -1659,7 +1714,7 @@ async def support_page(_request: web.Request) -> web.Response:
     issues_href = f"{repo}/issues" if repo else ""
     bug_href = f"{repo}/issues/new?template=bug_report.yml" if repo else ""
     feature_href = f"{repo}/issues/new?template=feature_request.yml" if repo else ""
-    docs_href = "/docs"
+    docs_href = "/help"
     readme_href = f"{repo}#readme" if repo else ""
 
     support_items: list[str] = []
@@ -1679,9 +1734,11 @@ async def support_page(_request: web.Request) -> web.Response:
         support_items.append("<li><span class='muted'>Email support (set SUPPORT_EMAIL)</span></li>")
 
     docs_items = [
-        f'<li><a href="{docs_href}">Docs hub</a></li>',
-        '<li><a href="/docs/server-setup-checklist">Server setup checklist</a></li>',
-        '<li><a href="/docs/billing">How billing works</a></li>',
+        f'<li><a href="{docs_href}">Help center</a></li>',
+        '<li><a href="/help/setup">Server setup checklist</a></li>',
+        '<li><a href="/help/billing">How billing works</a></li>',
+        '<li><a href="/help/faq">FAQ</a></li>',
+        '<li><a href="/commands">Commands reference</a></li>',
     ]
     issue_items: list[str] = []
     if repo:
@@ -4927,6 +4984,8 @@ def create_app(*, settings: Settings | None = None) -> web.Application:
     app.router.add_post("/admin/stripe/resync", admin_stripe_resync)
     app.router.add_get("/docs", docs_index_page)
     app.router.add_get("/docs/{slug}", docs_page)
+    app.router.add_get("/help", help_index_page)
+    app.router.add_get("/help/{slug}", help_page)
     app.router.add_get("/commands", commands_page)
     app.router.add_get("/login", login)
     app.router.add_get("/install", install)
