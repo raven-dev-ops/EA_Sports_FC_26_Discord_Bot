@@ -8,6 +8,7 @@ import io
 import json
 import logging
 import os
+import re
 import secrets
 import time
 import urllib.parse
@@ -110,6 +111,22 @@ GUILD_METADATA_CACHE_KEY: Final = web.AppKey("guild_metadata_cache", dict[int, d
 STATS_CACHE_KEY: Final = web.AppKey("stats_cache", dict[str, Any])
 HTTP_SESSION_KEY: Final = web.AppKey("http", ClientSession)
 
+_ALLOWED_REDIRECT_PREFIXES: Final[tuple[str, ...]] = (
+    "/app",
+    "/guild",
+    "/admin",
+    "/docs",
+    "/help",
+    "/commands",
+    "/pricing",
+    "/features",
+    "/support",
+    "/terms",
+    "/privacy",
+    "/product",
+    "/enterprise",
+)
+_SESSION_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
 
 class GuildSelectorItem(TypedDict):
     href: str
@@ -170,11 +187,13 @@ def _decode_session_cookie(value: str | None) -> tuple[str | None, bool]:
         return None, False
     keys = _session_signing_keys()
     if not keys:
-        return value, False
+        return (value, False) if _SESSION_ID_RE.fullmatch(value) else (None, False)
     if "." not in value:
-        return value, True
+        return (value, True) if _SESSION_ID_RE.fullmatch(value) else (None, False)
     session_id, signature = value.rsplit(".", 1)
     if not session_id or not signature:
+        return None, False
+    if not _SESSION_ID_RE.fullmatch(session_id):
         return None, False
     for idx, key in enumerate(keys):
         expected = _sign_session_id(session_id, key)
@@ -1030,7 +1049,23 @@ async def session_middleware(request: web.Request, handler):
 def _require_session(request: web.Request) -> SessionData:
     session = request.get("session")
     if session is None:
-        next_path = _sanitize_next_path(request.path_qs)
+        raw_next = str(request.path_qs or "").strip()
+        parsed = urllib.parse.urlsplit(raw_next)
+        next_path = parsed.path or "/"
+        if parsed.scheme or parsed.netloc:
+            next_path = "/app"
+        elif not next_path.startswith("/") or next_path.startswith("//") or next_path.startswith("/\\") or "\\" in next_path:
+            next_path = "/app"
+        else:
+            allowed = False
+            for prefix in _ALLOWED_REDIRECT_PREFIXES:
+                if next_path == prefix or next_path.startswith(f"{prefix}/"):
+                    allowed = True
+                    break
+            if not allowed:
+                next_path = "/app"
+            elif parsed.query:
+                next_path = f"{next_path}?{parsed.query}"
         params = {"next": next_path}
         if request.get("session_expired"):
             params["reason"] = "expired"
@@ -2195,7 +2230,23 @@ async def login(request: web.Request) -> web.Response:
     settings: Settings = request.app[SETTINGS_KEY]
     config = _dashboard_config(request)
     session = request.get("session")
-    next_path = _sanitize_next_path(str(request.query.get("next") or "/app"))
+    raw_next = str(request.query.get("next") or "/app").strip()
+    parsed = urllib.parse.urlsplit(raw_next)
+    next_path = parsed.path or "/"
+    if parsed.scheme or parsed.netloc:
+        next_path = "/app"
+    elif not next_path.startswith("/") or next_path.startswith("//") or next_path.startswith("/\\") or "\\" in next_path:
+        next_path = "/app"
+    else:
+        allowed = False
+        for prefix in _ALLOWED_REDIRECT_PREFIXES:
+            if next_path == prefix or next_path.startswith(f"{prefix}/"):
+                allowed = True
+                break
+        if not allowed:
+            next_path = "/app"
+        elif parsed.query:
+            next_path = f"{next_path}?{parsed.query}"
     if session is not None:
         raise web.HTTPFound(next_path)
     reason = str(request.query.get("reason") or "").strip().lower()
@@ -2382,7 +2433,22 @@ def _create_session_from_discord(
         properties={"flow": "discord"},
     )
 
-    redirect_path = _sanitize_next_path(next_path)
+    parsed_next = urllib.parse.urlsplit(str(next_path or "").strip())
+    redirect_path = parsed_next.path or "/"
+    if parsed_next.scheme or parsed_next.netloc:
+        redirect_path = "/app"
+    elif not redirect_path.startswith("/") or redirect_path.startswith("//") or redirect_path.startswith("/\\") or "\\" in redirect_path:
+        redirect_path = "/app"
+    else:
+        allowed = False
+        for prefix in _ALLOWED_REDIRECT_PREFIXES:
+            if redirect_path == prefix or redirect_path.startswith(f"{prefix}/"):
+                allowed = True
+                break
+        if not allowed:
+            redirect_path = "/app"
+        elif parsed_next.query:
+            redirect_path = f"{redirect_path}?{parsed_next.query}"
     if redirect_path == "/":
         redirect_path = "/app"
     resp = web.HTTPFound(redirect_path)
@@ -4492,9 +4558,28 @@ async def _enqueue_ops_from_dashboard(request: web.Request, *, action: str) -> w
         redirect_path = parsed.path
         if parsed.query:
             redirect_path = f"{redirect_path}?{parsed.query}"
-        redirect_path = _sanitize_next_path(redirect_path)
-        if redirect_path != "/":
-            raise web.HTTPFound(redirect_path)
+        if redirect_path:
+            parsed_next = urllib.parse.urlsplit(redirect_path)
+            safe_path = parsed_next.path or "/"
+            if (
+                not parsed_next.scheme
+                and not parsed_next.netloc
+                and safe_path.startswith("/")
+                and not safe_path.startswith("//")
+                and not safe_path.startswith("/\\")
+                and "\\" not in safe_path
+            ):
+                allowed = False
+                for prefix in _ALLOWED_REDIRECT_PREFIXES:
+                    if safe_path == prefix or safe_path.startswith(f"{prefix}/"):
+                        allowed = True
+                        break
+                if allowed:
+                    redirect_path = safe_path
+                    if parsed_next.query:
+                        redirect_path = f"{redirect_path}?{parsed_next.query}"
+                    if redirect_path != "/":
+                        raise web.HTTPFound(redirect_path)
 
     raise web.HTTPFound(f"/guild/{guild_id}/overview")
 
