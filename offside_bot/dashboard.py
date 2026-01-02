@@ -62,6 +62,7 @@ from services.subscription_service import (
     get_subscription_collection,
     upsert_guild_subscription,
 )
+from utils.analytics import track_event
 from utils.environment import validate_stripe_environment
 from utils.i18n import t
 from utils.redaction import redact_ip, redact_text
@@ -129,6 +130,12 @@ DOCS_PAGES: list[dict[str, str]] = [
         "title": "Data lifecycle",
         "path": "docs/public/data-lifecycle.md",
         "summary": "Retention, deletion, and data export guidance.",
+    },
+    {
+        "slug": "analytics",
+        "title": "Analytics",
+        "path": "docs/public/analytics.md",
+        "summary": "Funnel event schema and configuration.",
     },
     {
         "slug": "fc25-stats-policy",
@@ -644,6 +651,11 @@ async def upgrade_redirect(request: web.Request) -> web.Response:
 
     from_value = str(request.query.get("from") or "").strip() or "unknown"
     section = str(request.query.get("section") or "").strip() or "unknown"
+    _track_event(
+        request,
+        event="upgrade_click",
+        properties={"guild_id": guild_id, "source": from_value, "section": section},
+    )
     try:
         actor_id = _parse_int(session.user.get("id"))
         actor_username = f"{session.user.get('username','')}#{session.user.get('discriminator','')}".strip("#")
@@ -1018,6 +1030,11 @@ async def session_middleware(request: web.Request, handler):
                 if requested_guild_id and requested_guild_id != session.last_guild_id:
                     sessions.update_one({"_id": session_id}, {"$set": {"last_guild_id": requested_guild_id}})
                     session.last_guild_id = requested_guild_id
+                    _track_event(
+                        request,
+                        event="guild_selected",
+                        properties={"guild_id": requested_guild_id},
+                    )
         except Exception:
             invalidate_cookie = True
             if raw_cookie:
@@ -1151,6 +1168,37 @@ def _client_ip(request: web.Request) -> str:
 
 def _request_id(request: web.Request) -> str:
     return str(request.get("request_id") or "")
+
+
+def _analytics_distinct_id(request: web.Request) -> str:
+    session = request.get("session")
+    if isinstance(session, SessionData):
+        user_id = str(session.user.get("id") or "").strip()
+        if user_id:
+            return f"discord:{user_id}"
+    session_id = request.get("session_id")
+    if isinstance(session_id, str) and session_id:
+        return f"session:{session_id}"
+    return _request_id(request)
+
+
+def _track_event(
+    request: web.Request,
+    *,
+    event: str,
+    properties: dict[str, Any] | None = None,
+    distinct_id: str | None = None,
+) -> None:
+    http = request.app.get(HTTP_SESSION_KEY)
+    if not isinstance(http, ClientSession):
+        return
+    distinct_id = distinct_id or _analytics_distinct_id(request)
+    if not distinct_id:
+        return
+    payload: dict[str, Any] = {"path": request.path}
+    if properties:
+        payload.update(properties)
+    track_event(http, distinct_id=distinct_id, event=event, properties=payload)
 
 
 def _request_guild_id(request: web.Request) -> int | None:
@@ -1429,6 +1477,8 @@ async def index(request: web.Request) -> web.Response:
 
 
 async def app_index(request: web.Request) -> web.Response:
+    if request.get("session") is None:
+        _track_event(request, event="cta_click", properties={"cta": "open_dashboard"})
     session = _require_session(request)
     settings: Settings = request.app[SETTINGS_KEY]
 
@@ -2429,6 +2479,10 @@ async def install(request: web.Request) -> web.Response:
     client_id, _client_secret, redirect_uri = _oauth_config(settings)
 
     requested_guild_id = request.query.get("guild_id", "").strip()
+    cta_props: dict[str, Any] = {"cta": "add_to_discord"}
+    if requested_guild_id.isdigit():
+        cta_props["guild_id"] = int(requested_guild_id)
+    _track_event(request, event="cta_click", properties=cta_props)
     next_path = "/"
     extra: dict[str, str] = {"permissions": str(DEFAULT_BOT_PERMISSIONS)}
     if requested_guild_id.isdigit():
@@ -2678,6 +2732,21 @@ async def oauth_callback(request: web.Request) -> web.Response:
             "csrf_token": csrf_token,
             "last_guild_id": last_guild_id,
         },
+    )
+    user_id = str(user.get("id") or "").strip()
+    distinct_id = f"discord:{user_id}" if user_id else None
+    login_props = {
+        "guild_count": len(all_guilds),
+        "owner_guild_count": len(owner_guilds),
+    }
+    if installed_guild_id.isdigit():
+        login_props["installed_guild_id"] = int(installed_guild_id)
+    _track_event(request, event="login_success", distinct_id=distinct_id, properties=login_props)
+    _track_event(
+        request,
+        event="connect_discord_success",
+        distinct_id=distinct_id,
+        properties={"flow": "discord"},
     )
 
     redirect_path = _sanitize_next_path(next_path)
@@ -3878,6 +3947,12 @@ async def guild_setup_wizard_page(request: web.Request) -> web.Response:
                 portals_details = "Portals/instructions detected."
 
     ready = bool(installed is True and perms_ok and channels_ok and roles_ok and portals_ok)
+    if ready:
+        _track_event(
+            request,
+            event="setup_completed",
+            properties={"guild_id": guild_id, "plan": str(plan)},
+        )
     ready_status = _status("READY", "ok") if ready else _status("NOT READY", "warn")
     ready_details = "This server looks ready to use." if ready else "Complete the steps below to finish setup."
 
@@ -4995,6 +5070,11 @@ async def billing_checkout(request: web.Request) -> web.Response:
     plan = str(data.get("plan") or "pro").strip().lower()
     if plan != entitlements_service.PLAN_PRO:
         raise web.HTTPBadRequest(text="Unsupported plan.")
+    _track_event(
+        request,
+        event="upgrade_click",
+        properties={"guild_id": guild_id, "source": "billing_form"},
+    )
 
     existing = get_guild_subscription(settings, guild_id=guild_id)
     existing_status = str(existing.get("status") or "").strip().lower() if isinstance(existing, dict) else ""
@@ -5136,6 +5216,8 @@ async def billing_success(request: web.Request) -> web.Response:
             extra=_log_extra(request, guild_id=guild_id),
         )
     status = "success" if plan == entitlements_service.PLAN_PRO else "pending"
+    if plan == entitlements_service.PLAN_PRO:
+        _track_event(request, event="upgrade_success", properties={"guild_id": guild_id})
     raise web.HTTPFound(f"/app/billing?guild_id={guild_id}&status={status}")
 
 
