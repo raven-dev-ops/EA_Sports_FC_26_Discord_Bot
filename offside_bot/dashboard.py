@@ -13,7 +13,6 @@ import time
 import urllib.parse
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
 from typing import Any, Final, TypedDict
 
 from aiohttp import ClientSession, web
@@ -22,6 +21,25 @@ from pymongo.errors import DuplicateKeyError
 
 from config import Settings, load_settings
 from database import get_client, get_collection, get_global_collection
+from offside_bot.api.errors import api_error, api_forbidden, api_unauthorized
+from offside_bot.api.routes import api_guilds, api_me
+from offside_bot.web.config import DashboardConfig, load_dashboard_config
+from offside_bot.web.content import (
+    escape_html as _escape_html,
+)
+from offside_bot.web.content import (
+    markdown_to_html as _markdown_to_html,
+)
+from offside_bot.web.content import (
+    repo_read_text as _repo_read_text,
+)
+from offside_bot.web.docs_routes import (
+    commands_page,
+    docs_index_page,
+    docs_page,
+    help_index_page,
+    help_page,
+)
 from services import entitlements_service
 from services.analytics_service import get_guild_analytics
 from services.audit_log_service import list_audit_events, record_audit_event
@@ -75,93 +93,16 @@ MY_GUILDS_URL = f"{DISCORD_API_BASE}/users/@me/guilds"
 
 COOKIE_NAME = "offside_dashboard_session"
 REQUEST_ID_HEADER = "X-Request-Id"
-DEFAULT_SESSION_TTL_SECONDS = 60 * 60 * 24 * 30
-SESSION_TTL_SECONDS = int(
-    os.environ.get("DASHBOARD_SESSION_TTL_SECONDS", str(DEFAULT_SESSION_TTL_SECONDS)).strip()
-    or str(DEFAULT_SESSION_TTL_SECONDS)
-)
-SESSION_IDLE_TIMEOUT_SECONDS = int(
-    os.environ.get("DASHBOARD_SESSION_IDLE_TIMEOUT_SECONDS", "0").strip() or "0"
-)
-SESSION_TOUCH_INTERVAL_SECONDS = int(
-    os.environ.get("DASHBOARD_SESSION_TOUCH_INTERVAL_SECONDS", "300").strip() or "300"
-)
-STATE_TTL_SECONDS = 600
-GUILD_METADATA_TTL_SECONDS = int(os.environ.get("DASHBOARD_GUILD_METADATA_TTL_SECONDS", "60").strip() or "60")
-STATS_CACHE_TTL_SECONDS = int(os.environ.get("DASHBOARD_STATS_CACHE_TTL_SECONDS", "1800").strip() or "1800")
-
-REQUEST_TIMEOUT_SECONDS = float(os.environ.get("DASHBOARD_REQUEST_TIMEOUT_SECONDS", "15").strip() or "15")
-MAX_REQUEST_BYTES = int(os.environ.get("DASHBOARD_MAX_REQUEST_BYTES", "1048576").strip() or "1048576")
-RATE_LIMIT_WINDOW_SECONDS = int(os.environ.get("DASHBOARD_RATE_LIMIT_WINDOW_SECONDS", "60").strip() or "60")
-RATE_LIMIT_PUBLIC_MAX = int(os.environ.get("DASHBOARD_RATE_LIMIT_PUBLIC_MAX", "20").strip() or "20")
-RATE_LIMIT_WEBHOOK_MAX = int(os.environ.get("DASHBOARD_RATE_LIMIT_WEBHOOK_MAX", "120").strip() or "120")
-RATE_LIMIT_DEFAULT_MAX = int(os.environ.get("DASHBOARD_RATE_LIMIT_DEFAULT_MAX", "300").strip() or "300")
-GUILD_DATA_DELETE_GRACE_HOURS = int(
-    os.environ.get("GUILD_DATA_DELETE_GRACE_HOURS", "24").strip() or "24"
-)
 
 # Minimal permissions needed for auto-setup and dashboard posting:
 # - Manage Channels, Manage Roles, View Channel, Send Messages, Embed Links, Read Message History
 DEFAULT_BOT_PERMISSIONS = 268520464
 
-DEFAULT_PUBLIC_REPO_URL = "https://github.com/raven-dev-ops/EA_Sports_FC_26_Discord_Bot"
-
-DOCS_PAGES: list[dict[str, str]] = [
-    {
-        "slug": "server-setup-checklist",
-        "title": "Server setup checklist",
-        "path": "docs/public/server-setup-checklist.md",
-        "summary": "Step-by-step setup for new servers.",
-    },
-    {
-        "slug": "billing",
-        "title": "Billing",
-        "path": "docs/public/billing.md",
-        "summary": "Stripe setup, pricing, and subscription details.",
-    },
-    {
-        "slug": "faq",
-        "title": "FAQ",
-        "path": "docs/public/faq.md",
-        "summary": "Common questions about setup, pricing, and data.",
-    },
-    {
-        "slug": "data-lifecycle",
-        "title": "Data lifecycle",
-        "path": "docs/public/data-lifecycle.md",
-        "summary": "Retention, deletion, and data export guidance.",
-    },
-    {
-        "slug": "analytics",
-        "title": "Analytics",
-        "path": "docs/public/analytics.md",
-        "summary": "Funnel event schema and configuration.",
-    },
-    {
-        "slug": "fc25-stats-policy",
-        "title": "FC stats policy",
-        "path": "docs/public/fc25-stats-policy.md",
-        "summary": "Stats data handling policy and expectations.",
-    },
-]
-DOCS_BY_SLUG = {page["slug"]: page for page in DOCS_PAGES}
-DOCS_EXTRAS = [
-    {
-        "title": "Commands reference",
-        "summary": "Slash command list grouped by category.",
-        "href": "/commands",
-    }
-]
-_HELP_ALIASES = {
-    "setup": "server-setup-checklist",
-    "billing": "billing",
-    "faq": "faq",
-}
-
 DASHBOARD_SESSIONS_COLLECTION = "dashboard_sessions"
 DASHBOARD_OAUTH_STATES_COLLECTION = "dashboard_oauth_states"
 DASHBOARD_USERS_COLLECTION = "dashboard_users"
 SETTINGS_KEY: Final = web.AppKey("settings", Settings)
+DASHBOARD_CONFIG_KEY: Final = web.AppKey("dashboard_config", DashboardConfig)
 SESSION_COLLECTION_KEY: Final = web.AppKey("session_collection", Collection)
 STATE_COLLECTION_KEY: Final = web.AppKey("state_collection", Collection)
 USER_COLLECTION_KEY: Final = web.AppKey("user_collection", Collection)
@@ -194,6 +135,10 @@ _RATE_LIMIT_LAST_SWEEP: float = 0.0
 
 def _utc_now() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def _dashboard_config(request: web.Request) -> DashboardConfig:
+    return request.app[DASHBOARD_CONFIG_KEY]
 
 
 def _session_signing_keys() -> list[bytes]:
@@ -239,13 +184,14 @@ def _decode_session_cookie(value: str | None) -> tuple[str | None, bool]:
 
 
 def _set_session_cookie(response: web.StreamResponse, *, request: web.Request, session_id: str) -> None:
+    config = _dashboard_config(request)
     response.set_cookie(
         COOKIE_NAME,
         _encode_session_cookie(session_id),
         httponly=True,
         samesite="Lax",
         secure=_is_https(request),
-        max_age=SESSION_TTL_SECONDS,
+        max_age=max(0, int(config.session_ttl_seconds)),
     )
 
 
@@ -902,11 +848,15 @@ async def _get_guild_discord_metadata(
     guild_id: int,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     cache: dict[int, dict[str, Any]] = request.app[GUILD_METADATA_CACHE_KEY]
+    config = _dashboard_config(request)
     now = time.time()
     cached = cache.get(guild_id)
     if isinstance(cached, dict):
         fetched_at = cached.get("fetched_at")
-        if isinstance(fetched_at, (int, float)) and now - float(fetched_at) <= GUILD_METADATA_TTL_SECONDS:
+        if (
+            isinstance(fetched_at, (int, float))
+            and now - float(fetched_at) <= config.guild_metadata_ttl_seconds
+        ):
             roles = cached.get("roles")
             channels = cached.get("channels")
             if isinstance(roles, list) and isinstance(channels, list):
@@ -950,6 +900,7 @@ async def session_middleware(request: web.Request, handler):
     session: SessionData | None = None
     invalidate_cookie = False
     refresh_cookie = False
+    config = _dashboard_config(request)
     now = time.time()
     if raw_cookie and session_id is None:
         invalidate_cookie = True
@@ -972,7 +923,11 @@ async def session_middleware(request: web.Request, handler):
                 last_guild_id_value = int(last_guild_id)
 
             within_expires_at = expires_at_ts is None or now <= expires_at_ts
-            idle_timeout = max(1, int(SESSION_IDLE_TIMEOUT_SECONDS)) if SESSION_IDLE_TIMEOUT_SECONDS > 0 else None
+            idle_timeout = (
+                max(1, int(config.session_idle_timeout_seconds))
+                if config.session_idle_timeout_seconds > 0
+                else None
+            )
             last_seen_at_ts = float(last_seen_at) if isinstance(last_seen_at, (int, float)) else None
             within_idle = idle_timeout is None or (
                 last_seen_at_ts is not None and now - last_seen_at_ts <= idle_timeout
@@ -1012,10 +967,10 @@ async def session_middleware(request: web.Request, handler):
             else:
                 if cookie_needs_refresh:
                     refresh_cookie = True
-                touch_interval = max(1, int(SESSION_TOUCH_INTERVAL_SECONDS))
+                touch_interval = max(1, int(config.session_touch_interval_seconds))
                 should_touch = now - session.last_seen_at >= touch_interval
                 if should_touch:
-                    expires_at = _utc_now() + timedelta(seconds=SESSION_TTL_SECONDS)
+                    expires_at = _utc_now() + timedelta(seconds=config.session_ttl_seconds)
                     sessions.update_one(
                         {"_id": session_id},
                         {"$set": {"last_seen_at": now, "expires_at": expires_at}},
@@ -1023,7 +978,7 @@ async def session_middleware(request: web.Request, handler):
                     session.last_seen_at = now
                     refresh_cookie = True
                 elif expires_at_ts is None:
-                    expires_at = _utc_now() + timedelta(seconds=SESSION_TTL_SECONDS)
+                    expires_at = _utc_now() + timedelta(seconds=config.session_ttl_seconds)
                     sessions.update_one({"_id": session_id}, {"$set": {"expires_at": expires_at}})
                     refresh_cookie = True
                 requested_guild_id = _extract_guild_id_from_request(request)
@@ -1067,6 +1022,28 @@ def _require_session(request: web.Request) -> SessionData:
         login_href = f"/login?{urllib.parse.urlencode(params)}"
         raise web.HTTPFound(login_href)
     return session
+
+
+def _require_api_session(request: web.Request) -> SessionData:
+    session = request.get("session")
+    if session is None:
+        raise api_unauthorized()
+    return session
+
+
+def _require_owned_guild_api(
+    session: SessionData,
+    *,
+    settings: Settings,
+    path: str | None,
+    guild_id: str,
+) -> int:
+    try:
+        return _require_owned_guild(session, settings=settings, path=path, guild_id=guild_id)
+    except web.HTTPBadRequest as exc:
+        raise api_error(status=400, code="invalid_guild_id", message=exc.text or "Invalid guild id.") from exc
+    except web.HTTPForbidden as exc:
+        raise api_forbidden(exc.text or "Forbidden.") from exc
 
 
 def _admin_ids() -> set[int]:
@@ -1217,14 +1194,14 @@ def _log_extra(request: web.Request, **extra: object) -> dict[str, object]:
     return data
 
 
-def _rate_limit_bucket_and_max(path: str) -> tuple[str, int]:
+def _rate_limit_bucket_and_max(path: str, config: DashboardConfig) -> tuple[str, int]:
     if path in {"/health", "/ready"}:
         return "health", 10_000
     if path in {"/login", "/install", "/oauth/callback"}:
-        return "public", RATE_LIMIT_PUBLIC_MAX
+        return "public", config.rate_limit_public_max
     if path == "/api/billing/webhook":
-        return "webhook", RATE_LIMIT_WEBHOOK_MAX
-    return "default", RATE_LIMIT_DEFAULT_MAX
+        return "webhook", config.rate_limit_webhook_max
+    return "default", config.rate_limit_default_max
 
 
 def _rate_limit_allowed(*, key: tuple[str, str], limit: int, window_seconds: int) -> tuple[bool, int]:
@@ -1315,8 +1292,9 @@ async def request_metrics_middleware(request: web.Request, handler):
 
 @web.middleware
 async def rate_limit_middleware(request: web.Request, handler):
-    bucket, max_requests = _rate_limit_bucket_and_max(request.path)
-    window_seconds = max(1, int(RATE_LIMIT_WINDOW_SECONDS))
+    config = _dashboard_config(request)
+    bucket, max_requests = _rate_limit_bucket_and_max(request.path, config)
+    window_seconds = max(1, int(config.rate_limit_window_seconds))
     _sweep_rate_limit_state(window_seconds=window_seconds)
 
     ip = redact_ip(_client_ip(request))
@@ -1354,8 +1332,9 @@ async def rate_limit_middleware(request: web.Request, handler):
 
 @web.middleware
 async def timeout_middleware(request: web.Request, handler):
+    config = _dashboard_config(request)
     try:
-        return await asyncio.wait_for(handler(request), timeout=float(REQUEST_TIMEOUT_SECONDS))
+        return await asyncio.wait_for(handler(request), timeout=float(config.request_timeout_seconds))
     except asyncio.TimeoutError:
         ip = redact_ip(_client_ip(request))
         request_id = _request_id(request)
@@ -1397,17 +1376,6 @@ def _next_redirect_destination(raw: str) -> str:
     if path.startswith("/app"):
         return "/app"
     return "/app"
-
-
-def _escape_html(value: object) -> str:
-    text = str(value) if value is not None else ""
-    return (
-        text.replace("&", "&amp;")
-        .replace("<", "&lt;")
-        .replace(">", "&gt;")
-        .replace('"', "&quot;")
-        .replace("'", "&#x27;")
-    )
 
 
 def _invite_url(
@@ -1585,36 +1553,13 @@ async def app_index(request: web.Request) -> web.Response:
     return web.Response(text=_html_page(title="Offside Dashboard", body=body), content_type="text/html")
 
 
-def _repo_read_text(filename: str) -> str | None:
-    path = Path(__file__).resolve().parents[1] / filename
-    try:
-        return path.read_text(encoding="utf-8")
-    except FileNotFoundError:
-        return None
-    except Exception:
-        return None
-
-
-def _markdown_to_html(text: str) -> str:
-    try:
-        import markdown  # type: ignore[import-not-found]
-    except Exception:
-        return f"<pre>{_escape_html(text)}</pre>"
-    return markdown.markdown(text, extensions=["extra"], output_format="html")
-
-
 def _read_version_text() -> str:
     text = _repo_read_text("VERSION")
     return text.strip() if text else ""
 
 
-def _public_repo_url() -> str:
-    repo = (os.environ.get("PUBLIC_REPO_URL") or "").strip()
-    if not repo:
-        repo = (os.environ.get("GITHUB_REPO_URL") or "").strip()
-    if not repo:
-        repo = DEFAULT_PUBLIC_REPO_URL
-    return repo.rstrip("/")
+def _public_repo_url(config: DashboardConfig) -> str:
+    return config.public_repo_url
 
 
 def _mailto_link(address: str) -> str:
@@ -1648,7 +1593,8 @@ def _build_stats_payload(settings: Settings) -> dict[str, Any]:
 
 def _get_cached_stats(app: web.Application, settings: Settings) -> dict[str, Any]:
     cache: dict[str, Any] = app[STATS_CACHE_KEY]
-    ttl_seconds = max(0, int(STATS_CACHE_TTL_SECONDS))
+    config: DashboardConfig = app[DASHBOARD_CONFIG_KEY]
+    ttl_seconds = max(0, int(config.stats_cache_ttl_seconds))
     now = time.time()
     cached_payload = cache.get("payload")
     fetched_at = cache.get("fetched_at")
@@ -1750,225 +1696,6 @@ async def product_copy_page(request: web.Request) -> web.Response:
     return web.Response(text=page, content_type="text/html")
 
 
-async def docs_index_page(request: web.Request) -> web.Response:
-    from offside_bot.web_templates import render
-
-    docs = _build_docs_index_entries(base_path="/docs")
-    page_html = render(
-        "pages/docs_index.html",
-        title="Docs for FC 26 Discord bot",
-        description=(
-            "Documentation for Offside, the EA Sports FC 26 Discord bot: server setup, billing, "
-            "data lifecycle, FAQ, and commands."
-        ),
-        session=request.get("session"),
-        docs=docs,
-        active_nav="support",
-    )
-    return web.Response(text=page_html, content_type="text/html")
-
-
-async def docs_page(request: web.Request) -> web.Response:
-    slug = str(request.match_info.get("slug") or "").strip()
-    doc = DOCS_BY_SLUG.get(slug)
-    if not doc:
-        raise web.HTTPNotFound(text="Doc not found.")
-    return _render_doc_page(
-        doc,
-        back_href="/docs",
-        back_label="Back to docs",
-        session=request.get("session"),
-    )
-
-
-def _commands_group_for_category(category: str) -> str:
-    key = (category or "").strip().lower()
-    if key in {"roster", "recruitment"}:
-        return "coach"
-    if key == "staff":
-        return "staff"
-    if key == "operations":
-        return "ops"
-    if key == "tournament":
-        return "tournament"
-    return "other"
-
-
-def _strip_inline_code(value: str) -> str:
-    text = (value or "").strip()
-    if len(text) >= 2 and text.startswith("`") and text.endswith("`"):
-        return text[1:-1].strip()
-    return text
-
-
-def _parse_commands_markdown(text: str) -> list[dict[str, Any]]:
-    categories: list[dict[str, Any]] = []
-    current_category: dict[str, Any] | None = None
-    current_command: dict[str, Any] | None = None
-
-    for raw_line in text.splitlines():
-        line = raw_line.strip()
-        if not line:
-            continue
-
-        if line.startswith("## "):
-            name = line[3:].strip()
-            current_category = {"name": name, "group": _commands_group_for_category(name), "commands": []}
-            categories.append(current_category)
-            current_command = None
-            continue
-
-        if line.startswith("### "):
-            if current_category is None:
-                continue
-            signature = line[4:].strip()
-            current_command = {"signature": signature, "description": "", "permissions": "", "example": ""}
-            current_category["commands"].append(current_command)
-            continue
-
-        if line.startswith("- ") and current_command is not None:
-            item = line[2:].strip()
-            if ":" not in item:
-                continue
-            key, value = item.split(":", 1)
-            normalized_key = key.strip().lower()
-            normalized_value = value.strip()
-            if normalized_key == "description":
-                current_command["description"] = normalized_value
-            elif normalized_key == "permissions":
-                current_command["permissions"] = normalized_value
-            elif normalized_key == "example":
-                current_command["example"] = _strip_inline_code(normalized_value)
-            continue
-
-    for category in categories:
-        for command in category.get("commands", []):
-            blob = " ".join(
-                part
-                for part in [
-                    str(command.get("signature") or ""),
-                    str(command.get("description") or ""),
-                    str(command.get("permissions") or ""),
-                    str(command.get("example") or ""),
-                ]
-                if part
-            )
-            command["search_text"] = blob.lower()
-
-    return [c for c in categories if c.get("commands")]
-
-
-def _build_docs_index_entries(*, base_path: str) -> list[dict[str, str]]:
-    docs = [
-        {"title": page["title"], "summary": page["summary"], "href": f"{base_path}/{page['slug']}"}
-        for page in DOCS_PAGES
-    ]
-    for item in DOCS_EXTRAS:
-        entry = dict(item)
-        if base_path != "/docs" and entry["href"].startswith("/docs"):
-            entry["href"] = entry["href"].replace("/docs", base_path, 1)
-        docs.append(entry)
-    return docs
-
-
-def _render_doc_page(
-    doc: dict[str, str],
-    *,
-    back_href: str,
-    back_label: str,
-    session: SessionData | None,
-) -> web.Response:
-    text = _repo_read_text(doc["path"])
-    if text is None:
-        raise web.HTTPNotFound(text=f"{doc['path']} not found.")
-    html = _markdown_to_html(text)
-    summary = str(doc.get("summary") or "").strip()
-    if summary:
-        description = f"{summary} Offside help for EA Sports FC 26 Discord servers."
-    else:
-        description = "Offside help for EA Sports FC 26 Discord servers."
-    content = f"""
-      <section class="section">
-        <div class="card hero-card">
-          <a class="back-link" href="{_escape_html(back_href)}">&larr; {_escape_html(back_label)}</a>
-          <h1 class="mt-6 text-hero-sm">{_escape_html(doc["title"])}</h1>
-        </div>
-      </section>
-      <section class="section">
-        <div class="card prose">{html}</div>
-      </section>
-    """
-    from offside_bot.web_templates import render, safe_html
-
-    page_html = render(
-        "pages/markdown_page.html",
-        title=doc["title"],
-        description=description,
-        session=session,
-        content=safe_html(content),
-        active_nav="support",
-    )
-    return web.Response(text=page_html, content_type="text/html")
-
-
-async def commands_page(request: web.Request) -> web.Response:
-    text = _repo_read_text("docs/public/commands.md")
-    if text is None:
-        raise web.HTTPNotFound(text="docs/public/commands.md not found.")
-
-    categories = _parse_commands_markdown(text)
-    from offside_bot.web_templates import render
-
-    page = render(
-        "pages/commands.html",
-        title="FC 26 Discord bot commands",
-        description=(
-            "Command reference for Offside, the EA Sports FC 26 Discord bot. "
-            "Browse slash commands by category."
-        ),
-        session=request.get("session"),
-        categories=categories,
-        active_nav="support",
-    )
-    return web.Response(text=page, content_type="text/html")
-
-
-async def help_index_page(request: web.Request) -> web.Response:
-    from offside_bot.web_templates import render
-
-    docs = _build_docs_index_entries(base_path="/help")
-    page_html = render(
-        "pages/docs_index.html",
-        title="Help center for FC 26 Discord bot",
-        description=(
-            "Help center for Offside, the EA Sports FC 26 Discord bot. "
-            "Setup guides, billing info, data lifecycle, FAQ, and commands."
-        ),
-        session=request.get("session"),
-        heading="Help center",
-        subtitle="Setup guides, billing info, and answers for Offside.",
-        docs=docs,
-        active_nav="support",
-    )
-    return web.Response(text=page_html, content_type="text/html")
-
-
-async def help_page(request: web.Request) -> web.Response:
-    slug = str(request.match_info.get("slug") or "").strip()
-    if slug == "commands":
-        raise web.HTTPFound(location="/commands")
-    slug = _HELP_ALIASES.get(slug, slug)
-    doc = DOCS_BY_SLUG.get(slug)
-    if not doc:
-        raise web.HTTPNotFound(text="Help doc not found.")
-    return _render_doc_page(
-        doc,
-        back_href="/help",
-        back_label="Back to help",
-        session=request.get("session"),
-    )
-
-
 async def features_page(request: web.Request) -> web.Response:
     from offside_bot.web_templates import render
 
@@ -1988,7 +1715,8 @@ async def features_page(request: web.Request) -> web.Response:
 async def support_page(request: web.Request) -> web.Response:
     support_discord = os.environ.get("SUPPORT_DISCORD_INVITE_URL", "").strip()
     support_email = os.environ.get("SUPPORT_EMAIL", "").strip()
-    repo = _public_repo_url()
+    config = _dashboard_config(request)
+    repo = _public_repo_url(config)
     issues_href = f"{repo}/issues" if repo else ""
     bug_href = f"{repo}/issues/new?template=bug_report.yml" if repo else ""
     feature_href = f"{repo}/issues/new?template=feature_request.yml" if repo else ""
@@ -2433,9 +2161,10 @@ async def ready(request: web.Request) -> web.Response:
 
 async def stats_api(request: web.Request) -> web.Response:
     settings: Settings = request.app[SETTINGS_KEY]
+    config = _dashboard_config(request)
     payload = _get_cached_stats(request.app, settings)
     response = web.json_response(payload)
-    ttl_seconds = max(0, int(STATS_CACHE_TTL_SECONDS))
+    ttl_seconds = max(0, int(config.stats_cache_ttl_seconds))
     if ttl_seconds > 0:
         response.headers["Cache-Control"] = f"public, max-age={ttl_seconds}"
     else:
@@ -2445,6 +2174,7 @@ async def stats_api(request: web.Request) -> web.Response:
 
 async def login(request: web.Request) -> web.Response:
     settings: Settings = request.app[SETTINGS_KEY]
+    config = _dashboard_config(request)
     session = request.get("session")
     next_path = _sanitize_next_path(str(request.query.get("next") or "/app"))
     if session is not None:
@@ -2455,7 +2185,7 @@ async def login(request: web.Request) -> web.Response:
 
     client_id, _client_secret, redirect_uri = _oauth_config(settings)
     states: Collection = request.app[STATE_COLLECTION_KEY]
-    expires_at = _utc_now() + timedelta(seconds=STATE_TTL_SECONDS)
+    expires_at = _utc_now() + timedelta(seconds=config.state_ttl_seconds)
     state = _insert_oauth_state(states=states, next_path=next_path, expires_at=expires_at)
     authorize_url = _build_authorize_url(
         client_id=client_id,
@@ -2476,6 +2206,7 @@ async def login(request: web.Request) -> web.Response:
 
 async def install(request: web.Request) -> web.Response:
     settings: Settings = request.app[SETTINGS_KEY]
+    config = _dashboard_config(request)
     client_id, _client_secret, redirect_uri = _oauth_config(settings)
 
     requested_guild_id = request.query.get("guild_id", "").strip()
@@ -2491,7 +2222,7 @@ async def install(request: web.Request) -> web.Response:
         next_path = f"/guild/{requested_guild_id}/permissions"
 
     states: Collection = request.app[STATE_COLLECTION_KEY]
-    expires_at = _utc_now() + timedelta(seconds=STATE_TTL_SECONDS)
+    expires_at = _utc_now() + timedelta(seconds=config.state_ttl_seconds)
     state = _insert_oauth_state(states=states, next_path=next_path, expires_at=expires_at)
     authorize_url = _build_authorize_url(
         client_id=client_id,
@@ -2561,6 +2292,7 @@ def _oauth_error_response(
 
 async def oauth_callback(request: web.Request) -> web.Response:
     settings: Settings = request.app[SETTINGS_KEY]
+    config = _dashboard_config(request)
     client_id, client_secret, redirect_uri = _oauth_config(settings)
     http: ClientSession = request.app[HTTP_SESSION_KEY]
     request_id = _request_id(request)
@@ -2612,7 +2344,7 @@ async def oauth_callback(request: web.Request) -> web.Response:
             status=400,
         )
 
-    if issued_at is None or time.time() - issued_at > STATE_TTL_SECONDS:
+    if issued_at is None or time.time() - issued_at > config.state_ttl_seconds:
         return _oauth_error_response(
             title=t("oauth.expired.title", "Login expired"),
             message=t("oauth.expired.message", "Your login attempt expired. Please try logging in again."),
@@ -2715,7 +2447,7 @@ async def oauth_callback(request: web.Request) -> web.Response:
                 break
 
     sessions: Collection = request.app[SESSION_COLLECTION_KEY]
-    expires_at = _utc_now() + timedelta(seconds=SESSION_TTL_SECONDS)
+    expires_at = _utc_now() + timedelta(seconds=config.session_ttl_seconds)
     csrf_token = secrets.token_urlsafe(24)
     now_ts = time.time()
     session_id = _insert_unique(
@@ -4494,6 +4226,7 @@ async def guild_audit_csv(request: web.Request) -> web.Response:
 async def guild_ops_page(request: web.Request) -> web.Response:
     session = _require_session(request)
     settings: Settings = request.app[SETTINGS_KEY]
+    config = _dashboard_config(request)
     from offside_bot.web_templates import render
 
     guild_id_str = request.match_info["guild_id"]
@@ -4561,7 +4294,7 @@ async def guild_ops_page(request: web.Request) -> web.Response:
     if tasks_error:
         notices.append({"title": "Tasks unavailable", "text": tasks_error, "kind": "warn"})
 
-    grace_hours = max(0, int(GUILD_DATA_DELETE_GRACE_HOURS))
+    grace_hours = max(0, int(config.guild_data_delete_grace_hours))
     deletion_state: dict[str, str] = {"mode": "disabled", "reason": ""}
     deletion_note: str | None = None
     if not mongodb_configured:
@@ -4768,6 +4501,7 @@ async def guild_ops_repost_portals(request: web.Request) -> web.Response:
 async def guild_ops_schedule_delete_data(request: web.Request) -> web.Response:
     session = _require_session(request)
     settings: Settings = request.app[SETTINGS_KEY]
+    config = _dashboard_config(request)
     if not settings.mongodb_uri:
         raise web.HTTPInternalServerError(text="MongoDB is not configured.")
 
@@ -4791,7 +4525,7 @@ async def guild_ops_schedule_delete_data(request: web.Request) -> web.Response:
     actor_id = _parse_int(session.user.get("id"))
     actor_username = f"{session.user.get('username','')}#{session.user.get('discriminator','')}".strip("#")
 
-    grace_hours = max(0, int(GUILD_DATA_DELETE_GRACE_HOURS))
+    grace_hours = max(0, int(config.guild_data_delete_grace_hours))
     run_after = datetime.now(timezone.utc) + timedelta(hours=grace_hours)
 
     task = enqueue_ops_task(
@@ -4867,11 +4601,11 @@ async def guild_ops_cancel_delete_data(request: web.Request) -> web.Response:
 
 
 async def guild_analytics_json(request: web.Request) -> web.Response:
-    session = _require_session(request)
+    session = _require_api_session(request)
     settings: Settings = request.app[SETTINGS_KEY]
 
     guild_id_str = request.match_info["guild_id"]
-    guild_id = _require_owned_guild(session, settings=settings, path=request.path_qs, guild_id=guild_id_str)
+    guild_id = _require_owned_guild_api(session, settings=settings, path=request.path_qs, guild_id=guild_id_str)
     analytics = get_guild_analytics(settings, guild_id=guild_id)
 
     return web.json_response(
@@ -4886,10 +4620,10 @@ async def guild_analytics_json(request: web.Request) -> web.Response:
 
 
 async def guild_discord_metadata_json(request: web.Request) -> web.Response:
-    session = _require_session(request)
+    session = _require_api_session(request)
     settings: Settings = request.app[SETTINGS_KEY]
     guild_id_str = request.match_info["guild_id"]
-    guild_id = _require_owned_guild(session, settings=settings, path=request.path_qs, guild_id=guild_id_str)
+    guild_id = _require_owned_guild_api(session, settings=settings, path=request.path_qs, guild_id=guild_id_str)
     roles, channels = await _get_guild_discord_metadata(request, guild_id=guild_id)
     return web.json_response({"guild_id": guild_id, "roles": roles, "channels": channels})
 
@@ -5265,8 +4999,9 @@ async def _on_cleanup(app: web.Application) -> None:
 
 
 def create_app(*, settings: Settings | None = None) -> web.Application:
+    config = load_dashboard_config()
     app = web.Application(
-        client_max_size=max(1, int(MAX_REQUEST_BYTES)),
+        client_max_size=max(1, int(config.max_request_bytes)),
         middlewares=[
             request_id_middleware,
             request_metrics_middleware,
@@ -5278,6 +5013,7 @@ def create_app(*, settings: Settings | None = None) -> web.Application:
     )
     app_settings = settings or load_settings()
     app[SETTINGS_KEY] = app_settings
+    app[DASHBOARD_CONFIG_KEY] = config
     validate_stripe_environment()
     init_error_reporting(settings=app_settings, service_name="dashboard")
     session_collection, state_collection, user_collection = _ensure_dashboard_collections(app_settings)
@@ -5340,6 +5076,8 @@ def create_app(*, settings: Settings | None = None) -> web.Application:
     app.router.add_get("/guild/{guild_id}/ops", guild_ops_page)
     app.router.add_get("/guild/{guild_id}/settings", guild_settings_page)
     app.router.add_post("/guild/{guild_id}/settings", guild_settings_save)
+    app.router.add_get("/api/me", api_me)
+    app.router.add_get("/api/guilds", api_guilds)
     app.router.add_get("/api/stats", stats_api)
     app.router.add_get("/api/guild/{guild_id}/analytics.json", guild_analytics_json)
     app.router.add_get("/api/guild/{guild_id}/discord_metadata.json", guild_discord_metadata_json)
