@@ -204,6 +204,9 @@ def _decode_session_cookie(value: str | None) -> tuple[str | None, bool]:
 
 def _set_session_cookie(response: web.StreamResponse, *, request: web.Request, session_id: str) -> None:
     config = _dashboard_config(request)
+    if not _SESSION_ID_RE.fullmatch(session_id):
+        logging.warning("event=session_cookie_rejected reason=invalid_session_id")
+        return
     response.set_cookie(
         COOKIE_NAME,
         _encode_session_cookie(session_id),
@@ -932,6 +935,7 @@ async def session_middleware(request: web.Request, handler):
     request["session_id"] = session_id
     request["session_expired"] = False
     session: SessionData | None = None
+    cookie_session_id: str | None = None
     invalidate_cookie = False
     refresh_cookie = False
     config = _dashboard_config(request)
@@ -943,6 +947,9 @@ async def session_middleware(request: web.Request, handler):
         try:
             sessions: Collection = request.app[SESSION_COLLECTION_KEY]
             doc = sessions.find_one({"_id": session_id}) or {}
+            doc_session_id = doc.get("_id")
+            if isinstance(doc_session_id, str) and _SESSION_ID_RE.fullmatch(doc_session_id):
+                cookie_session_id = doc_session_id
             created_at = doc.get("created_at")
             created_at_ts = float(created_at) if isinstance(created_at, (int, float)) else None
             expires_at_dt = doc.get("expires_at")
@@ -1036,13 +1043,13 @@ async def session_middleware(request: web.Request, handler):
     except web.HTTPException as exc:
         if invalidate_cookie:
             exc.del_cookie(COOKIE_NAME)
-        elif refresh_cookie and session_id:
-            _set_session_cookie(exc, request=request, session_id=session_id)
+        elif refresh_cookie and cookie_session_id:
+            _set_session_cookie(exc, request=request, session_id=cookie_session_id)
         raise
     if invalidate_cookie:
         response.del_cookie(COOKIE_NAME)
-    elif refresh_cookie and session_id:
-        _set_session_cookie(response, request=request, session_id=session_id)
+    elif refresh_cookie and cookie_session_id:
+        _set_session_cookie(response, request=request, session_id=cookie_session_id)
     return response
 
 
@@ -1050,22 +1057,23 @@ def _require_session(request: web.Request) -> SessionData:
     session = request.get("session")
     if session is None:
         raw_next = str(request.path_qs or "").strip()
-        parsed = urllib.parse.urlsplit(raw_next)
-        next_path = parsed.path or "/"
+        next_path = raw_next.replace("\\", "")
+        parsed = urllib.parse.urlparse(next_path)
         if parsed.scheme or parsed.netloc:
             next_path = "/app"
-        elif not next_path.startswith("/") or next_path.startswith("//") or next_path.startswith("/\\") or "\\" in next_path:
+        elif not next_path.startswith("/") or next_path.startswith("//") or next_path.startswith("/\\"):
             next_path = "/app"
         else:
             allowed = False
+            safe_path = parsed.path or "/"
             for prefix in _ALLOWED_REDIRECT_PREFIXES:
-                if next_path == prefix or next_path.startswith(f"{prefix}/"):
+                if safe_path == prefix or safe_path.startswith(f"{prefix}/"):
                     allowed = True
                     break
             if not allowed:
                 next_path = "/app"
-            elif parsed.query:
-                next_path = f"{next_path}?{parsed.query}"
+        if next_path == "/":
+            next_path = "/app"
         params = {"next": next_path}
         if request.get("session_expired"):
             params["reason"] = "expired"
@@ -2231,22 +2239,23 @@ async def login(request: web.Request) -> web.Response:
     config = _dashboard_config(request)
     session = request.get("session")
     raw_next = str(request.query.get("next") or "/app").strip()
-    parsed = urllib.parse.urlsplit(raw_next)
-    next_path = parsed.path or "/"
+    next_path = raw_next.replace("\\", "")
+    parsed = urllib.parse.urlparse(next_path)
     if parsed.scheme or parsed.netloc:
         next_path = "/app"
-    elif not next_path.startswith("/") or next_path.startswith("//") or next_path.startswith("/\\") or "\\" in next_path:
+    elif not next_path.startswith("/") or next_path.startswith("//") or next_path.startswith("/\\"):
         next_path = "/app"
     else:
         allowed = False
+        safe_path = parsed.path or "/"
         for prefix in _ALLOWED_REDIRECT_PREFIXES:
-            if next_path == prefix or next_path.startswith(f"{prefix}/"):
+            if safe_path == prefix or safe_path.startswith(f"{prefix}/"):
                 allowed = True
                 break
         if not allowed:
             next_path = "/app"
-        elif parsed.query:
-            next_path = f"{next_path}?{parsed.query}"
+    if next_path == "/":
+        next_path = "/app"
     if session is not None:
         raise web.HTTPFound(next_path)
     reason = str(request.query.get("reason") or "").strip().lower()
@@ -2433,22 +2442,21 @@ def _create_session_from_discord(
         properties={"flow": "discord"},
     )
 
-    parsed_next = urllib.parse.urlsplit(str(next_path or "").strip())
-    redirect_path = parsed_next.path or "/"
+    redirect_path = str(next_path or "").strip().replace("\\", "")
+    parsed_next = urllib.parse.urlparse(redirect_path)
     if parsed_next.scheme or parsed_next.netloc:
         redirect_path = "/app"
-    elif not redirect_path.startswith("/") or redirect_path.startswith("//") or redirect_path.startswith("/\\") or "\\" in redirect_path:
+    elif not redirect_path.startswith("/") or redirect_path.startswith("//") or redirect_path.startswith("/\\"):
         redirect_path = "/app"
     else:
         allowed = False
+        safe_path = parsed_next.path or "/"
         for prefix in _ALLOWED_REDIRECT_PREFIXES:
-            if redirect_path == prefix or redirect_path.startswith(f"{prefix}/"):
+            if safe_path == prefix or safe_path.startswith(f"{prefix}/"):
                 allowed = True
                 break
         if not allowed:
             redirect_path = "/app"
-        elif parsed_next.query:
-            redirect_path = f"{redirect_path}?{parsed_next.query}"
     if redirect_path == "/":
         redirect_path = "/app"
     resp = web.HTTPFound(redirect_path)
