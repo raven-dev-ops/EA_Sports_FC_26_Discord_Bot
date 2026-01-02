@@ -50,6 +50,7 @@ async def _upsert_pinned_embed(
     channel: discord.TextChannel,
     *,
     embed: discord.Embed,
+    legacy_titles: list[str] | None = None,
 ) -> None:
     bot_user = bot.user
     if bot_user is None:
@@ -57,6 +58,9 @@ async def _upsert_pinned_embed(
     desired_title = embed.title
     if not desired_title:
         return
+    match_titles = {desired_title}
+    if legacy_titles:
+        match_titles.update(legacy_titles)
 
     async def _update_existing(message: discord.Message) -> None:
         await edit_message(
@@ -78,7 +82,7 @@ async def _upsert_pinned_embed(
     for pinned_message in pinned:
         if pinned_message.author.id != bot_user.id:
             continue
-        if not pinned_message.embeds or pinned_message.embeds[0].title != desired_title:
+        if not pinned_message.embeds or pinned_message.embeds[0].title not in match_titles:
             continue
         await _update_existing(pinned_message)
         return
@@ -87,7 +91,7 @@ async def _upsert_pinned_embed(
         async for history_message in channel.history(limit=50):
             if history_message.author.id != bot_user.id:
                 continue
-            if not history_message.embeds or history_message.embeds[0].title != desired_title:
+            if not history_message.embeds or history_message.embeds[0].title not in match_titles:
                 continue
             await _update_existing(history_message)
             return
@@ -175,10 +179,10 @@ async def post_listing_channel_instructions(
             ),
             (
                 "channel_premium_coaches_id",
-                "premium-coaches",
+                "pro-coaches",
                 _build_listing_about_embed(
-                    title="About: premium-coaches",
-                    description="Premium coach listings are managed by the bot (openings/practice times).",
+                    title="About: pro-coaches",
+                    description="Pro coach listings are managed by the bot (openings/practice times).",
                     portal_ref=_format_channel_ref(manager_portal_id, fallback_name="club-managers-portal"),
                 ),
             ),
@@ -197,6 +201,11 @@ async def post_listing_channel_instructions(
             if not isinstance(channel, discord.TextChannel):
                 continue
             try:
-                await _upsert_pinned_embed(bot, channel, embed=embed)
+                await _upsert_pinned_embed(
+                    bot,
+                    channel,
+                    embed=embed,
+                    legacy_titles=["About: premium-coaches"] if fallback_name == "pro-coaches" else None,
+                )
             except Exception:
                 logging.exception("Failed to upsert listing instructions (guild=%s channel=%s).", guild.id, channel_id)

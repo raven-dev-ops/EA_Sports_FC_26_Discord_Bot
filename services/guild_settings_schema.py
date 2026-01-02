@@ -24,7 +24,7 @@ GUILD_CHANNEL_FIELDS: list[tuple[str, str]] = [
     ("channel_roster_listing_id", "Roster listing channel"),
     ("channel_recruit_listing_id", "Recruit listing channel"),
     ("channel_club_listing_id", "Club listing channel"),
-    ("channel_premium_coaches_id", "Premium Coaches channel"),
+    ("channel_premium_coaches_id", "Pro coaches channel"),
 ]
 
 INT_FIELDS: set[str] = {k for k, _label in (GUILD_COACH_ROLE_FIELDS + GUILD_CHANNEL_FIELDS)}

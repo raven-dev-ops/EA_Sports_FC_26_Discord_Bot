@@ -48,7 +48,7 @@ def build_manager_intro_embed() -> discord.Embed:
         title="Club Managers Portal Overview",
         description=(
             "**Purpose**\n"
-            "Manage coach tiers, roster unlocks, and premium coach listings.\n\n"
+            "Manage coach tiers, roster unlocks, and pro coach listings.\n\n"
             "**Who should use this**\n"
             "- Staff / club managers only.\n\n"
             "**Quick rules**\n"
@@ -86,19 +86,19 @@ def build_manager_embed() -> discord.Embed:
         inline=False,
     )
     embed.add_field(
-        name="Refresh Premium Coaches",
-        value="- Update the Premium Coaches report embed.",
+        name="Refresh Pro coaches",
+        value="- Update the Pro coaches report embed.",
         inline=False,
     )
     embed.add_field(
-        name="Toggle Premium Pin",
-        value="- Pin/unpin the Premium Coaches embed (if permitted).",
+        name="Toggle Pro Pin",
+        value="- Pin/unpin the Pro coaches embed (if permitted).",
         inline=False,
     )
     embed.add_field(
-        name="Force Rebuild Premium",
+        name="Force Rebuild Pro",
         value=(
-            "- Delete stale bot messages in the Premium Coaches channel\n"
+            "- Delete stale bot messages in the Pro coaches channel\n"
             "- Rebuild the report"
         ),
         inline=False,
@@ -575,9 +575,9 @@ class ManagerPortalView(SafeView):
         buttons = [
             ("Set Coach Tier", discord.ButtonStyle.primary, self.on_set_tier),
             ("Unlock Roster", discord.ButtonStyle.secondary, self.on_unlock),
-            ("Refresh Premium Coaches", discord.ButtonStyle.success, self.on_refresh_premium),
-            ("Toggle Premium Pin", discord.ButtonStyle.secondary, self.on_toggle_premium_pin),
-            ("Force Rebuild Premium", discord.ButtonStyle.danger, self.on_force_rebuild_premium),
+            ("Refresh Pro coaches", discord.ButtonStyle.success, self.on_refresh_premium),
+            ("Toggle Pro Pin", discord.ButtonStyle.secondary, self.on_toggle_premium_pin),
+            ("Force Rebuild Pro", discord.ButtonStyle.danger, self.on_force_rebuild_premium),
             ("Sync Caps (Active Cycle)", discord.ButtonStyle.secondary, self.on_sync_caps),
             ("Repost Portal (staff)", discord.ButtonStyle.secondary, self.on_repost_portal),
             ("Delete Roster", discord.ButtonStyle.danger, self.on_delete_roster),
@@ -634,8 +634,8 @@ class ManagerPortalView(SafeView):
         except PermissionError:
             await interaction.response.send_message(
                 embed=make_embed(
-                    title="Premium Coaches is Pro-only",
-                    description="Upgrade this server to Pro to enable the Premium Coaches report.",
+                    title="Pro coaches report is Pro-only",
+                    description="Upgrade this server to Pro to enable the Pro coaches report.",
                     color=ERROR_COLOR,
                 ),
                 ephemeral=True,
@@ -650,8 +650,8 @@ class ManagerPortalView(SafeView):
         )
         await interaction.response.send_message(
             embed=make_embed(
-                title="Premium Coaches refreshed",
-                description="Updated the Premium Coaches listing embed.",
+                title="Pro coaches refreshed",
+                description="Updated the Pro coaches listing embed.",
                 color=SUCCESS_COLOR,
             ),
             ephemeral=True,
@@ -684,8 +684,8 @@ class ManagerPortalView(SafeView):
         except PermissionError:
             await interaction.response.send_message(
                 embed=make_embed(
-                    title="Premium Coaches is Pro-only",
-                    description="Upgrade this server to Pro to enable the Premium Coaches report.",
+                    title="Pro coaches report is Pro-only",
+                    description="Upgrade this server to Pro to enable the Pro coaches report.",
                     color=ERROR_COLOR,
                 ),
                 ephemeral=True,
@@ -725,8 +725,8 @@ class ManagerPortalView(SafeView):
         status = "enabled" if not enabled else "disabled"
         await interaction.response.send_message(
             embed=make_embed(
-                title="Premium Coaches pin updated",
-                description=f"Pinning is now **{status}** for the Premium Coaches listing.",
+                title="Pro coaches pin updated",
+                description=f"Pinning is now **{status}** for the Pro coaches listing.",
                 color=SUCCESS_COLOR,
             ),
             ephemeral=True,
@@ -759,8 +759,8 @@ class ManagerPortalView(SafeView):
         except PermissionError:
             await interaction.response.send_message(
                 embed=make_embed(
-                    title="Premium Coaches is Pro-only",
-                    description="Upgrade this server to Pro to enable the Premium Coaches report.",
+                    title="Pro coaches report is Pro-only",
+                    description="Upgrade this server to Pro to enable the Pro coaches report.",
                     color=ERROR_COLOR,
                 ),
                 ephemeral=True,
@@ -776,7 +776,7 @@ class ManagerPortalView(SafeView):
         )
         await interaction.response.send_message(
             embed=make_embed(
-                title="Premium Coaches rebuilt",
+                title="Pro coaches rebuilt",
                 description=f"Deleted {deleted} stale bot message(s) and rebuilt the listing.",
                 color=SUCCESS_COLOR,
             ),

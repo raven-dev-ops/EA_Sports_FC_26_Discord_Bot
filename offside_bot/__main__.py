@@ -243,9 +243,9 @@ class OffsideBot(commands.AutoShardedBot):
         await asyncio.sleep(0.5)
         try:
             await post_premium_coaches_report(self, guilds=guilds)
-            logging.info("Posted premium coaches report embed.")
+            logging.info("Posted pro coaches report embed.")
         except Exception:
-            logging.exception("Failed to post premium coaches report.")
+            logging.exception("Failed to post pro coaches report.")
         await asyncio.sleep(0.5)
         try:
             await post_listing_channel_instructions(self, guilds=guilds)

@@ -22,7 +22,8 @@ STAFF_MONITOR_CHANNEL_NAME = "staff-monitor"
 ROSTER_LISTING_CHANNEL_NAME = "roster-listing"
 RECRUIT_LISTING_CHANNEL_NAME = "recruit-listing"
 CLUB_LISTING_CHANNEL_NAME = "club-listing"
-PREMIUM_COACHES_CHANNEL_NAME = "premium-coaches"
+PRO_COACHES_CHANNEL_NAME = "pro-coaches"
+LEGACY_PREMIUM_COACHES_CHANNEL_NAME = "premium-coaches"
 
 STAFF_MONITOR_MANAGED_KEY = "channel_staff_monitor_managed"
 
@@ -67,6 +68,12 @@ async def ensure_offside_channels(
         guild,
         config=config,
         dashboard_category=dashboard_category,
+        reports_category=reports_category,
+        actions=actions,
+    )
+    await _migrate_pro_coaches_channel(
+        guild,
+        config=config,
         reports_category=reports_category,
         actions=actions,
     )
@@ -187,7 +194,7 @@ async def ensure_offside_channels(
         (ROSTER_LISTING_CHANNEL_NAME, "channel_roster_listing_id"),
         (RECRUIT_LISTING_CHANNEL_NAME, "channel_recruit_listing_id"),
         (CLUB_LISTING_CHANNEL_NAME, "channel_club_listing_id"),
-        (PREMIUM_COACHES_CHANNEL_NAME, "channel_premium_coaches_id"),
+        (PRO_COACHES_CHANNEL_NAME, "channel_premium_coaches_id"),
     ]
     reports_overwrites = _public_readonly_overwrites(guild, staff_roles, bot_member)
     for name, key in reports_specs:
@@ -532,7 +539,8 @@ async def _cleanup_duplicate_offside_categories(
         ROSTER_LISTING_CHANNEL_NAME,
         RECRUIT_LISTING_CHANNEL_NAME,
         CLUB_LISTING_CHANNEL_NAME,
-        PREMIUM_COACHES_CHANNEL_NAME,
+        PRO_COACHES_CHANNEL_NAME,
+        LEGACY_PREMIUM_COACHES_CHANNEL_NAME,
     }
 
     repairs: list[tuple[discord.CategoryChannel, discord.CategoryChannel]] = []
@@ -584,6 +592,77 @@ async def _cleanup_duplicate_offside_categories(
 def _is_repair_category_name(category_name: str, canonical_name: str) -> bool:
     pattern = re.compile(rf"^{re.escape(canonical_name)}\s*\(offside\)", re.IGNORECASE)
     return bool(pattern.match(category_name))
+
+
+async def _migrate_pro_coaches_channel(
+    guild: discord.Guild,
+    *,
+    config: dict[str, Any],
+    reports_category: discord.CategoryChannel,
+    actions: list[str],
+) -> None:
+    target_name = PRO_COACHES_CHANNEL_NAME
+    legacy_name = LEGACY_PREMIUM_COACHES_CHANNEL_NAME
+    channel_id = _parse_int(config.get("channel_premium_coaches_id"))
+    managed_channel: discord.TextChannel | None = None
+    if channel_id:
+        existing = guild.get_channel(channel_id)
+        if isinstance(existing, discord.TextChannel):
+            managed_channel = existing
+
+    existing_target = discord.utils.get(reports_category.text_channels, name=target_name)
+    if existing_target is None:
+        existing_target = discord.utils.get(guild.text_channels, name=target_name)
+
+    if managed_channel is not None and existing_target is not None and managed_channel.id != existing_target.id:
+        config["channel_premium_coaches_id"] = existing_target.id
+        actions.append("Found existing `pro-coaches` channel; updated config to use it.")
+        return
+
+    if managed_channel is not None:
+        if managed_channel.name == legacy_name:
+            try:
+                await managed_channel.edit(
+                    name=target_name,
+                    reason="Offside setup: rename premium coaches channel",
+                )
+            except discord.Forbidden:
+                actions.append(
+                    "Could not rename `premium-coaches` (missing permissions). "
+                    "Will create `pro-coaches` instead."
+                )
+                config.pop("channel_premium_coaches_id", None)
+            else:
+                actions.append("Renamed `premium-coaches` to `pro-coaches`.")
+                config["channel_premium_coaches_id"] = managed_channel.id
+            return
+        if managed_channel.name == target_name:
+            config["channel_premium_coaches_id"] = managed_channel.id
+            return
+
+    if existing_target is not None:
+        config["channel_premium_coaches_id"] = existing_target.id
+        return
+
+    legacy_channel = discord.utils.get(reports_category.text_channels, name=legacy_name)
+    if legacy_channel is None:
+        legacy_channel = discord.utils.get(guild.text_channels, name=legacy_name)
+    if legacy_channel is None:
+        return
+    try:
+        await legacy_channel.edit(
+            name=target_name,
+            reason="Offside setup: rename premium coaches channel",
+        )
+    except discord.Forbidden:
+        actions.append(
+            "Could not rename `premium-coaches` (missing permissions). "
+            "Will create `pro-coaches` instead."
+        )
+        config.pop("channel_premium_coaches_id", None)
+        return
+    actions.append("Renamed `premium-coaches` to `pro-coaches`.")
+    config["channel_premium_coaches_id"] = legacy_channel.id
 
 
 def _filter_roles_for_overwrites(

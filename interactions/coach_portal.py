@@ -62,7 +62,7 @@ def build_coach_intro_embed() -> discord.Embed:
             "- Minimum 8 players to submit.\n"
             "- Caps: Coach=16, Premium=22, Premium+=25.\n"
             "- After submit, your roster locks until staff approves/rejects.\n"
-            "- Premium coaches: set Practice Times to appear in the Premium Coaches report."
+            "- Pro coaches: set Practice Times to appear in the Pro coaches report."
         ),
         color=DEFAULT_COLOR,
         footer=_portal_footer(),

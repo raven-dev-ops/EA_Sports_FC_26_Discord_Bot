@@ -20,6 +20,8 @@ PREMIUM_CAPS = {22, 25}
 PREMIUM_MESSAGE_ID_KEY = "premium_coaches_message_id"
 PREMIUM_PIN_ENABLED_KEY = "premium_coaches_pin_enabled"
 PREMIUM_PINNED_MESSAGE_ID_KEY = "premium_coaches_pinned_message_id"
+PRO_COACHES_TITLE = "Pro Coaches"
+LEGACY_PREMIUM_COACHES_TITLE = "Premium Coaches"
 
 
 def _build_embed(
@@ -30,10 +32,10 @@ def _build_embed(
     updated_at: datetime,
 ) -> discord.Embed:
     embed = discord.Embed(
-        title="Premium Coaches",
+        title=PRO_COACHES_TITLE,
         description=(
-            "Premium coach rosters for the current tournament cycle.\n"
-            "Listings update automatically when premium rosters change."
+            "Pro coach rosters for the current tournament cycle.\n"
+            "Listings update automatically when pro rosters change."
         ),
         color=discord.Color.gold(),
     )
@@ -42,18 +44,18 @@ def _build_embed(
     if not premium_listings and not premium_plus_listings:
         embed.add_field(
             name="Listings",
-            value="No premium rosters found yet.",
+            value="No pro rosters found yet.",
             inline=False,
         )
         embed.set_footer(text=f"Last updated: {discord.utils.format_dt(updated_at, style='R')}")
         return embed
 
-    _add_listing_fields(embed, heading="Premium+ (25 cap)", listings=premium_plus_listings)
-    _add_listing_fields(embed, heading="Premium (22 cap)", listings=premium_listings)
+    _add_listing_fields(embed, heading="Pro+ (25 cap)", listings=premium_plus_listings)
+    _add_listing_fields(embed, heading="Pro (22 cap)", listings=premium_listings)
     embed.set_footer(
         text=(
             f"Last updated: {discord.utils.format_dt(updated_at, style='R')} | "
-            "Premium=22 | Premium+=25"
+            "Pro=22 | Pro+=25"
         )
     )
     return embed
@@ -191,7 +193,7 @@ def _format_listing(roster: dict[str, Any], *, count: int, openings: int) -> str
     cap_raw = roster.get("cap")
     cap = int(cap_raw) if isinstance(cap_raw, int) else 0
     practice = str(roster.get("practice_times") or "").strip() or "Not set"
-    tier = "Premium+" if cap >= 25 else "Premium"
+    tier = "Pro+" if cap >= 25 else "Pro"
     return (
         f"{coach} - **{team_name}** - {tier} - "
         f"Openings: {openings} ({count}/{cap}) - Practice: {practice}"
@@ -236,7 +238,7 @@ async def force_rebuild_premium_coaches_report(
                     continue
                 if not message.embeds:
                     continue
-                if message.embeds[0].title != "Premium Coaches":
+                if message.embeds[0].title not in {PRO_COACHES_TITLE, LEGACY_PREMIUM_COACHES_TITLE}:
                     continue
                 try:
                     await message.delete()
@@ -256,7 +258,7 @@ async def force_rebuild_premium_coaches_report(
         try:
             set_guild_config(guild_id, cfg, source="premium_coaches_report")
         except Exception:
-            logging.debug("Failed to clear premium coaches message ids (guild=%s).", guild_id)
+                    logging.debug("Failed to clear pro coaches message ids (guild=%s).", guild_id)
 
     await upsert_premium_coaches_report(
         client,
@@ -356,7 +358,7 @@ async def upsert_premium_coaches_report(
                     set_guild_config(guild_id, cfg, source="premium_coaches_report")
                 except Exception:
                     logging.debug(
-                        "Failed to persist premium coaches pin settings (guild=%s).", guild_id
+                        "Failed to persist pro coaches pin settings (guild=%s).", guild_id
                     )
             return
 
@@ -375,7 +377,7 @@ async def upsert_premium_coaches_report(
     try:
         set_guild_config(guild_id, cfg, source="premium_coaches_report")
     except Exception:
-        logging.debug("Failed to persist premium coaches config (guild=%s).", guild_id)
+        logging.debug("Failed to persist pro coaches config (guild=%s).", guild_id)
 
 
 async def _apply_pin_settings(
@@ -401,17 +403,17 @@ async def _apply_pin_settings(
                 old = None
             if old is not None and getattr(old, "pinned", False):
                 try:
-                    await old.unpin(reason="Offside: premium coaches repin")  # type: ignore[attr-defined]
+                    await old.unpin(reason="Offside: pro coaches repin")  # type: ignore[attr-defined]
                 except discord.DiscordException:
                     pass
         try:
             if not getattr(message, "pinned", False):
-                await message.pin(reason="Offside: premium coaches")  # type: ignore[attr-defined]
+                await message.pin(reason="Offside: pro coaches")  # type: ignore[attr-defined]
             if cfg.get(PREMIUM_PINNED_MESSAGE_ID_KEY) != message.id:
                 cfg[PREMIUM_PINNED_MESSAGE_ID_KEY] = message.id
                 changed = True
         except discord.Forbidden:
-            logging.info("Missing permission to pin premium coaches message (guild=%s).", guild_id)
+            logging.info("Missing permission to pin pro coaches message (guild=%s).", guild_id)
         except discord.DiscordException:
             pass
         return changed
@@ -423,7 +425,7 @@ async def _apply_pin_settings(
             old = None
         if old is not None and getattr(old, "pinned", False):
             try:
-                await old.unpin(reason="Offside: premium coaches unpin")  # type: ignore[attr-defined]
+                await old.unpin(reason="Offside: pro coaches unpin")  # type: ignore[attr-defined]
             except discord.DiscordException:
                 pass
         if PREMIUM_PINNED_MESSAGE_ID_KEY in cfg:
@@ -452,4 +454,4 @@ async def post_premium_coaches_report(
                 test_mode=test_mode,
             )
         except Exception:
-            logging.exception("Failed to upsert premium coaches report (guild=%s).", guild.id)
+            logging.exception("Failed to upsert pro coaches report (guild=%s).", guild.id)

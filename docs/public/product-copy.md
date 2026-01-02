@@ -46,7 +46,7 @@ Free is the default plan and includes all core workflows.
 Pro unlocks feature-keys listed in `services/entitlements_service.py` `PRO_FEATURE_KEYS`:
 
 - `premium_coach_tiers` (Coach Premium / Coach Premium+ roles and caps)
-- `premium_coaches_report` (Premium Coaches listing channel/report)
+- `premium_coaches_report` (Pro coaches listing channel/report)
 - `fc25_stats` (FC stats integration)
 - `banlist` (Google Sheets banlist integration)
 - `tournament_automation` (advanced tournament automation tooling)

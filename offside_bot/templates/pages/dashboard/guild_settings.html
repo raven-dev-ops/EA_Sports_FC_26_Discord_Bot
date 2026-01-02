@@ -32,7 +32,7 @@
           <strong>Premium features locked</strong>
         </div>
         <p class="muted spacer-sm">
-          Premium coach tiers, Premium Coaches report, and FC25 stats are available on the Pro plan.
+          Premium coach tiers, Pro coaches report, and FC25 stats are available on the Pro plan.
         </p>
       </div>
       <div class="btn-group">
@@ -118,7 +118,7 @@
           {% endif %}
         {% endfor %}
 
-        <h3 class="mt-14">Premium Coaches {{ badge("PRO", premium_report_badge_class ~ " inline") }}</h3>
+        <h3 class="mt-14">Pro coaches {{ badge("PRO", premium_report_badge_class ~ " inline") }}</h3>
         <label>
           <input
             type="checkbox"
@@ -130,12 +130,12 @@
           Pin listing message
         </label>
         <p class="muted">
-          Pins the bot's Premium Coaches listing message in the Premium Coaches channel (requires Manage Messages).
+          Pins the bot's Pro coaches listing message in the Pro coaches channel (requires Manage Messages).
         </p>
         {% if not premium_report_enabled %}
           <p class="muted">
             <span class="badge warn">LOCKED</span>
-            Premium Coaches report controls require Pro. <a href="{{ upgrade_href }}">Upgrade</a>
+            Pro coaches report controls require Pro. <a href="{{ upgrade_href }}">Upgrade</a>
           </p>
         {% endif %}
 

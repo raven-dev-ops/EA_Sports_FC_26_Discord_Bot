@@ -504,7 +504,7 @@ def _pro_locked_page(
     if benefits is None:
         benefits = [
             ("Premium coach tiers", "Coach Premium and Coach Premium+ roles, caps, and workflow."),
-            ("Premium Coaches report", "Public listing embed of Premium coaches and openings."),
+            ("Pro coaches report", "Public listing embed of Pro coaches and openings."),
             ("FC stats integration", "FC25/FC26 stats lookup, caching, and richer player profiles."),
             ("Banlist integration", "Google Sheets-driven banlist checks and moderation tooling."),
             ("Tournament automation", "Automated brackets, fixtures, and match reporting workflows."),
@@ -2196,7 +2196,7 @@ async def pricing_page(request: web.Request) -> web.Response:
             "enterprise": True,
         },
         {
-            "name": "Premium Coaches report",
+            "name": "Pro coaches report",
             "description": "Premium coach listing embed and related controls.",
             "free": False,
             "pro": entitlements_service.FEATURE_PREMIUM_COACHES_REPORT in entitlements_service.PRO_FEATURE_KEYS,
@@ -3168,7 +3168,7 @@ async def guild_settings_save(request: web.Request) -> web.Response:
             cfg.pop(PREMIUM_COACHES_PIN_ENABLED_KEY, None)
     else:
         if data.get(PREMIUM_COACHES_PIN_ENABLED_KEY) is not None:
-            raise web.HTTPForbidden(text="Premium Coaches report controls require Pro.")
+            raise web.HTTPForbidden(text="Pro coaches report controls require Pro.")
 
     if fc25_stats_enabled:
         fc25_raw = str(data.get(FC25_STATS_ENABLED_KEY, "default")).strip().lower()

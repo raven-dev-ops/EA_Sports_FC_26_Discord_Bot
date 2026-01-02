@@ -8,7 +8,7 @@ See also: `docs/public/server-setup-checklist.md`
 - Verify portals are posted:
   - `staff-portal`, `club-managers-portal`, `club-portal`, `coach-portal`, `recruit-portal`
 - Verify reports channels exist:
-  - `staff-monitor` (test mode only), `roster-listing`, `recruit-listing`, `club-listing`, `premium-coaches`
+  - `staff-monitor` (test mode only), `roster-listing`, `recruit-listing`, `club-listing`, `pro-coaches`
 - With `TEST_MODE=false`, confirm `coach-portal` is only visible to coaches + staff
 - Confirm listing channels have a pinned "About" embed (instructions + no-chat policy)
 - In `staff-portal`, run **Verify Setup (staff)** and confirm the report is clean

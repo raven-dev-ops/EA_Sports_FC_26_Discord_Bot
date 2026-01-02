@@ -9,7 +9,7 @@ Invite the bot with:
 - Bot permissions (recommended):
   - `Manage Channels` (auto-creates the Offside categories/channels)
   - `Manage Roles` (auto-creates coach tier roles and assigns tiers)
-  - `Manage Messages` (optional; used for portal cleanup, pin/unpin Premium Coaches)
+  - `Manage Messages` (optional; used for portal cleanup, pin/unpin Pro coaches)
   - `Read Message History`, `Send Messages`, `Embed Links`, `Attach Files`
 
 Role hierarchy:
@@ -55,7 +55,7 @@ Report channels:
 - `roster-listing`
 - `recruit-listing`
 - `club-listing`
-- `premium-coaches`
+- `pro-coaches`
 
 Roles:
 - `Coach`
@@ -70,7 +70,7 @@ This is the default intent for auto-created channels:
 - `club-managers-portal`: staff-only (staff can post)
 - `coach-portal`: coaches-only (read-only; use buttons)
 - `recruit-portal`, `club-portal`: public read-only (use buttons)
-- `roster-listing`, `recruit-listing`, `club-listing`, `premium-coaches`: public read-only (bot-managed listings)
+- `roster-listing`, `recruit-listing`, `club-listing`, `pro-coaches`: public read-only (bot-managed listings)
 - `staff-monitor`: staff-only (test mode only)
 
 Notes:
@@ -81,8 +81,8 @@ Notes:
 
 From `club-managers-portal`:
 - Use **Sync Caps (Active Cycle)** after changing coach roles manually.
-- Use **Toggle Premium Pin** to pin/unpin the Premium Coaches embed (requires permissions).
-- Use **Force Rebuild Premium** if the premium channel has stale bot messages.
+- Use **Toggle Pro Pin** to pin/unpin the Pro coaches embed (requires permissions).
+- Use **Force Rebuild Pro** if the pro coaches channel has stale bot messages.
 
 From any portal channel:
 - Use **Repost Portal (staff)** to clean up and repost the portal messages.

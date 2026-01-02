@@ -9,7 +9,7 @@ Roster management and staff review bot for Discord tournaments.
 
 1. Set up Discord channels and roles:
    - Invite the bot with permissions to manage channels/roles, send messages, read message history, and use slash commands.
-   - On join/startup, the bot auto-creates the `--OFFSIDE DASHBOARD--` / `--OFFSIDE REPORTS--` layout, required channels (including Club Managers + Premium Coaches), and the coach roles (`Coach`, `Coach Premium`, `Coach Premium+`).
+   - On join/startup, the bot auto-creates the `--OFFSIDE DASHBOARD--` / `--OFFSIDE REPORTS--` layout, required channels (including Club Managers + Pro coaches), and the coach roles (`Coach`, `Coach Premium`, `Coach Premium+`).
    - Assign the coach roles to your coaches (premium tiers control roster caps).
    - Checklist: `docs/public/server-setup-checklist.md`
 2. Configure the bot:
@@ -26,7 +26,7 @@ Roster management and staff review bot for Discord tournaments.
 - Ephemeral roster workflow with role-based caps and min-8 submission rule; identity checks enforce no duplicates and required player fields.
 - Staff review with approve/reject/unlock; decisions DM coaches with reasons; staff cards cleaned after action.
 - Portals auto-post on startup: coach portal (dashboard/help), staff portal (controls/review), roster portal (approved only); bot cleans prior portal embeds before posting new ones.
-- Premium coaches report channel auto-updates with roster name, openings, and practice times.
+- Pro coaches report channel auto-updates with roster name, openings, and practice times.
 - Listing channels are read-only and include pinned "About" instructions (bot-managed).
 - Audit trail for staff actions; unlock clears stale submissions for resubmission.
 - Tournament scaffold with staff-only commands, bracket preview/publish, match/dispute flows, and leaderboard stats.
@@ -43,19 +43,19 @@ Roster management and staff review bot for Discord tournaments.
 ## Portals (auto-posted on startup)
 
 - **Staff Portal** (`channel_staff_portal_id`): staff review (approve/reject) + quick-reference panel.
-- **Club Managers Portal** (`channel_manager_portal_id`): coach tiers (Coach/Premium/Premium+), roster unlock/delete, premium coaches refresh, and cap sync tools.
+- **Club Managers Portal** (`channel_manager_portal_id`): coach tiers (Coach/Premium/Premium+), roster unlock/delete, pro coaches refresh, and cap sync tools.
 - **Coach Portal** (`channel_coach_portal_id`): roster dashboard + coach help (buttons; responses are ephemeral). Channel is coaches-only.
 - **Recruit Portal** (`channel_recruit_portal_id`): recruit profile register/edit/preview/unregister (buttons; responses are ephemeral).
 - **Club Portal** (`channel_club_portal_id`): club ad register/edit/preview/unregister (buttons; responses are ephemeral).
 - **Roster Listing** (`channel_roster_listing_id`): approved roster embeds reposted here after staff approval.
 - **Recruit Listing** (`channel_recruit_listing_id`): recruit profile listing embeds.
 - **Club Listing** (`channel_club_listing_id`): club ad listing embeds.
-- **Premium Coaches** (`channel_premium_coaches_id`): premium coach roster listings (openings + practice times).
+- **Pro coaches** (`channel_premium_coaches_id`): pro coach roster listings (openings + practice times).
 
 ### Dashboard embeds & buttons
 - Coach portal: intro embed + roster portal embed. Buttons open the roster dashboard (add/remove/view/submit, rename) and coach help. Responses are ephemeral; portal is idempotent and cleans prior portal embeds.
 - Staff portal: intro embed + admin control panel. Buttons for Tournaments, Club Managers portal link, Players, DB/Analytics, and Verify Setup. Staff actions are ephemeral; the submission review message is cleaned after approve/reject.
-- Club Managers portal: intro embed + control panel. Buttons for Set Coach Tier, Unlock Roster, Refresh Premium Coaches, Toggle Premium Pin, Force Rebuild Premium, Sync Caps (Active Cycle), and Delete Roster (admin-only).
+- Club Managers portal: intro embed + control panel. Buttons for Set Coach Tier, Unlock Roster, Refresh Pro coaches, Toggle Pro Pin, Force Rebuild Pro, Sync Caps (Active Cycle), and Delete Roster (admin-only).
 - All portals include a staff-only "Repost Portal" action for quick cleanup/repost.
 - Help command: `/help` returns an embed with coach/staff/tournament/ops categories and submission steps; all responses are ephemeral.
 
