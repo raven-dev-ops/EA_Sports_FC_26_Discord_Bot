@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import asyncio
 import csv
+import hashlib
+import hmac
 import io
 import json
 import logging
@@ -72,9 +74,13 @@ MY_GUILDS_URL = f"{DISCORD_API_BASE}/users/@me/guilds"
 
 COOKIE_NAME = "offside_dashboard_session"
 REQUEST_ID_HEADER = "X-Request-Id"
-SESSION_TTL_SECONDS = int(os.environ.get("DASHBOARD_SESSION_TTL_SECONDS", "21600").strip() or "21600")
+DEFAULT_SESSION_TTL_SECONDS = 60 * 60 * 24 * 30
+SESSION_TTL_SECONDS = int(
+    os.environ.get("DASHBOARD_SESSION_TTL_SECONDS", str(DEFAULT_SESSION_TTL_SECONDS)).strip()
+    or str(DEFAULT_SESSION_TTL_SECONDS)
+)
 SESSION_IDLE_TIMEOUT_SECONDS = int(
-    os.environ.get("DASHBOARD_SESSION_IDLE_TIMEOUT_SECONDS", "1800").strip() or "1800"
+    os.environ.get("DASHBOARD_SESSION_IDLE_TIMEOUT_SECONDS", "0").strip() or "0"
 )
 SESSION_TOUCH_INTERVAL_SECONDS = int(
     os.environ.get("DASHBOARD_SESSION_TOUCH_INTERVAL_SECONDS", "300").strip() or "300"
@@ -181,6 +187,59 @@ _RATE_LIMIT_LAST_SWEEP: float = 0.0
 
 def _utc_now() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def _session_signing_keys() -> list[bytes]:
+    raw = os.environ.get("DASHBOARD_SESSION_SIGNING_KEYS", "").strip()
+    if not raw:
+        raw = os.environ.get("DASHBOARD_SESSION_SIGNING_KEY", "").strip()
+    if not raw:
+        raw = os.environ.get("DISCORD_CLIENT_SECRET", "").strip()
+    if not raw:
+        return []
+    keys = [token.strip() for token in raw.split(",") if token.strip()]
+    return [key.encode("utf-8") for key in keys]
+
+
+def _sign_session_id(session_id: str, key: bytes) -> str:
+    return hmac.new(key, session_id.encode("utf-8"), hashlib.sha256).hexdigest()
+
+
+def _encode_session_cookie(session_id: str) -> str:
+    keys = _session_signing_keys()
+    if not keys:
+        return session_id
+    signature = _sign_session_id(session_id, keys[0])
+    return f"{session_id}.{signature}"
+
+
+def _decode_session_cookie(value: str | None) -> tuple[str | None, bool]:
+    if not value:
+        return None, False
+    keys = _session_signing_keys()
+    if not keys:
+        return value, False
+    if "." not in value:
+        return value, True
+    session_id, signature = value.rsplit(".", 1)
+    if not session_id or not signature:
+        return None, False
+    for idx, key in enumerate(keys):
+        expected = _sign_session_id(session_id, key)
+        if hmac.compare_digest(signature, expected):
+            return session_id, idx != 0
+    return None, False
+
+
+def _set_session_cookie(response: web.StreamResponse, *, request: web.Request, session_id: str) -> None:
+    response.set_cookie(
+        COOKIE_NAME,
+        _encode_session_cookie(session_id),
+        httponly=True,
+        samesite="Lax",
+        secure=_is_https(request),
+        max_age=SESSION_TTL_SECONDS,
+    )
 
 
 def _ensure_dashboard_collections(settings: Settings) -> tuple[Collection, Collection, Collection]:
@@ -872,11 +931,17 @@ async def _detect_bot_installed(request: web.Request, *, guild_id: int) -> tuple
 
 @web.middleware
 async def session_middleware(request: web.Request, handler):
-    session_id = request.cookies.get(COOKIE_NAME)
+    raw_cookie = request.cookies.get(COOKIE_NAME)
+    session_id, cookie_needs_refresh = _decode_session_cookie(raw_cookie)
     request["session_id"] = session_id
+    request["session_expired"] = False
     session: SessionData | None = None
     invalidate_cookie = False
+    refresh_cookie = False
     now = time.time()
+    if raw_cookie and session_id is None:
+        invalidate_cookie = True
+        request["session_expired"] = True
     if session_id:
         try:
             sessions: Collection = request.app[SESSION_COLLECTION_KEY]
@@ -894,26 +959,15 @@ async def session_middleware(request: web.Request, handler):
             elif isinstance(last_guild_id, str) and last_guild_id.isdigit():
                 last_guild_id_value = int(last_guild_id)
 
-            within_absolute_ttl = created_at_ts is not None and now - created_at_ts <= SESSION_TTL_SECONDS
             within_expires_at = expires_at_ts is None or now <= expires_at_ts
             idle_timeout = max(1, int(SESSION_IDLE_TIMEOUT_SECONDS)) if SESSION_IDLE_TIMEOUT_SECONDS > 0 else None
             last_seen_at_ts = float(last_seen_at) if isinstance(last_seen_at, (int, float)) else None
             within_idle = idle_timeout is None or (
                 last_seen_at_ts is not None and now - last_seen_at_ts <= idle_timeout
             )
-            guild_cache_ttl = max(1, int(GUILD_METADATA_TTL_SECONDS)) if GUILD_METADATA_TTL_SECONDS > 0 else None
             guilds_fetched_at_ts = float(guilds_fetched_at) if isinstance(guilds_fetched_at, (int, float)) else None
-            within_guild_cache = guild_cache_ttl is None or (
-                guilds_fetched_at_ts is not None and now - guilds_fetched_at_ts <= guild_cache_ttl
-            )
 
-            if (
-                within_absolute_ttl
-                and within_expires_at
-                and within_idle
-                and within_guild_cache
-                and created_at_ts is not None
-            ):
+            if within_expires_at and within_idle and created_at_ts is not None:
                 user = doc.get("user")
                 owner_guilds = doc.get("owner_guilds")
                 all_guilds = doc.get("all_guilds")
@@ -941,19 +995,33 @@ async def session_middleware(request: web.Request, handler):
 
             if session is None:
                 invalidate_cookie = True
+                request["session_expired"] = True
                 sessions.delete_one({"_id": session_id})
             else:
+                if cookie_needs_refresh:
+                    refresh_cookie = True
                 touch_interval = max(1, int(SESSION_TOUCH_INTERVAL_SECONDS))
                 should_touch = now - session.last_seen_at >= touch_interval
                 if should_touch:
-                    sessions.update_one({"_id": session_id}, {"$set": {"last_seen_at": now}})
+                    expires_at = _utc_now() + timedelta(seconds=SESSION_TTL_SECONDS)
+                    sessions.update_one(
+                        {"_id": session_id},
+                        {"$set": {"last_seen_at": now, "expires_at": expires_at}},
+                    )
                     session.last_seen_at = now
+                    refresh_cookie = True
+                elif expires_at_ts is None:
+                    expires_at = _utc_now() + timedelta(seconds=SESSION_TTL_SECONDS)
+                    sessions.update_one({"_id": session_id}, {"$set": {"expires_at": expires_at}})
+                    refresh_cookie = True
                 requested_guild_id = _extract_guild_id_from_request(request)
                 if requested_guild_id and requested_guild_id != session.last_guild_id:
                     sessions.update_one({"_id": session_id}, {"$set": {"last_guild_id": requested_guild_id}})
                     session.last_guild_id = requested_guild_id
         except Exception:
             invalidate_cookie = True
+            if raw_cookie:
+                request["session_expired"] = True
             session = None
             logging.exception("event=session_load_failed")
     request["session"] = session
@@ -962,9 +1030,13 @@ async def session_middleware(request: web.Request, handler):
     except web.HTTPException as exc:
         if invalidate_cookie:
             exc.del_cookie(COOKIE_NAME)
+        elif refresh_cookie and session_id:
+            _set_session_cookie(exc, request=request, session_id=session_id)
         raise
     if invalidate_cookie:
         response.del_cookie(COOKIE_NAME)
+    elif refresh_cookie and session_id:
+        _set_session_cookie(response, request=request, session_id=session_id)
     return response
 
 
@@ -972,7 +1044,10 @@ def _require_session(request: web.Request) -> SessionData:
     session = request.get("session")
     if session is None:
         next_path = _sanitize_next_path(request.path_qs)
-        login_href = f"/login?{urllib.parse.urlencode({'next': next_path})}"
+        params = {"next": next_path}
+        if request.get("session_expired"):
+            params["reason"] = "expired"
+        login_href = f"/login?{urllib.parse.urlencode(params)}"
         raise web.HTTPFound(login_href)
     return session
 
@@ -2324,6 +2399,9 @@ async def login(request: web.Request) -> web.Response:
     next_path = _sanitize_next_path(str(request.query.get("next") or "/app"))
     if session is not None:
         raise web.HTTPFound(next_path)
+    reason = str(request.query.get("reason") or "").strip().lower()
+    if reason == "expired":
+        return _session_expired_response(next_path=next_path)
 
     client_id, _client_secret, redirect_uri = _oauth_config(settings)
     states: Collection = request.app[STATE_COLLECTION_KEY]
@@ -2377,6 +2455,28 @@ async def install(request: web.Request) -> web.Response:
         logging.error("event=oauth_authorize_url_invalid", extra=_log_extra(request))
         raise web.HTTPInternalServerError(text="OAuth is misconfigured.")
     raise web.HTTPFound(authorize_url)
+
+
+def _session_expired_response(*, next_path: str) -> web.Response:
+    from offside_bot.web_templates import render, safe_html
+
+    next_path = _sanitize_next_path(next_path)
+    title = t("session.expired.title", "Session expired")
+    message = t("session.expired.message", "Your session expired. Please log in again.")
+    login_href = f"/login?{urllib.parse.urlencode({'next': next_path})}"
+    content = f"""
+      <p><a href="/">&larr; Back</a></p>
+      <h1>{_escape_html(title)}</h1>
+      <div class="card">
+        <p class="muted">{_escape_html(message)}</p>
+        <div class="btn-group mt-12">
+          <a class="btn blue" href="{_escape_html(login_href)}">Log in again</a>
+          <a class="btn secondary" href="/support">Support</a>
+        </div>
+      </div>
+    """
+    page = render("pages/markdown_page.html", title=title, content=safe_html(content))
+    return web.Response(text=page, content_type="text/html")
 
 
 def _oauth_error_response(
@@ -2584,19 +2684,13 @@ async def oauth_callback(request: web.Request) -> web.Response:
     if redirect_path == "/":
         redirect_path = "/app"
     resp = web.HTTPFound(redirect_path)
-    resp.set_cookie(
-        COOKIE_NAME,
-        session_id,
-        httponly=True,
-        samesite="Lax",
-        secure=_is_https(request),
-        max_age=SESSION_TTL_SECONDS,
-    )
+    _set_session_cookie(resp, request=request, session_id=session_id)
     raise resp
 
 
 async def logout(request: web.Request) -> web.Response:
-    session_id = request.cookies.get(COOKIE_NAME)
+    raw_cookie = request.cookies.get(COOKIE_NAME)
+    session_id, _cookie_needs_refresh = _decode_session_cookie(raw_cookie)
     if session_id:
         sessions: Collection = request.app[SESSION_COLLECTION_KEY]
         sessions.delete_one({"_id": session_id})

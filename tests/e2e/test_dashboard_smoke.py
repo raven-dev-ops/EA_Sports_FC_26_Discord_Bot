@@ -139,7 +139,8 @@ async def test_dashboard_smoke_critical_path(monkeypatch) -> None:
 
         # Upgrade checkout can be started (Stripe mocked).
         sessions = app[dashboard.SESSION_COLLECTION_KEY]
-        session_doc = sessions.find_one({"_id": cookie.value}) or {}
+        session_id, _ = dashboard._decode_session_cookie(cookie.value)
+        session_doc = sessions.find_one({"_id": session_id}) or {}
         csrf = session_doc.get("csrf_token")
         assert isinstance(csrf, str) and csrf
 

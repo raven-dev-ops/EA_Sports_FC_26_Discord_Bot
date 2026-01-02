@@ -317,7 +317,7 @@ async def test_oauth_callback_records_manage_guild_as_eligible(monkeypatch) -> N
         cookie = resp.cookies.get(dashboard.COOKIE_NAME)
         assert cookie is not None
 
-        session_id = cookie.value
+        session_id, _ = dashboard._decode_session_cookie(cookie.value)
         sessions = app[dashboard.SESSION_COLLECTION_KEY]
         doc = sessions.find_one({"_id": session_id})
         assert isinstance(doc, dict)
@@ -371,6 +371,7 @@ async def test_session_idle_timeout_forces_relogin(monkeypatch) -> None:
 
     monkeypatch.setattr(database, "MongoClient", mongomock.MongoClient)
     monkeypatch.setattr(database, "_CLIENT", None)
+    monkeypatch.setattr(dashboard, "SESSION_IDLE_TIMEOUT_SECONDS", 10)
 
     app = dashboard.create_app(settings=_settings())
     sessions = app[dashboard.SESSION_COLLECTION_KEY]
@@ -397,15 +398,34 @@ async def test_session_idle_timeout_forces_relogin(monkeypatch) -> None:
         assert parsed.path == "/login"
         qs = parse_qs(parsed.query)
         assert qs.get("next") == ["/app"]
+        assert qs.get("reason") == ["expired"]
         assert sessions.find_one({"_id": "sess_idle"}) is None
     finally:
         await client.close()
 
 
 @pytest.mark.asyncio
-async def test_guild_list_cache_ttl_forces_relogin(monkeypatch) -> None:
-    from urllib.parse import parse_qs, urlparse
+async def test_login_shows_session_expired_notice(monkeypatch) -> None:
+    from aiohttp.test_utils import TestClient, TestServer
 
+    monkeypatch.setattr(database, "MongoClient", mongomock.MongoClient)
+    monkeypatch.setattr(database, "_CLIENT", None)
+
+    app = dashboard.create_app(settings=_settings())
+    client = TestClient(TestServer(app))
+    await client.start_server()
+    try:
+        resp = await client.get("/login?next=/app&reason=expired", allow_redirects=False)
+        assert resp.status == 200
+        html = await resp.text()
+        assert "Session expired" in html
+        assert "Log in again" in html
+    finally:
+        await client.close()
+
+
+@pytest.mark.asyncio
+async def test_guild_list_cache_ttl_does_not_force_relogin(monkeypatch) -> None:
     from aiohttp.test_utils import TestClient, TestServer
 
     monkeypatch.setattr(database, "MongoClient", mongomock.MongoClient)
@@ -432,13 +452,11 @@ async def test_guild_list_cache_ttl_forces_relogin(monkeypatch) -> None:
     client = TestClient(TestServer(app))
     await client.start_server()
     try:
-        resp = await client.get("/app", allow_redirects=False, headers={"Cookie": f"{dashboard.COOKIE_NAME}=sess_stale_guilds"})
-        assert resp.status == 302
-        parsed = urlparse(resp.headers["Location"])
-        assert parsed.path == "/login"
-        qs = parse_qs(parsed.query)
-        assert qs.get("next") == ["/app"]
-        assert sessions.find_one({"_id": "sess_stale_guilds"}) is None
+        resp = await client.get(
+            "/app", allow_redirects=False, headers={"Cookie": f"{dashboard.COOKIE_NAME}=sess_stale_guilds"}
+        )
+        assert resp.status == 200
+        assert sessions.find_one({"_id": "sess_stale_guilds"}) is not None
     finally:
         await client.close()
 
