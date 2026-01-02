@@ -30,7 +30,6 @@ SAFE_CONFIG_FIELDS = {
     "role_coach_premium_id",
     "role_coach_premium_plus_id",
     "channel_staff_portal_id",
-    "channel_club_portal_id",
     "channel_manager_portal_id",
     "channel_coach_portal_id",
     "channel_recruit_portal_id",

@@ -75,7 +75,7 @@ def build_admin_intro_embed() -> discord.Embed:
             "- Running setup checks and portal reposts\n\n"
             "**Guardrails**\n"
             "- Approve/reject with clear feedback.\n"
-            "- Unlock rosters only after rejection (Club Managers portal).\n"
+            "- Unlock rosters only after rejection (Managers portal).\n"
             "- Approved rosters are final once posted to the roster listing channel."
         ),
         color=DEFAULT_COLOR,
@@ -102,11 +102,11 @@ def build_admin_embed() -> discord.Embed:
         inline=False,
     )
     embed.add_field(
-        name="Club Managers",
+        name="Managers",
         value=(
             "- Assign coach tiers and caps\n"
             "- Unlock rosters after rejection\n"
-            "- Refresh premium coach listings"
+            "- Refresh pro coach listings"
         ),
         inline=False,
     )
@@ -299,7 +299,7 @@ class AdminPortalView(SafeView):
 
         buttons = [
             ("Tournaments", discord.ButtonStyle.primary, self.on_tournaments),
-            ("Club Managers", discord.ButtonStyle.primary, self.on_managers),
+            ("Managers", discord.ButtonStyle.primary, self.on_managers),
             ("Players", discord.ButtonStyle.primary, self.on_players),
             ("DB Analytics", discord.ButtonStyle.primary, self.on_db),
             ("Verify Setup (staff)", discord.ButtonStyle.secondary, self.on_verify_setup),
@@ -356,12 +356,12 @@ class AdminPortalView(SafeView):
         )
         if not target_channel_id:
                 await interaction.response.send_message(
-                    "Club Managers portal is not configured yet. Ensure the bot has `Manage Channels` and MongoDB is configured, then restart the bot.",
+                    "Managers portal is not configured yet. Ensure the bot has `Manage Channels` and MongoDB is configured, then restart the bot.",
                     ephemeral=True,
                 )
                 return
         await interaction.response.send_message(
-            f"Open the Club Managers portal here: <#{target_channel_id}>",
+            f"Open the Managers portal here: <#{target_channel_id}>",
             ephemeral=True,
         )
 

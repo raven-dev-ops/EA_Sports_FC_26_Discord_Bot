@@ -6,7 +6,7 @@ See also: `docs/public/server-setup-checklist.md`
 - Start bot with `TEST_MODE=true`
 - Confirm auto-setup creates `--OFFSIDE DASHBOARD--` and `--OFFSIDE REPORTS--`
 - Verify portals are posted:
-  - `staff-portal`, `club-managers-portal`, `club-portal`, `coach-portal`, `recruit-portal`
+  - `staff-portal`, `managers-portal`, `coach-portal`, `recruit-portal`
 - Verify reports channels exist:
   - `staff-monitor` (test mode only), `roster-listing`, `recruitment-boards`, `club-listing`, `pro-coaches`
 - With `TEST_MODE=false`, confirm `coach-portal` is only visible to coaches + staff
@@ -47,16 +47,6 @@ See also: `docs/public/server-setup-checklist.md`
   - Use `Unlink FC25 Stats`
   - Confirm verified stats section is removed from the listing
   - Confirm staff log message is emitted
-
-## Club Portal
-- Register club ad via `club-portal`:
-  - Confirm min description length is enforced
-  - Confirm listing is posted/updated in `club-listing`
-- Edit ad:
-  - Confirm existing listing message is edited (not duplicated)
-  - Confirm rapid edits hit the cooldown message
-- Unregister:
-  - Confirm DB record deleted and posts removed when possible
 
 ## Coach Portal / Rosters
 - Create roster:

@@ -13,7 +13,6 @@ from config import Settings, load_settings
 from config.settings import summarize_settings
 from database import close_client, get_collection, guild_db_context, set_current_guild_id
 from interactions.admin_portal import post_admin_portal
-from interactions.club_portal import post_club_portal
 from interactions.coach_portal import post_coach_portal
 from interactions.fc25_stats_modals import refresh_fc25_stats_for_user
 from interactions.listing_instructions import post_listing_channel_instructions
@@ -219,9 +218,9 @@ class OffsideBot(commands.AutoShardedBot):
         await asyncio.sleep(0.5)
         try:
             await post_manager_portal(self, guilds=guilds)
-            logging.info("Posted club managers portal embed.")
+            logging.info("Posted managers portal embed.")
         except Exception:
-            logging.exception("Failed to post club managers portal.")
+            logging.exception("Failed to post managers portal.")
         await asyncio.sleep(0.5)
         try:
             await post_coach_portal(self, guilds=guilds)
@@ -234,12 +233,6 @@ class OffsideBot(commands.AutoShardedBot):
             logging.info("Posted recruit portal embed.")
         except Exception:
             logging.exception("Failed to post recruit portal.")
-        await asyncio.sleep(0.5)
-        try:
-            await post_club_portal(self, guilds=guilds)
-            logging.info("Posted club portal embed.")
-        except Exception:
-            logging.exception("Failed to post club portal.")
         await asyncio.sleep(0.5)
         try:
             await post_premium_coaches_report(self, guilds=guilds)

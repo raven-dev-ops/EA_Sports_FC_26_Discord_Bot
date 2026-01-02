@@ -46,8 +46,7 @@ Categories:
 
 Dashboard channels:
 - `staff-portal`
-- `club-managers-portal`
-- `club-portal`
+- `managers-portal`
 - `coach-portal`
 - `recruit-portal`
 
@@ -67,9 +66,9 @@ Roles:
 This is the default intent for auto-created channels:
 
 - `staff-portal`: staff-only (staff can post)
-- `club-managers-portal`: staff-only (staff can post)
+- `managers-portal`: staff-only (staff can post)
 - `coach-portal`: coaches-only (read-only; use buttons)
-- `recruit-portal`, `club-portal`: public read-only (use buttons)
+- `recruit-portal`: public read-only (use buttons)
 - `roster-listing`, `recruitment-boards`, `club-listing`, `pro-coaches`: public read-only (bot-managed listings)
 - `staff-monitor`: staff-only (test mode only)
 
@@ -79,7 +78,7 @@ Notes:
 
 ## 7) Operational buttons
 
-From `club-managers-portal`:
+From `managers-portal`:
 - Use **Sync Caps (Active Cycle)** after changing coach roles manually.
 - Use **Toggle Pro Pin** to pin/unpin the Pro coaches embed (requires permissions).
 - Use **Force Rebuild Pro** if the pro coaches channel has stale bot messages.

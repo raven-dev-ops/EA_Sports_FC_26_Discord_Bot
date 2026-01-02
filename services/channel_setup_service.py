@@ -11,12 +11,13 @@ DASHBOARD_CATEGORY_NAME = "--OFFSIDE DASHBOARD--"
 REPORTS_CATEGORY_NAME = "--OFFSIDE REPORTS--"
 
 STAFF_PORTAL_CHANNEL_NAME = "staff-portal"
-MANAGER_PORTAL_CHANNEL_NAME = "club-managers-portal"
-CLUB_PORTAL_CHANNEL_NAME = "club-portal"
+MANAGER_PORTAL_CHANNEL_NAME = "managers-portal"
+LEGACY_MANAGER_PORTAL_CHANNEL_NAME = "club-managers-portal"
+LEGACY_CLUB_PORTAL_CHANNEL_NAME = "club-portal"
 COACH_PORTAL_CHANNEL_NAME = "coach-portal"
 RECRUIT_PORTAL_CHANNEL_NAME = "recruit-portal"
-FREE_PLAYER_PORTAL_CHANNEL_NAME = "free-player-portal"
-PREMIUM_PLAYER_PORTAL_CHANNEL_NAME = "premium-player-portal"
+LEGACY_FREE_PLAYER_PORTAL_CHANNEL_NAME = "free-player-portal"
+LEGACY_PREMIUM_PLAYER_PORTAL_CHANNEL_NAME = "premium-player-portal"
 
 STAFF_MONITOR_CHANNEL_NAME = "staff-monitor"
 ROSTER_LISTING_CHANNEL_NAME = "roster-listing"
@@ -72,6 +73,12 @@ async def ensure_offside_channels(
         reports_category=reports_category,
         actions=actions,
     )
+    await _migrate_manager_portal_channel(
+        guild,
+        config=config,
+        dashboard_category=dashboard_category,
+        actions=actions,
+    )
     await _migrate_pro_coaches_channel(
         guild,
         config=config,
@@ -98,11 +105,6 @@ async def ensure_offside_channels(
             _staff_only_overwrites(guild, staff_roles, bot_member),
         ),
         (
-            CLUB_PORTAL_CHANNEL_NAME,
-            "channel_club_portal_id",
-            _public_readonly_overwrites(guild, staff_roles, bot_member),
-        ),
-        (
             COACH_PORTAL_CHANNEL_NAME,
             "channel_coach_portal_id",
             _coach_portal_overwrites(guild, staff_roles, coach_roles, bot_member),
@@ -111,26 +113,6 @@ async def ensure_offside_channels(
             RECRUIT_PORTAL_CHANNEL_NAME,
             "channel_recruit_portal_id",
             _public_readonly_overwrites(guild, staff_roles, bot_member),
-        ),
-        (
-            FREE_PLAYER_PORTAL_CHANNEL_NAME,
-            "channel_free_player_portal_id",
-            _role_portal_overwrites(
-                guild,
-                staff_roles=staff_roles,
-                target_roles=_resolve_portal_roles(guild, config, key="role_free_player_id"),
-                bot_member=bot_member,
-            ),
-        ),
-        (
-            PREMIUM_PLAYER_PORTAL_CHANNEL_NAME,
-            "channel_premium_player_portal_id",
-            _role_portal_overwrites(
-                guild,
-                staff_roles=staff_roles,
-                target_roles=_resolve_portal_roles(guild, config, key="role_premium_player_id"),
-                bot_member=bot_member,
-            ),
         ),
     ]
 
@@ -537,11 +519,12 @@ async def _cleanup_duplicate_offside_categories(
     managed_names = {
         STAFF_PORTAL_CHANNEL_NAME,
         MANAGER_PORTAL_CHANNEL_NAME,
-        CLUB_PORTAL_CHANNEL_NAME,
+        LEGACY_MANAGER_PORTAL_CHANNEL_NAME,
+        LEGACY_CLUB_PORTAL_CHANNEL_NAME,
         COACH_PORTAL_CHANNEL_NAME,
         RECRUIT_PORTAL_CHANNEL_NAME,
-        FREE_PLAYER_PORTAL_CHANNEL_NAME,
-        PREMIUM_PLAYER_PORTAL_CHANNEL_NAME,
+        LEGACY_FREE_PLAYER_PORTAL_CHANNEL_NAME,
+        LEGACY_PREMIUM_PLAYER_PORTAL_CHANNEL_NAME,
         STAFF_MONITOR_CHANNEL_NAME,
         ROSTER_LISTING_CHANNEL_NAME,
         RECRUITMENT_BOARDS_CHANNEL_NAME,
@@ -671,6 +654,77 @@ async def _migrate_pro_coaches_channel(
         return
     actions.append("Renamed `premium-coaches` to `pro-coaches`.")
     config["channel_premium_coaches_id"] = legacy_channel.id
+
+
+async def _migrate_manager_portal_channel(
+    guild: discord.Guild,
+    *,
+    config: dict[str, Any],
+    dashboard_category: discord.CategoryChannel,
+    actions: list[str],
+) -> None:
+    target_name = MANAGER_PORTAL_CHANNEL_NAME
+    legacy_name = LEGACY_MANAGER_PORTAL_CHANNEL_NAME
+    channel_id = _parse_int(config.get("channel_manager_portal_id"))
+    managed_channel: discord.TextChannel | None = None
+    if channel_id:
+        existing = guild.get_channel(channel_id)
+        if isinstance(existing, discord.TextChannel):
+            managed_channel = existing
+
+    existing_target = discord.utils.get(dashboard_category.text_channels, name=target_name)
+    if existing_target is None:
+        existing_target = discord.utils.get(guild.text_channels, name=target_name)
+
+    if managed_channel is not None and existing_target is not None and managed_channel.id != existing_target.id:
+        config["channel_manager_portal_id"] = existing_target.id
+        actions.append("Found existing `managers-portal` channel; updated config to use it.")
+        return
+
+    if managed_channel is not None:
+        if managed_channel.name == legacy_name:
+            try:
+                await managed_channel.edit(
+                    name=target_name,
+                    reason="Offside setup: rename managers portal channel",
+                )
+            except discord.Forbidden:
+                actions.append(
+                    "Could not rename `club-managers-portal` (missing permissions). "
+                    "Will create `managers-portal` instead."
+                )
+                config.pop("channel_manager_portal_id", None)
+            else:
+                actions.append("Renamed `club-managers-portal` to `managers-portal`.")
+                config["channel_manager_portal_id"] = managed_channel.id
+            return
+        if managed_channel.name == target_name:
+            config["channel_manager_portal_id"] = managed_channel.id
+            return
+
+    if existing_target is not None:
+        config["channel_manager_portal_id"] = existing_target.id
+        return
+
+    legacy_channel = discord.utils.get(dashboard_category.text_channels, name=legacy_name)
+    if legacy_channel is None:
+        legacy_channel = discord.utils.get(guild.text_channels, name=legacy_name)
+    if legacy_channel is None:
+        return
+    try:
+        await legacy_channel.edit(
+            name=target_name,
+            reason="Offside setup: rename managers portal channel",
+        )
+    except discord.Forbidden:
+        actions.append(
+            "Could not rename `club-managers-portal` (missing permissions). "
+            "Will create `managers-portal` instead."
+        )
+        config.pop("channel_manager_portal_id", None)
+        return
+    actions.append("Renamed `club-managers-portal` to `managers-portal`.")
+    config["channel_manager_portal_id"] = legacy_channel.id
 
 
 async def _migrate_recruitment_boards_channel(

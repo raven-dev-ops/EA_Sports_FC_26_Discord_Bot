@@ -568,7 +568,7 @@ def main() -> None:
             "positions_needed": ["ST", "CM", "RB"],
             "keywords": ["competitive", "structured", "mics preferred"],
             "description": "Looking for disciplined players to fill out the squad. Trials open.",
-            "contact": "DM the owner or reply in #club-portal.",
+            "contact": "DM the owner or reply in #club-listing.",
             "approval_status": "approved",
         },
         {

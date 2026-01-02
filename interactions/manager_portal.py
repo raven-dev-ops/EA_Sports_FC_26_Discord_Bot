@@ -45,12 +45,12 @@ def _portal_footer() -> str:
 
 def build_manager_intro_embed() -> discord.Embed:
     return make_embed(
-        title="Club Managers Portal Overview",
+        title="Managers Portal Overview",
         description=(
             "**Purpose**\n"
             "Manage coach tiers, roster unlocks, and pro coach listings.\n\n"
             "**Who should use this**\n"
-            "- Staff / club managers only.\n\n"
+            "- Staff / managers only.\n\n"
             "**Quick rules**\n"
             "- The bot needs `Manage Roles` for tier changes.\n"
             "- Cap downgrades will not reduce below current roster size."
@@ -62,7 +62,7 @@ def build_manager_intro_embed() -> discord.Embed:
 
 def build_manager_embed() -> discord.Embed:
     embed = make_embed(
-        title="Club Managers Control Panel",
+        title="Managers Control Panel",
         description=(
             "Use the buttons below to manage tiers and listings. Responses are ephemeral."
         ),
@@ -1023,7 +1023,7 @@ class ManagerPortalView(SafeView):
         await interaction.response.send_message(
             embed=make_embed(
                 title="Reposting portal...",
-                description="Cleaning up and reposting the Club Managers portal now.",
+                description="Cleaning up and reposting the Managers portal now.",
                 color=SUCCESS_COLOR,
             ),
             ephemeral=True,
@@ -1081,8 +1081,8 @@ async def post_manager_portal(
             async for message in channel.history(limit=20):
                 if message.author.id == bot_user.id:
                     if message.embeds and message.embeds[0].title in {
-                        "Club Managers Control Panel",
-                        "Club Managers Portal Overview",
+                        "Managers Control Panel",
+                        "Managers Portal Overview",
                     }:
                         try:
                             await message.delete()
@@ -1107,11 +1107,11 @@ async def post_manager_portal(
                 allowed_mentions=discord.AllowedMentions.none(),
             )
             logging.info(
-                "Posted club managers portal embed (guild=%s channel=%s).", guild.id, target_channel_id
+                "Posted managers portal embed (guild=%s channel=%s).", guild.id, target_channel_id
             )
         except discord.DiscordException as exc:
             logging.warning(
-                "Failed to post club managers portal to channel %s (guild=%s): %s",
+                "Failed to post managers portal to channel %s (guild=%s): %s",
                 target_channel_id,
                 guild.id,
                 exc,

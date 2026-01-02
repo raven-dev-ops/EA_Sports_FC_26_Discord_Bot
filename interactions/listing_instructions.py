@@ -136,12 +136,6 @@ async def post_listing_channel_instructions(
             field="channel_recruit_portal_id",
             test_mode=False,
         )
-        club_portal_id = resolve_channel_id(
-            settings,
-            guild_id=guild.id,
-            field="channel_club_portal_id",
-            test_mode=False,
-        )
         manager_portal_id = resolve_channel_id(
             settings,
             guild_id=guild.id,
@@ -174,7 +168,7 @@ async def post_listing_channel_instructions(
                 _build_listing_about_embed(
                     title="About: club-listing",
                     description="Club ads are posted here automatically when a club registers/updates.",
-                    portal_ref=_format_channel_ref(club_portal_id, fallback_name="club-portal"),
+                    portal_ref="Contact staff to submit a club ad.",
                 ),
             ),
             (
@@ -183,7 +177,7 @@ async def post_listing_channel_instructions(
                 _build_listing_about_embed(
                     title="About: pro-coaches",
                     description="Pro coach listings are managed by the bot (openings/practice times).",
-                    portal_ref=_format_channel_ref(manager_portal_id, fallback_name="club-managers-portal"),
+                    portal_ref=_format_channel_ref(manager_portal_id, fallback_name="managers-portal"),
                 ),
             ),
         ]

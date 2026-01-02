@@ -269,7 +269,6 @@ def summarize_settings(settings: Settings) -> dict[str, object]:
         },
         "channels": {
             "staff_portal": settings.channel_staff_portal_id,
-            "club_portal": settings.channel_club_portal_id,
             "manager_portal": settings.channel_manager_portal_id,
             "coach_portal": settings.channel_coach_portal_id,
             "recruit_portal": settings.channel_recruit_portal_id,

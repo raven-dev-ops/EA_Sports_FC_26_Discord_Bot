@@ -16,8 +16,7 @@ GUILD_COACH_ROLE_FIELDS: list[tuple[str, str]] = [
 
 GUILD_CHANNEL_FIELDS: list[tuple[str, str]] = [
     ("channel_staff_portal_id", "Staff portal channel"),
-    ("channel_club_portal_id", "Club portal channel"),
-    ("channel_manager_portal_id", "Club Managers portal channel"),
+    ("channel_manager_portal_id", "Managers portal channel"),
     ("channel_coach_portal_id", "Coach portal channel"),
     ("channel_recruit_portal_id", "Recruit portal channel"),
     ("channel_staff_monitor_id", "Staff monitor channel"),

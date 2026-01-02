@@ -952,15 +952,14 @@ async def test_overview_page_renders(monkeypatch) -> None:
         if url.endswith("/guilds/123/channels"):
             return [
                 {"id": "20", "type": 0, "name": "staff-portal", "position": 1, "permission_overwrites": []},
-                {"id": "21", "type": 0, "name": "club-managers-portal", "position": 2, "permission_overwrites": []},
-                {"id": "22", "type": 0, "name": "club-portal", "position": 3, "permission_overwrites": []},
-                {"id": "23", "type": 0, "name": "coach-portal", "position": 4, "permission_overwrites": []},
-                {"id": "24", "type": 0, "name": "recruit-portal", "position": 5, "permission_overwrites": []},
+                {"id": "21", "type": 0, "name": "managers-portal", "position": 2, "permission_overwrites": []},
+                {"id": "22", "type": 0, "name": "coach-portal", "position": 3, "permission_overwrites": []},
+                {"id": "23", "type": 0, "name": "recruit-portal", "position": 4, "permission_overwrites": []},
                 {"id": "30", "type": 0, "name": "staff-monitor", "position": 6, "permission_overwrites": []},
                 {"id": "31", "type": 0, "name": "roster-listing", "position": 7, "permission_overwrites": []},
-                {"id": "32", "type": 0, "name": "recruit-listing", "position": 8, "permission_overwrites": []},
+                {"id": "32", "type": 0, "name": "recruitment-boards", "position": 8, "permission_overwrites": []},
                 {"id": "33", "type": 0, "name": "club-listing", "position": 9, "permission_overwrites": []},
-                {"id": "34", "type": 0, "name": "premium-coaches", "position": 10, "permission_overwrites": []},
+                {"id": "34", "type": 0, "name": "pro-coaches", "position": 10, "permission_overwrites": []},
             ]
         if "/channels/" in url and "/messages" in url:
             return [{"id": "m1", "author": {"id": "1"}}]
@@ -976,9 +975,8 @@ async def test_overview_page_renders(monkeypatch) -> None:
             "role_coach_premium_plus_id": 13,
             "channel_staff_portal_id": 20,
             "channel_manager_portal_id": 21,
-            "channel_club_portal_id": 22,
-            "channel_coach_portal_id": 23,
-            "channel_recruit_portal_id": 24,
+            "channel_coach_portal_id": 22,
+            "channel_recruit_portal_id": 23,
             "channel_staff_monitor_id": 30,
             "channel_roster_listing_id": 31,
             "channel_recruit_listing_id": 32,
@@ -1228,13 +1226,12 @@ async def test_setup_wizard_page_renders(monkeypatch) -> None:
         if url.endswith("/guilds/123/channels"):
             return [
                 {"id": "20", "type": 0, "name": "staff-portal", "position": 1, "permission_overwrites": []},
-                {"id": "21", "type": 0, "name": "club-managers-portal", "position": 2, "permission_overwrites": []},
-                {"id": "22", "type": 0, "name": "club-portal", "position": 3, "permission_overwrites": []},
-                {"id": "23", "type": 0, "name": "coach-portal", "position": 4, "permission_overwrites": []},
-                {"id": "24", "type": 0, "name": "recruit-portal", "position": 5, "permission_overwrites": []},
+                {"id": "21", "type": 0, "name": "managers-portal", "position": 2, "permission_overwrites": []},
+                {"id": "22", "type": 0, "name": "coach-portal", "position": 3, "permission_overwrites": []},
+                {"id": "23", "type": 0, "name": "recruit-portal", "position": 4, "permission_overwrites": []},
                 {"id": "30", "type": 0, "name": "staff-monitor", "position": 6, "permission_overwrites": []},
                 {"id": "31", "type": 0, "name": "roster-listing", "position": 7, "permission_overwrites": []},
-                {"id": "32", "type": 0, "name": "recruit-listing", "position": 8, "permission_overwrites": []},
+                {"id": "32", "type": 0, "name": "recruitment-boards", "position": 8, "permission_overwrites": []},
                 {"id": "33", "type": 0, "name": "club-listing", "position": 9, "permission_overwrites": []},
             ]
         if url.endswith("/guilds/123/members/1"):
@@ -1251,9 +1248,8 @@ async def test_setup_wizard_page_renders(monkeypatch) -> None:
             "role_coach_id": 11,
             "channel_staff_portal_id": 20,
             "channel_manager_portal_id": 21,
-            "channel_club_portal_id": 22,
-            "channel_coach_portal_id": 23,
-            "channel_recruit_portal_id": 24,
+            "channel_coach_portal_id": 22,
+            "channel_recruit_portal_id": 23,
             "channel_staff_monitor_id": 30,
             "channel_roster_listing_id": 31,
             "channel_recruit_listing_id": 32,

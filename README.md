@@ -9,7 +9,7 @@ Roster management and staff review bot for Discord tournaments.
 
 1. Set up Discord channels and roles:
    - Invite the bot with permissions to manage channels/roles, send messages, read message history, and use slash commands.
-   - On join/startup, the bot auto-creates the `--OFFSIDE DASHBOARD--` / `--OFFSIDE REPORTS--` layout, required channels (including Club Managers + Pro coaches), and the coach roles (`Coach`, `Coach Premium`, `Coach Premium+`).
+   - On join/startup, the bot auto-creates the `--OFFSIDE DASHBOARD--` / `--OFFSIDE REPORTS--` layout, required channels (including Managers + Pro coaches), and the coach roles (`Coach`, `Coach Premium`, `Coach Premium+`).
    - Assign the coach roles to your coaches (premium tiers control roster caps).
    - Checklist: `docs/public/server-setup-checklist.md`
 2. Configure the bot:
@@ -43,10 +43,9 @@ Roster management and staff review bot for Discord tournaments.
 ## Portals (auto-posted on startup)
 
 - **Staff Portal** (`channel_staff_portal_id`): staff review (approve/reject) + quick-reference panel.
-- **Club Managers Portal** (`channel_manager_portal_id`): coach tiers (Coach/Premium/Premium+), roster unlock/delete, pro coaches refresh, and cap sync tools.
+- **Managers Portal** (`channel_manager_portal_id`): coach tiers (Coach/Premium/Premium+), roster unlock/delete, pro coaches refresh, and cap sync tools.
 - **Coach Portal** (`channel_coach_portal_id`): roster dashboard + coach help (buttons; responses are ephemeral). Channel is coaches-only.
 - **Recruit Portal** (`channel_recruit_portal_id`): recruit profile register/edit/preview/unregister (buttons; responses are ephemeral).
-- **Club Portal** (`channel_club_portal_id`): club ad register/edit/preview/unregister (buttons; responses are ephemeral).
 - **Roster Listing** (`channel_roster_listing_id`): approved roster embeds reposted here after staff approval.
 - **Recruitment Boards** (`channel_recruit_listing_id`): recruit profile listing embeds.
 - **Club Listing** (`channel_club_listing_id`): club ad listing embeds.
@@ -54,8 +53,8 @@ Roster management and staff review bot for Discord tournaments.
 
 ### Dashboard embeds & buttons
 - Coach portal: intro embed + roster portal embed. Buttons open the roster dashboard (add/remove/view/submit, rename) and coach help. Responses are ephemeral; portal is idempotent and cleans prior portal embeds.
-- Staff portal: intro embed + admin control panel. Buttons for Tournaments, Club Managers portal link, Players, DB/Analytics, and Verify Setup. Staff actions are ephemeral; the submission review message is cleaned after approve/reject.
-- Club Managers portal: intro embed + control panel. Buttons for Set Coach Tier, Unlock Roster, Refresh Pro coaches, Toggle Pro Pin, Force Rebuild Pro, Sync Caps (Active Cycle), and Delete Roster (admin-only).
+- Staff portal: intro embed + admin control panel. Buttons for Tournaments, Managers portal link, Players, DB/Analytics, and Verify Setup. Staff actions are ephemeral; the submission review message is cleaned after approve/reject.
+- Managers portal: intro embed + control panel. Buttons for Set Coach Tier, Unlock Roster, Refresh Pro coaches, Toggle Pro Pin, Force Rebuild Pro, Sync Caps (Active Cycle), and Delete Roster (admin-only).
 - All portals include a staff-only "Repost Portal" action for quick cleanup/repost.
 - Help command: `/help` returns an embed with coach/staff/tournament/ops categories and submission steps; all responses are ephemeral.
 
@@ -120,7 +119,7 @@ Optional:
   - `ROLE_COACH_PREMIUM_ID`
   - `ROLE_COACH_PREMIUM_PLUS_ID`
 - Channel env overrides (optional; primary source is per-guild config created by auto-setup):
-  - `CHANNEL_STAFF_PORTAL_ID`, `CHANNEL_MANAGER_PORTAL_ID`, `CHANNEL_CLUB_PORTAL_ID`, `CHANNEL_COACH_PORTAL_ID`, `CHANNEL_RECRUIT_PORTAL_ID`
+  - `CHANNEL_STAFF_PORTAL_ID`, `CHANNEL_MANAGER_PORTAL_ID`, `CHANNEL_COACH_PORTAL_ID`, `CHANNEL_RECRUIT_PORTAL_ID`
   - `CHANNEL_STAFF_MONITOR_ID` (test-mode sink)
   - `CHANNEL_ROSTER_LISTING_ID` (fallback to legacy `CHANNEL_ROSTER_PORTAL_ID`)
   - `CHANNEL_RECRUIT_LISTING_ID`, `CHANNEL_CLUB_LISTING_ID`, `CHANNEL_PREMIUM_COACHES_ID`

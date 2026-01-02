@@ -3432,7 +3432,6 @@ async def guild_overview_page(request: web.Request) -> web.Response:
             post_fields = [
                 "channel_staff_portal_id",
                 "channel_manager_portal_id",
-                "channel_club_portal_id",
                 "channel_coach_portal_id",
                 "channel_recruit_portal_id",
                 "channel_roster_listing_id",
@@ -3749,7 +3748,6 @@ async def guild_setup_wizard_page(request: web.Request) -> web.Response:
             portal_fields = [
                 "channel_staff_portal_id",
                 "channel_manager_portal_id",
-                "channel_club_portal_id",
                 "channel_coach_portal_id",
                 "channel_recruit_portal_id",
                 "channel_roster_listing_id",
