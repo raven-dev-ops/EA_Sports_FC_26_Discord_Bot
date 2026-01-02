@@ -124,7 +124,7 @@ async def test_dashboard_smoke_critical_path(monkeypatch) -> None:
 
         resp = await client.get(f"/oauth/callback?code=abc&state={state}", allow_redirects=False)
         assert resp.status == 302
-        assert resp.headers.get("Location") == "/app"
+        assert resp.headers.get("Location") == "/app/billing?guild_id=123"
 
         cookie = resp.cookies.get(dashboard.COOKIE_NAME)
         assert cookie is not None

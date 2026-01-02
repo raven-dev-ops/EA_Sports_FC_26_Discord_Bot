@@ -61,7 +61,7 @@ def _stripe_sig_header(*, payload: bytes, secret: str, timestamp: int) -> str:
 
 @pytest.mark.asyncio
 async def test_protected_routes_redirect_to_login_with_next(monkeypatch) -> None:
-    from urllib.parse import urlparse
+    from urllib.parse import parse_qs, urlparse
 
     from aiohttp.test_utils import TestClient, TestServer
 
@@ -78,13 +78,15 @@ async def test_protected_routes_redirect_to_login_with_next(monkeypatch) -> None
         assert location is not None
         parsed = urlparse(location)
         assert parsed.path == "/login"
+        qs = parse_qs(parsed.query)
+        assert qs.get("next") == ["/app/billing?guild_id=123"]
     finally:
         await client.close()
 
 
 @pytest.mark.asyncio
 async def test_app_requires_login_redirects_with_next(monkeypatch) -> None:
-    from urllib.parse import urlparse
+    from urllib.parse import parse_qs, urlparse
 
     from aiohttp.test_utils import TestClient, TestServer
 
@@ -101,6 +103,46 @@ async def test_app_requires_login_redirects_with_next(monkeypatch) -> None:
         assert location is not None
         parsed = urlparse(location)
         assert parsed.path == "/login"
+        qs = parse_qs(parsed.query)
+        assert qs.get("next") == ["/app"]
+    finally:
+        await client.close()
+
+
+@pytest.mark.asyncio
+async def test_login_redirects_when_authenticated(monkeypatch) -> None:
+    from aiohttp.test_utils import TestClient, TestServer
+
+    monkeypatch.setattr(database, "MongoClient", mongomock.MongoClient)
+    monkeypatch.setattr(database, "_CLIENT", None)
+
+    app = dashboard.create_app(settings=_settings())
+    sessions = app[dashboard.SESSION_COLLECTION_KEY]
+    now = time.time()
+    sessions.insert_one(
+        {
+            "_id": "sess1",
+            "created_at": now - 10,
+            "last_seen_at": now - 5,
+            "guilds_fetched_at": now - 5,
+            "expires_at": datetime.now(timezone.utc) + timedelta(seconds=dashboard.SESSION_TTL_SECONDS),
+            "user": {"id": "1", "username": "alice", "discriminator": "0001"},
+            "owner_guilds": [{"id": "123", "name": "Managed"}],
+            "all_guilds": [{"id": "123", "name": "Managed"}],
+            "csrf_token": "csrf_good",
+        }
+    )
+
+    client = TestClient(TestServer(app))
+    await client.start_server()
+    try:
+        resp = await client.get(
+            "/login?next=/app/billing?guild_id=123",
+            allow_redirects=False,
+            headers={"Cookie": f"{dashboard.COOKIE_NAME}=sess1"},
+        )
+        assert resp.status == 302
+        assert resp.headers.get("Location") == "/app/billing?guild_id=123"
     finally:
         await client.close()
 
@@ -323,7 +365,7 @@ async def test_oauth_callback_with_expired_state_is_rejected(monkeypatch) -> Non
 
 @pytest.mark.asyncio
 async def test_session_idle_timeout_forces_relogin(monkeypatch) -> None:
-    from urllib.parse import urlparse
+    from urllib.parse import parse_qs, urlparse
 
     from aiohttp.test_utils import TestClient, TestServer
 
@@ -353,6 +395,8 @@ async def test_session_idle_timeout_forces_relogin(monkeypatch) -> None:
         assert resp.status == 302
         parsed = urlparse(resp.headers["Location"])
         assert parsed.path == "/login"
+        qs = parse_qs(parsed.query)
+        assert qs.get("next") == ["/app"]
         assert sessions.find_one({"_id": "sess_idle"}) is None
     finally:
         await client.close()
@@ -360,7 +404,7 @@ async def test_session_idle_timeout_forces_relogin(monkeypatch) -> None:
 
 @pytest.mark.asyncio
 async def test_guild_list_cache_ttl_forces_relogin(monkeypatch) -> None:
-    from urllib.parse import urlparse
+    from urllib.parse import parse_qs, urlparse
 
     from aiohttp.test_utils import TestClient, TestServer
 
@@ -392,6 +436,8 @@ async def test_guild_list_cache_ttl_forces_relogin(monkeypatch) -> None:
         assert resp.status == 302
         parsed = urlparse(resp.headers["Location"])
         assert parsed.path == "/login"
+        qs = parse_qs(parsed.query)
+        assert qs.get("next") == ["/app"]
         assert sessions.find_one({"_id": "sess_stale_guilds"}) is None
     finally:
         await client.close()

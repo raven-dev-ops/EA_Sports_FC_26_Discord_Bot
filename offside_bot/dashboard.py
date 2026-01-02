@@ -971,7 +971,9 @@ async def session_middleware(request: web.Request, handler):
 def _require_session(request: web.Request) -> SessionData:
     session = request.get("session")
     if session is None:
-        raise web.HTTPFound("/login")
+        next_path = _sanitize_next_path(request.path_qs)
+        login_href = f"/login?{urllib.parse.urlencode({'next': next_path})}"
+        raise web.HTTPFound(login_href)
     return session
 
 
@@ -2318,10 +2320,14 @@ async def stats_api(request: web.Request) -> web.Response:
 
 async def login(request: web.Request) -> web.Response:
     settings: Settings = request.app[SETTINGS_KEY]
+    session = request.get("session")
+    next_path = _sanitize_next_path(str(request.query.get("next") or "/app"))
+    if session is not None:
+        raise web.HTTPFound(next_path)
+
     client_id, _client_secret, redirect_uri = _oauth_config(settings)
     states: Collection = request.app[STATE_COLLECTION_KEY]
     expires_at = _utc_now() + timedelta(seconds=STATE_TTL_SECONDS)
-    next_path = "/app"
     state = _insert_oauth_state(states=states, next_path=next_path, expires_at=expires_at)
     authorize_url = _build_authorize_url(
         client_id=client_id,
@@ -2574,7 +2580,10 @@ async def oauth_callback(request: web.Request) -> web.Response:
         },
     )
 
-    resp = web.HTTPFound("/app")
+    redirect_path = _sanitize_next_path(next_path)
+    if redirect_path == "/":
+        redirect_path = "/app"
+    resp = web.HTTPFound(redirect_path)
     resp.set_cookie(
         COOKIE_NAME,
         session_id,
