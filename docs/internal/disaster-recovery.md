@@ -1,7 +1,7 @@
 # Disaster Recovery Checklist
 
 This checklist covers MongoDB backups/restores, Stripe event replay, and credential rotation.
-See `docs/data-lifecycle.md` for retention guidance and baseline backup policy.
+See `docs/public/data-lifecycle.md` for retention guidance and baseline backup policy.
 
 ## MongoDB backup and restore
 

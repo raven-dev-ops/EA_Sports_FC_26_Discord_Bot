@@ -51,7 +51,7 @@ docker run --env-file .env offside-bot
 - Keep PRs small and focused; include tests for new logic.
 - Update README/CHANGELOG when behavior or setup changes.
 - Describe testing performed (e.g., `pytest`, `ruff`, `mypy`).
-- If you touch commands, make sure `docs/commands.md` is up to date.
+- If you touch commands, make sure `docs/public/commands.md` is up to date.
 - For security issues, follow `SECURITY.md` and do not open a public issue.
 
 ## Contributions and Licensing

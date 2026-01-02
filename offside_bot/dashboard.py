@@ -103,31 +103,31 @@ DOCS_PAGES: list[dict[str, str]] = [
     {
         "slug": "server-setup-checklist",
         "title": "Server setup checklist",
-        "path": "docs/server-setup-checklist.md",
+        "path": "docs/public/server-setup-checklist.md",
         "summary": "Step-by-step setup for new servers.",
     },
     {
         "slug": "billing",
         "title": "Billing",
-        "path": "docs/billing.md",
+        "path": "docs/public/billing.md",
         "summary": "Stripe setup, pricing, and subscription details.",
     },
     {
         "slug": "faq",
         "title": "FAQ",
-        "path": "docs/faq.md",
+        "path": "docs/public/faq.md",
         "summary": "Common questions about setup, pricing, and data.",
     },
     {
         "slug": "data-lifecycle",
         "title": "Data lifecycle",
-        "path": "docs/data-lifecycle.md",
+        "path": "docs/public/data-lifecycle.md",
         "summary": "Retention, deletion, and data export guidance.",
     },
     {
         "slug": "fc25-stats-policy",
         "title": "FC stats policy",
-        "path": "docs/fc25-stats-policy.md",
+        "path": "docs/public/fc25-stats-policy.md",
         "summary": "Stats data handling policy and expectations.",
     },
 ]
@@ -1585,9 +1585,9 @@ async def privacy_page(_request: web.Request) -> web.Response:
 
 
 async def product_copy_page(_request: web.Request) -> web.Response:
-    text = _repo_read_text("docs/product-copy.md")
+    text = _repo_read_text("docs/public/product-copy.md")
     if text is None:
-        raise web.HTTPNotFound(text="docs/product-copy.md not found.")
+        raise web.HTTPNotFound(text="docs/public/product-copy.md not found.")
     html = _markdown_to_html(text)
     content = f"""
       <div class="card hero-card">
@@ -1752,9 +1752,9 @@ def _render_doc_page(doc: dict[str, str], *, back_href: str, back_label: str) ->
 
 
 async def commands_page(_request: web.Request) -> web.Response:
-    text = _repo_read_text("docs/commands.md")
+    text = _repo_read_text("docs/public/commands.md")
     if text is None:
-        raise web.HTTPNotFound(text="docs/commands.md not found.")
+        raise web.HTTPNotFound(text="docs/public/commands.md not found.")
 
     categories = _parse_commands_markdown(text)
     from offside_bot.web_templates import render

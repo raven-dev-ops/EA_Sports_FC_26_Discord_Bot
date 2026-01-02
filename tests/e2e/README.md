@@ -1,6 +1,6 @@
 ## End-to-end harness (optional)
 
-Backend health (prod): ![Web health](https://img.shields.io/website?url=https%3A%2F%2Fofficial-offside-bot-214b205fba71.herokuapp.com%2Fhealth&label=web&up_message=up&down_message=down) ![DB + worker](https://img.shields.io/website?url=https%3A%2F%2Fofficial-offside-bot-214b205fba71.herokuapp.com%2Fready&label=db%2Bworker&up_message=passing&down_message=failing). See `docs/monitoring.md`.
+Backend health (prod): ![Web health](https://img.shields.io/website?url=https%3A%2F%2Fofficial-offside-bot-214b205fba71.herokuapp.com%2Fhealth&label=web&up_message=up&down_message=down) ![DB + worker](https://img.shields.io/website?url=https%3A%2F%2Fofficial-offside-bot-214b205fba71.herokuapp.com%2Fready&label=db%2Bworker&up_message=passing&down_message=failing). See `docs/internal/monitoring.md`.
 
 These are manual/automation-ready scenarios that can be exercised with mocked credentials or in a staging guild. They are meant to guide end-to-end validation without hitting production:
 

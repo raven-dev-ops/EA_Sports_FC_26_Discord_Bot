@@ -21,7 +21,7 @@ How to fix:
 - Alternative: Fix GitHub billing/spending limits so GitHub-hosted runners can start.
 
 Notes:
-- `docs/billing.md` is Stripe billing for the app, not GitHub billing.
+- `docs/public/billing.md` is Stripe billing for the app, not GitHub billing.
 
 ## Release metadata checks
 

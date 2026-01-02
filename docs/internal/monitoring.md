@@ -45,10 +45,10 @@ Dashboard panels (baseline):
 - Discord: API error rate by operation and status code.
 
 Alert starters (link to runbooks):
-- Web 5xx > 2% for 5 minutes (see `docs/qa-checklist.md`).
-- Stripe webhook failures > 0 in 5 minutes (see `docs/billing.md`).
-- Discord API errors spike (see `docs/release-playbook.md`).
-- Worker heartbeat stale (see `docs/monitoring.md` + `docs/release-playbook.md`).
+- Web 5xx > 2% for 5 minutes (see `docs/internal/qa-checklist.md`).
+- Stripe webhook failures > 0 in 5 minutes (see `docs/public/billing.md`).
+- Discord API errors spike (see `docs/internal/release-playbook.md`).
+- Worker heartbeat stale (see `docs/internal/monitoring.md` + `docs/internal/release-playbook.md`).
 
 ## Logging hygiene
 

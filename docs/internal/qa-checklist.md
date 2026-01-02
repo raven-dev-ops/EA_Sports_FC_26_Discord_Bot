@@ -1,6 +1,6 @@
 # QA Checklist (Staging Guild)
 
-See also: `docs/server-setup-checklist.md`
+See also: `docs/public/server-setup-checklist.md`
 
 ## Setup
 - Start bot with `TEST_MODE=true`

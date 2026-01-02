@@ -2,7 +2,7 @@
 
 This project stores guild data in MongoDB. For multi-tenant production, the recommended configuration is **per-guild databases** (`MONGODB_PER_GUILD_DB=true`) so each Discord server can be isolated and safely deleted.
 
-For a full disaster recovery checklist (backups, restores, Stripe replay, credential rotation), see `docs/disaster-recovery.md`.
+For a full disaster recovery checklist (backups, restores, Stripe replay, credential rotation), see `docs/internal/disaster-recovery.md`.
 
 ## Backups
 
@@ -37,7 +37,7 @@ High-level restore runbook:
 1. Restore the backup into a **new** MongoDB instance/cluster (preferred) or the existing one.
 2. Point the app at the restored DB (`MONGODB_URI` + `MONGODB_DB_NAME` / `MONGODB_PER_GUILD_DB`).
 3. Run migrations: `python -m scripts.migrate`.
-4. Run tests/smoke checks (see `docs/release-playbook.md`).
+4. Run tests/smoke checks (see `docs/internal/release-playbook.md`).
 
 ## Retention policy (logs / audit)
 

@@ -2,7 +2,7 @@
 Generate markdown documentation for commands from the shared command catalog.
 
 Usage:
-  python -m scripts.generate_docs           # writes docs/commands.md
+  python -m scripts.generate_docs           # writes docs/public/commands.md
   python -m scripts.generate_docs --check   # exits non-zero if docs are stale
 """
 from __future__ import annotations
@@ -13,7 +13,7 @@ import sys
 
 from utils.command_catalog import commands_by_category
 
-DOC_PATH = pathlib.Path("docs/commands.md")
+DOC_PATH = pathlib.Path("docs/public/commands.md")
 
 
 def render_markdown() -> str:

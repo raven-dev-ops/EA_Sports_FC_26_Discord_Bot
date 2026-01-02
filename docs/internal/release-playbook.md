@@ -3,9 +3,9 @@
 This doc is the repeatable checklist for deploying and rolling back Offside.
 
 See also:
-- `docs/qa-checklist.md`
-- `docs/billing.md`
-- `docs/data-lifecycle.md`
+- `docs/internal/qa-checklist.md`
+- `docs/public/billing.md`
+- `docs/public/data-lifecycle.md`
 - `.env.example`
 
 ## Versioning policy
@@ -18,7 +18,7 @@ See also:
 ## Release checklist
 
 - [ ] CI is green on `main` (ruff, mypy, pytest, build).
-- [ ] Ensure the self-hosted runner is online (CI + tag releases run on self-hosted runners; see `docs/ci.md`).
+- [ ] Ensure the self-hosted runner is online (CI + tag releases run on self-hosted runners; see `docs/internal/ci.md`).
 - [ ] Review open PRs and Dependabot updates; merge or defer intentionally.
 - [ ] Verify secrets are not committed (no `.env` changes, no tokens in git history).
 - [ ] Confirm gitleaks is green and `.slugignore` excludes `.env` and local artifacts.
@@ -31,7 +31,7 @@ See also:
   - `python -m build --outdir dist`
 - [ ] Run fast smoke tests:
   - Web dashboard: `pytest -q tests/e2e/test_dashboard_smoke.py`
-  - Discord staging guild: `docs/qa-checklist.md`
+  - Discord staging guild: `docs/internal/qa-checklist.md`
 - [ ] Confirm Discord developer portal settings are correct (redirect URIs, install link, bot perms).
 - [ ] Deploy the release to production (see platform notes below).
 - [ ] Watch logs for 5-10 minutes after deploy (startup migrations, setup tasks, dashboard health).
@@ -41,7 +41,7 @@ See also:
 Some repos may show a failing check named `Automatic Dependency Submission (Python)` even when CI is green.
 It is GitHub-managed and may fail if GitHub-hosted runners cannot start due to account billing/spending limits.
 
-If you don't need it, disable it in repo settings (details: `docs/ci.md`).
+If you don't need it, disable it in repo settings (details: `docs/internal/ci.md`).
 
 ## Environment variable checklist
 
@@ -61,7 +61,7 @@ At minimum, confirm:
   - `MONGODB_DB_NAME`
   - `MONGODB_COLLECTION`
   - `MONGODB_PER_GUILD_DB` / `MONGODB_GUILD_DB_PREFIX` (if using per-guild databases)
-- Billing (if enabled; see `docs/billing.md`)
+- Billing (if enabled; see `docs/public/billing.md`)
   - `STRIPE_MODE` (test/live)
   - `STRIPE_SECRET_KEY`
   - `STRIPE_WEBHOOK_SECRET`
@@ -114,6 +114,6 @@ MongoDB changes are not always reversible automatically. Options:
 
 ### 4) Re-verify
 
-- Re-run the smoke test checklist (`docs/qa-checklist.md`).
+- Re-run the smoke test checklist (`docs/internal/qa-checklist.md`).
 - Confirm the dashboard works (login, select guild, open settings).
 - Confirm portals/listings are posting correctly in Discord.

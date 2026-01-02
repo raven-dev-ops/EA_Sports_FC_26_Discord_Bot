@@ -34,7 +34,7 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 - Ops: dashboard workflow to schedule/cancel irreversible guild data deletion (per-guild DB mode) and worker support to execute it.
-- Docs/Scripts: data lifecycle runbook (`docs/data-lifecycle.md`) + guild export script (`python -m scripts.export_guild_data`).
+- Docs/Scripts: data lifecycle runbook (`docs/public/data-lifecycle.md`) + guild export script (`python -m scripts.export_guild_data`).
 
 ### Changed
 - Ops: ops tasks support scheduled execution (`run_after`) and cancellation.
@@ -43,7 +43,7 @@ All notable changes to this project will be documented in this file.
 ## [0.2.48] - 2025-12-31
 
 ### Added
-- Docs/Web: canonical product positioning + plan gating doc at `docs/product-copy.md` and a public `/product` page.
+- Docs/Web: canonical product positioning + plan gating doc at `docs/public/product-copy.md` and a public `/product` page.
 
 ## [0.2.47] - 2025-12-31
 
@@ -63,7 +63,7 @@ All notable changes to this project will be documented in this file.
 ## [0.2.44] - 2025-12-31
 
 ### Docs
-- Release checklist + env/migration checklist + rollback plan: `docs/release-playbook.md`.
+- Release checklist + env/migration checklist + rollback plan: `docs/internal/release-playbook.md`.
 
 ## [0.2.43] - 2025-12-31
 
@@ -73,7 +73,7 @@ All notable changes to this project will be documented in this file.
 ## [0.2.42] - 2025-12-31
 
 ### Added
-- Web: `/commands` page generated from `docs/commands.md` with client-side search + category filters.
+- Web: `/commands` page generated from `docs/public/commands.md` with client-side search + category filters.
 
 ## [0.2.41] - 2025-12-31
 
@@ -196,7 +196,7 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 - Billing: Stripe Billing Portal integration (self-serve subscription management) in the web dashboard.
-- Docs: Stripe billing configuration guide (`docs/billing.md`).
+- Docs: Stripe billing configuration guide (`docs/public/billing.md`).
 
 ### Fixed
 - Typing: widened Discord channel permission overwrites typing for newer discord.py stubs.
@@ -235,7 +235,7 @@ All notable changes to this project will be documented in this file.
 - Migrations: schema version bumped to 4; indexes are ensured per collection.
 
 ### Updated
-- Docs: clarified MongoDB configuration in `.env.example`, `README.md`, and `docs/server-setup-checklist.md`.
+- Docs: clarified MongoDB configuration in `.env.example`, `README.md`, and `docs/public/server-setup-checklist.md`.
 
 ## [0.2.19] - 2025-12-30
 
@@ -253,7 +253,7 @@ All notable changes to this project will be documented in this file.
 - Premium Coaches report improvements: Premium vs Premium+ sections, last-updated timestamp, optional pin, and a manager "force rebuild" cleanup action.
 - Club Managers portal: Sync Caps (Active Cycle) action and audit events for tier changes/cap syncs.
 - Portal UX: standardized intro/control panel formatting, "Last refreshed" footers, and a staff-only "Repost Portal" action on each portal.
-- Server onboarding checklist: `docs/server-setup-checklist.md`.
+- Server onboarding checklist: `docs/public/server-setup-checklist.md`.
 
 ### Changed
 - Recruit and club listing embeds: improved field ordering/icons, "Updated" footers, and safer long-text handling (split/truncate with guidance).
@@ -317,7 +317,7 @@ All notable changes to this project will be documented in this file.
 - Staff tools: `/player_pool`, `/player_pool_index` (pinned index), and `/me` (ephemeral profile preview).
 - Abuse/quality controls: cooldowns on profile/ad edits, minimum publish requirements, and club ad minimum description length.
 - Optional club ad approvals (`FEATURE_FLAGS=club_ads_approval`) with approve/reject actions and audit logging.
-- QA checklist (`docs/qa-checklist.md`) and additional parsing/fixture tests for FC25 helpers.
+- QA checklist (`docs/internal/qa-checklist.md`) and additional parsing/fixture tests for FC25 helpers.
 
 ### Changed
 - `TEST_MODE=true` routes all portal posts, listing posts, and forwarded logs to the staff monitor channel (`channel_staff_monitor_id`) only.
@@ -339,7 +339,7 @@ All notable changes to this project will be documented in this file.
 - Discord HTTP helpers now honor `retry_after` with bounded exponential backoff and timeouts; graceful shutdown closes Mongo client.
 - Command registry validation (duplicate name/description checks) and standalone migration runner with mongomock-tested schema versioning.
 - In-memory channel caching to reduce Discord API calls.
-- Shared command catalog powering `/help` and generated docs (`docs/commands.md`) via `scripts.generate_docs` with CI check.
+- Shared command catalog powering `/help` and generated docs (`docs/public/commands.md`) via `scripts.generate_docs` with CI check.
 - Command metrics (duration/status) logged per command for basic observability.
 - Per-guild config overrides with staff commands to view/set; mass-mention guard on inputs and safer allowed mentions on sends.
 - Dependency hygiene: dependabot config, pip-audit in CI, and release workflow builds artifacts on tags.

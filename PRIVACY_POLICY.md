@@ -30,7 +30,7 @@ This Privacy Policy describes how the Offside Discord Bot ("the Bot") collects, 
 - Roster/tournament data: kept for the duration of the tournament and a short post-event review period determined by staff; staff can delete entries on request where feasible.
 - Logs: retained up to 30 days for troubleshooting.
 - Ban/blacklist data: retained in Google Sheets by server staff (not controlled by the Bot); requests must go to staff.
-- FC25 stats (if enabled and you opt in): retained according to `docs/fc25-stats-policy.md` and deleted when you unlink/delete your stats.
+- FC25 stats (if enabled and you opt in): retained according to `docs/public/fc25-stats-policy.md` and deleted when you unlink/delete your stats.
 
 ## Sharing and Disclosure
 

@@ -1,7 +1,7 @@
 # Official Offsides Discord Bot
 
 ![CI](https://github.com/raven-dev-ops/EA_Sports_FC_26_Discord_Bot/actions/workflows/ci.yml/badge.svg) ![Backend health](https://img.shields.io/website?url=https%3A%2F%2Fofficial-offside-bot-214b205fba71.herokuapp.com%2Fhealth&label=backend%20health)
-![Web health](https://img.shields.io/website?url=https%3A%2F%2Fofficial-offside-bot-214b205fba71.herokuapp.com%2Fhealth&label=web&up_message=up&down_message=down) ![DB + worker](https://img.shields.io/website?url=https%3A%2F%2Fofficial-offside-bot-214b205fba71.herokuapp.com%2Fready&label=db%2Bworker&up_message=passing&down_message=failing). See `docs/monitoring.md`.
+![Web health](https://img.shields.io/website?url=https%3A%2F%2Fofficial-offside-bot-214b205fba71.herokuapp.com%2Fhealth&label=web&up_message=up&down_message=down) ![DB + worker](https://img.shields.io/website?url=https%3A%2F%2Fofficial-offside-bot-214b205fba71.herokuapp.com%2Fready&label=db%2Bworker&up_message=passing&down_message=failing). See `docs/internal/monitoring.md`.
 
 Roster management and staff review bot for Discord tournaments.
 
@@ -11,13 +11,13 @@ Roster management and staff review bot for Discord tournaments.
    - Invite the bot with permissions to manage channels/roles, send messages, read message history, and use slash commands.
    - On join/startup, the bot auto-creates the `--OFFSIDE DASHBOARD--` / `--OFFSIDE REPORTS--` layout, required channels (including Club Managers + Premium Coaches), and the coach roles (`Coach`, `Coach Premium`, `Coach Premium+`).
    - Assign the coach roles to your coaches (premium tiers control roster caps).
-   - Checklist: `docs/server-setup-checklist.md`
+   - Checklist: `docs/public/server-setup-checklist.md`
 2. Configure the bot:
    - Copy `.env.example` to `.env` and fill in the required IDs and tokens.
    - Keep `TEST_MODE=true` while validating in a staging guild (routes all portal/listing posts + forwarded logs to the staff monitor channel).
 3. Deploy and verify:
    - Run locally (`python -m offside_bot`) or deploy to your host (e.g., Heroku worker).
-   - Maintainers: release + rollback checklist: `docs/release-playbook.md`
+   - Maintainers: release + rollback checklist: `docs/internal/release-playbook.md`
    - Confirm the coach and staff portal embeds appear in their channels (or run the portal refresh buttons).
    - Submit a test roster, approve/reject, and confirm approved rosters flow to the roster listing channel.
 
@@ -35,7 +35,7 @@ Roster management and staff review bot for Discord tournaments.
 - Startup migrations + recovery run automatically; Mongo client closes cleanly on shutdown.
 - Backoff + timeouts on Discord HTTP calls to reduce rate-limit impact; retries respect `retry_after`.
 - Command registry validation prevents duplicate slash names or missing descriptions at startup.
-- Command docs are generated from shared metadata (`docs/commands.md`); CI checks they stay in sync.
+- Command docs are generated from shared metadata (`docs/public/commands.md`); CI checks they stay in sync.
 - Per-guild config overrides (staff-only) and mass-mention guard on inputs; allowed mentions restrict @everyone/@here/roles by default.
 - Optional sharding (`USE_SHARDING`, `SHARD_COUNT`) for scale-out; channel lookups cached to reduce Discord API pressure.
 - Dependabot + `pip-audit` keep dependencies healthy; release workflow builds artifacts on tags.
@@ -129,7 +129,7 @@ Optional (billing / Pro plan):
 - `STRIPE_SECRET_KEY`
 - `STRIPE_WEBHOOK_SECRET`
 - `STRIPE_PRICE_PRO_ID`
-- Setup guide: `docs/billing.md`
+- Setup guide: `docs/public/billing.md`
 
 Optional (ops):
 - `LOG_LEVEL` (default INFO)
@@ -142,7 +142,7 @@ Optional (ops):
 - `GOOGLE_SHEETS_CREDENTIALS_JSON`
 - `USE_SHARDING` (default false) and optional `SHARD_COUNT` for scale-out.
 - `FEATURE_FLAGS` (comma-separated; e.g., `metrics_log` for scheduler demo).
-- FC25 stats (optional; requires `FEATURE_FLAGS=fc25_stats`, see `docs/fc25-stats-policy.md`; includes a scheduled refresh worker).
+- FC25 stats (optional; requires `FEATURE_FLAGS=fc25_stats`, see `docs/public/fc25-stats-policy.md`; includes a scheduled refresh worker).
   - `FC25_STATS_CACHE_TTL_SECONDS` (default 900)
   - `FC25_STATS_HTTP_TIMEOUT_SECONDS` (default 7)
   - `FC25_STATS_MAX_CONCURRENCY` (default 3)
@@ -195,9 +195,9 @@ staff monitor channel (`channel_staff_monitor_id`) only.
 - Register commands: `python -m scripts.register_commands --guild <id>` during dev; use `--global` for production sync after validation.
 - Logging: structured key/value logging with command context (guild/channel/user/command); set `LOG_LEVEL=DEBUG` for verbose output in staging.
 - Signals & shutdown: SIGTERM/SIGINT trigger a graceful shutdown and close the Mongo client; Discord backoff helpers use timeouts and honor `retry_after`.
-- Docs/Help sync: `python -m scripts.generate_docs` refreshes `docs/commands.md`; `/help` pulls from the same catalog.
+- Docs/Help sync: `python -m scripts.generate_docs` refreshes `docs/public/commands.md`; `/help` pulls from the same catalog.
 - Per-guild config: staff can use `/config_guild_set` to override settings per guild; stored in Mongo `guild_settings`.
-- Releases: update `VERSION` + `CHANGELOG.md`, then tag `vX.Y.Z` (see `docs/release-playbook.md`); pushing the tag runs the release workflow (requires the self-hosted runner to be online) to build and attach wheel/sdist artifacts.
+- Releases: update `VERSION` + `CHANGELOG.md`, then tag `vX.Y.Z` (see `docs/internal/release-playbook.md`); pushing the tag runs the release workflow (requires the self-hosted runner to be online) to build and attach wheel/sdist artifacts.
 - Dev watch: `python -m scripts.dev_watch` (requires `watchfiles`) restarts the bot on Python file changes.
 - Profiling: `python -m scripts.profile --module offside_bot.__main__ --func main` for quick CPU profiling (non-production).
 - Feature flags: use `FEATURE_FLAGS=metrics_log` to enable sample scheduler job; extend via `utils/flags.py`.
@@ -240,10 +240,10 @@ staff monitor channel (`channel_staff_monitor_id`) only.
 - Security policy: `SECURITY.md`
 - License: All rights reserved (see `LICENSE`)
 - Changelog: `CHANGELOG.md`
-- Release playbook: `docs/release-playbook.md`
-- Disaster recovery: `docs/disaster-recovery.md`
-- Environments: `docs/environments.md`
-- CI notes (self-hosted runner, dynamic checks): `docs/ci.md`
-- Admin console: `docs/admin-console.md`
-- Localization: `docs/localization.md`
-- Data lifecycle (backups/retention/deletion): `docs/data-lifecycle.md`
+- Release playbook: `docs/internal/release-playbook.md`
+- Disaster recovery: `docs/internal/disaster-recovery.md`
+- Environments: `docs/internal/environments.md`
+- CI notes (self-hosted runner, dynamic checks): `docs/internal/ci.md`
+- Admin console: `docs/internal/admin-console.md`
+- Localization: `docs/internal/localization.md`
+- Data lifecycle (backups/retention/deletion): `docs/public/data-lifecycle.md`
