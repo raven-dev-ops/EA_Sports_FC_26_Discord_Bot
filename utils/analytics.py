@@ -5,7 +5,7 @@ import logging
 import os
 from typing import Any
 
-from aiohttp import ClientSession
+from aiohttp import ClientSession, ClientTimeout
 
 _DEFAULT_POSTHOG_HOST = "https://app.posthog.com"
 
@@ -27,7 +27,7 @@ async def _posthog_capture(
 ) -> None:
     url = f"{host}/capture"
     try:
-        async with http.post(url, json=payload, timeout=2) as resp:
+        async with http.post(url, json=payload, timeout=ClientTimeout(total=2)) as resp:
             await resp.read()
     except Exception as exc:
         logging.debug("event=posthog_capture_failed error=%s", exc)

@@ -2375,7 +2375,7 @@ def _create_session_from_discord(
     guilds: list[dict[str, Any]],
     next_path: str,
     installed_guild_id: str = "",
-) -> web.StreamResponse:
+) -> web.HTTPFound:
     settings: Settings = request.app[SETTINGS_KEY]
     config = _dashboard_config(request)
 
