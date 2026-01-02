@@ -171,6 +171,52 @@
     }, 1200);
   });
 
+  const statsStrip = document.querySelector("[data-stats-strip]");
+  if (statsStrip) {
+    const serverItem = statsStrip.querySelector('[data-stat="servers"]');
+    const versionItem = statsStrip.querySelector('[data-stat="version"]');
+    const statusItem = statsStrip.querySelector('[data-stat="status"]');
+    const serverValue = statsStrip.querySelector('[data-stat-value="servers"]');
+    const versionValue = statsStrip.querySelector('[data-stat-value="version"]');
+    const statusLink = statsStrip.querySelector("[data-stat-link]");
+
+    const show = (el) => {
+      if (el) {
+        el.classList.remove("hidden");
+      }
+    };
+
+    fetch("/api/stats", { credentials: "same-origin" })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data) => {
+        if (!data) {
+          return;
+        }
+        if (typeof data.server_count === "number" && Number.isFinite(data.server_count)) {
+          if (serverValue) {
+            serverValue.textContent = data.server_count.toLocaleString();
+          }
+          show(serverItem);
+        }
+        if (typeof data.version === "string" && data.version.trim()) {
+          const versionText = data.version.startsWith("v") ? data.version : `v${data.version}`;
+          if (versionValue) {
+            versionValue.textContent = versionText;
+          }
+          show(versionItem);
+        }
+        if (typeof data.status_url === "string" && data.status_url.trim()) {
+          if (statusLink) {
+            statusLink.setAttribute("href", data.status_url);
+          }
+          show(statusItem);
+        }
+      })
+      .catch(() => {
+        // leave stats strip hidden if the endpoint fails
+      });
+  }
+
   document.addEventListener("focusin", (event) => {
     const input = event.target;
     if (!input || !(input instanceof HTMLInputElement)) {

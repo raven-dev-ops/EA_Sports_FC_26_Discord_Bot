@@ -25,7 +25,11 @@ from services.analytics_service import get_guild_analytics
 from services.audit_log_service import list_audit_events, record_audit_event
 from services.error_reporting_service import init_error_reporting, set_guild_tag
 from services.guild_config_service import get_guild_config, set_guild_config
-from services.guild_install_service import ensure_guild_install_indexes, list_guild_installs
+from services.guild_install_service import (
+    ensure_guild_install_indexes,
+    get_guild_install_collection,
+    list_guild_installs,
+)
 from services.guild_settings_schema import (
     FC25_STATS_ENABLED_KEY,
     GUILD_CHANNEL_FIELDS,
@@ -77,6 +81,7 @@ SESSION_TOUCH_INTERVAL_SECONDS = int(
 )
 STATE_TTL_SECONDS = 600
 GUILD_METADATA_TTL_SECONDS = int(os.environ.get("DASHBOARD_GUILD_METADATA_TTL_SECONDS", "60").strip() or "60")
+STATS_CACHE_TTL_SECONDS = int(os.environ.get("DASHBOARD_STATS_CACHE_TTL_SECONDS", "1800").strip() or "1800")
 
 REQUEST_TIMEOUT_SECONDS = float(os.environ.get("DASHBOARD_REQUEST_TIMEOUT_SECONDS", "15").strip() or "15")
 MAX_REQUEST_BYTES = int(os.environ.get("DASHBOARD_MAX_REQUEST_BYTES", "1048576").strip() or "1048576")
@@ -148,6 +153,7 @@ SESSION_COLLECTION_KEY: Final = web.AppKey("session_collection", Collection)
 STATE_COLLECTION_KEY: Final = web.AppKey("state_collection", Collection)
 USER_COLLECTION_KEY: Final = web.AppKey("user_collection", Collection)
 GUILD_METADATA_CACHE_KEY: Final = web.AppKey("guild_metadata_cache", dict[int, dict[str, Any]])
+STATS_CACHE_KEY: Final = web.AppKey("stats_cache", dict[str, Any])
 HTTP_SESSION_KEY: Final = web.AppKey("http", ClientSession)
 
 
@@ -1469,6 +1475,11 @@ def _markdown_to_html(text: str) -> str:
     return markdown.markdown(text, extensions=["extra"], output_format="html")
 
 
+def _read_version_text() -> str:
+    text = _repo_read_text("VERSION")
+    return text.strip() if text else ""
+
+
 def _public_repo_url() -> str:
     repo = (os.environ.get("PUBLIC_REPO_URL") or "").strip()
     if not repo:
@@ -1480,6 +1491,51 @@ def _public_repo_url() -> str:
 
 def _mailto_link(address: str) -> str:
     return "mailto:" + urllib.parse.quote(address)
+
+
+def _build_stats_payload(settings: Settings) -> dict[str, Any]:
+    payload: dict[str, Any] = {}
+    version = _read_version_text()
+    if version:
+        payload["version"] = version
+
+    status_url = os.environ.get("STATUSPAGE_URL", "").strip()
+    if status_url:
+        payload["status_url"] = status_url
+
+    server_count: int | None = None
+    if settings.mongodb_uri:
+        try:
+            col = get_guild_install_collection(settings)
+            server_count = int(col.count_documents({"installed": True}))
+        except Exception:
+            logging.exception("stats_server_count_failed")
+            server_count = None
+
+    if isinstance(server_count, int):
+        payload["server_count"] = server_count
+
+    return payload
+
+
+def _get_cached_stats(app: web.Application, settings: Settings) -> dict[str, Any]:
+    cache: dict[str, Any] = app[STATS_CACHE_KEY]
+    ttl_seconds = max(0, int(STATS_CACHE_TTL_SECONDS))
+    now = time.time()
+    cached_payload = cache.get("payload")
+    fetched_at = cache.get("fetched_at")
+    if (
+        ttl_seconds > 0
+        and isinstance(fetched_at, (int, float))
+        and isinstance(cached_payload, dict)
+        and now - float(fetched_at) <= ttl_seconds
+    ):
+        return cached_payload
+
+    payload = _build_stats_payload(settings)
+    cache["payload"] = payload
+    cache["fetched_at"] = now
+    return payload
 
 
 async def terms_page(_request: web.Request) -> web.Response:
@@ -2198,6 +2254,18 @@ async def ready(request: web.Request) -> web.Response:
             }
         )
     return web.json_response({"ok": False, "mongo": "ok", "worker": "missing"}, status=503)
+
+
+async def stats_api(request: web.Request) -> web.Response:
+    settings: Settings = request.app[SETTINGS_KEY]
+    payload = _get_cached_stats(request.app, settings)
+    response = web.json_response(payload)
+    ttl_seconds = max(0, int(STATS_CACHE_TTL_SECONDS))
+    if ttl_seconds > 0:
+        response.headers["Cache-Control"] = f"public, max-age={ttl_seconds}"
+    else:
+        response.headers["Cache-Control"] = "no-store"
+    return response
 
 
 async def login(request: web.Request) -> web.Response:
@@ -5016,6 +5084,7 @@ def create_app(*, settings: Settings | None = None) -> web.Application:
         ensure_ops_task_indexes(app_settings)
         ensure_guild_install_indexes(app_settings)
     app[GUILD_METADATA_CACHE_KEY] = {}
+    app[STATS_CACHE_KEY] = {}
     app.on_startup.append(_on_startup)
     app.on_cleanup.append(_on_cleanup)
 
@@ -5066,6 +5135,7 @@ def create_app(*, settings: Settings | None = None) -> web.Application:
     app.router.add_get("/guild/{guild_id}/ops", guild_ops_page)
     app.router.add_get("/guild/{guild_id}/settings", guild_settings_page)
     app.router.add_post("/guild/{guild_id}/settings", guild_settings_save)
+    app.router.add_get("/api/stats", stats_api)
     app.router.add_get("/api/guild/{guild_id}/analytics.json", guild_analytics_json)
     app.router.add_get("/api/guild/{guild_id}/discord_metadata.json", guild_discord_metadata_json)
     app.router.add_post("/api/guild/{guild_id}/ops/run_setup", guild_ops_run_setup)
