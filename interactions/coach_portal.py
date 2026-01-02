@@ -50,52 +50,19 @@ def build_coach_help_embed() -> discord.Embed:
     return embed
 
 
-def build_coach_intro_embed() -> discord.Embed:
-    return make_embed(
-        title="Coach Portal Overview",
+def build_coach_portal_embed() -> discord.Embed:
+    embed = make_embed(
+        title="Coach Portal",
         description=(
-            "**Purpose**\n"
-            "Build and submit your roster for the current tournament cycle.\n\n"
-            "**Who should use this**\n"
-            "- Coaches only (Team Coach / Club Manager).\n\n"
-            "**Quick rules**\n"
+            "**Build and submit your roster for the current cycle.**\n"
             "- Minimum 8 players to submit.\n"
             "- Caps: Team Coach=16, Club Manager=22.\n"
             "- After submit, your roster locks until staff approves/rejects.\n"
-            "- Pro coaches: set Practice Times to appear in the Pro coaches report."
+            "- Pro coaches: set Practice Times to appear in the Pro coaches report.\n\n"
+            "Use the action menu below. Responses are ephemeral."
         ),
         color=DEFAULT_COLOR,
         footer=_portal_footer(),
-    )
-
-
-def build_coach_portal_embed() -> discord.Embed:
-    embed = make_embed(
-        title="Coach Roster Portal",
-        description=(
-            "Use the buttons below to manage your roster. Responses are ephemeral."
-        ),
-        color=DEFAULT_COLOR,
-        footer=_portal_footer(),
-    )
-    embed.add_field(
-        name="Open Roster Dashboard",
-        value=(
-            "- Create or rename your roster\n"
-            "- Add/remove players and review details\n"
-            "- Submit for staff review"
-        ),
-        inline=False,
-    )
-    embed.add_field(
-        name="Coach Help",
-        value="- View the coach guide (tips + requirements).",
-        inline=False,
-    )
-    embed.add_field(
-        name="Repost Portal (staff)",
-        value="- Clean up and repost this portal message set.",
-        inline=False,
     )
     return embed
 
@@ -103,23 +70,43 @@ def build_coach_portal_embed() -> discord.Embed:
 class CoachPortalView(SafeView):
     def __init__(self) -> None:
         super().__init__(timeout=None)
-        btn_dashboard: discord.ui.Button = discord.ui.Button(
-            label="Open Roster Dashboard", style=discord.ButtonStyle.primary
+        options = [
+            discord.SelectOption(
+                label="Open Roster Dashboard",
+                value="dashboard",
+                description="Create, edit, and submit your roster",
+            ),
+            discord.SelectOption(
+                label="Coach Help",
+                value="help",
+                description="Tips + requirements",
+            ),
+            discord.SelectOption(
+                label="Repost Portal",
+                value="repost",
+                description="Staff-only portal cleanup",
+            ),
+        ]
+        self.action_select = discord.ui.Select(
+            placeholder="Select a coach action...",
+            options=options,
         )
-        btn_help: discord.ui.Button = discord.ui.Button(
-            label="Coach Help", style=discord.ButtonStyle.secondary
-        )
-        btn_repost: discord.ui.Button = discord.ui.Button(
-            label="Repost Portal (staff)", style=discord.ButtonStyle.secondary
-        )
+        self.action_select.callback = self.on_action_select
+        self.add_item(self.action_select)
 
-        setattr(btn_dashboard, "callback", self.on_dashboard)
-        setattr(btn_help, "callback", self.on_help)
-        setattr(btn_repost, "callback", self.on_repost_portal)
-
-        self.add_item(btn_dashboard)
-        self.add_item(btn_help)
-        self.add_item(btn_repost)
+    async def on_action_select(self, interaction: discord.Interaction) -> None:
+        selection = self.action_select.values[0] if self.action_select.values else ""
+        if selection == "dashboard":
+            await self.on_dashboard(interaction)
+        elif selection == "help":
+            await self.on_help(interaction)
+        elif selection == "repost":
+            await self.on_repost_portal(interaction)
+        else:
+            await interaction.response.send_message(
+                "Select a valid action.",
+                ephemeral=True,
+            )
 
     async def on_dashboard(self, interaction: discord.Interaction) -> None:
         try:
@@ -199,6 +186,7 @@ async def send_coach_portal_message(
                 if message.embeds and message.embeds[0].title in {
                     "Coach Roster Portal",
                     "Coach Portal Overview",
+                    "Coach Portal",
                 }:
                     try:
                         await message.delete()
@@ -207,15 +195,9 @@ async def send_coach_portal_message(
     except discord.DiscordException:
         pass
 
-    intro_embed = build_coach_intro_embed()
     embed = build_coach_portal_embed()
     view = CoachPortalView()
     try:
-        await send_message(
-            channel,
-            embed=intro_embed,
-            allowed_mentions=discord.AllowedMentions.none(),
-        )
         await send_message(
             channel,
             embed=embed,
@@ -269,6 +251,7 @@ async def post_coach_portal(
                     if message.embeds and message.embeds[0].title in {
                         "Coach Roster Portal",
                         "Coach Portal Overview",
+                        "Coach Portal",
                     }:
                         try:
                             await message.delete()
@@ -277,15 +260,9 @@ async def post_coach_portal(
         except discord.DiscordException:
             pass
 
-        intro_embed = build_coach_intro_embed()
         embed = build_coach_portal_embed()
         view = CoachPortalView()
         try:
-            await send_message(
-                channel,
-                embed=intro_embed,
-                allowed_mentions=discord.AllowedMentions.none(),
-            )
             await send_message(
                 channel,
                 embed=embed,

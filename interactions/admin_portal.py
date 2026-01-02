@@ -63,81 +63,26 @@ def _coach_help_embed() -> discord.Embed:
     return embed
 
 
-def build_admin_intro_embed() -> discord.Embed:
-    return make_embed(
-        title="Staff Portal Overview",
+def build_admin_portal_embed() -> discord.Embed:
+    embed = make_embed(
+        title="Staff Portal",
         description=(
-            "**Purpose**\n"
-            "Run staff workflows and tournament operations in one place.\n\n"
-            "**Use this portal for**\n"
-            "- Reviewing roster submissions\n"
-            "- Managing tournament flow and staff tools\n"
-            "- Running setup checks and portal reposts\n\n"
-            "**Guardrails**\n"
+            "**Staff-only controls**\n"
+            "- Tournaments, roster reviews, and staff ops\n"
+            "- Player checks and data health\n"
+            "- Setup verification and portal reposts\n\n"
+            "Use the action menu below. Responses are ephemeral."
+        ),
+        color=DEFAULT_COLOR,
+        footer=_portal_footer(),
+    )
+    embed.add_field(
+        name="Guardrails",
+        value=(
             "- Approve/reject with clear feedback.\n"
             "- Unlock rosters only after rejection (Managers portal).\n"
-            "- Approved rosters are final once posted to the club listings channel."
+            "- Approved rosters are final once posted to listings."
         ),
-        color=DEFAULT_COLOR,
-        footer=_portal_footer(),
-    )
-
-
-def build_admin_embed() -> discord.Embed:
-    embed = make_embed(
-        title="Admin Control Panel",
-        description=(
-            "Pick a panel below. Buttons are staff-only and responses are ephemeral."
-        ),
-        color=DEFAULT_COLOR,
-        footer=_portal_footer(),
-    )
-    embed.add_field(
-        name="Tournaments",
-        value=(
-            "- Create/state tournaments\n"
-            "- Register teams and publish brackets\n"
-            "- Run match flow and disputes"
-        ),
-        inline=False,
-    )
-    embed.add_field(
-        name="Managers",
-        value=(
-            "- Assign coach roles and caps\n"
-            "- Unlock rosters after rejection\n"
-            "- Refresh pro coach listings"
-        ),
-        inline=False,
-    )
-    embed.add_field(
-        name="Players",
-        value=(
-            "- Eligibility checks\n"
-            "- Ban list validation\n"
-            "- Player data cleanup"
-        ),
-        inline=False,
-    )
-    embed.add_field(
-        name="DB Analytics",
-        value=(
-            "- Health checks and data exports\n"
-            "- Audit review and metrics snapshots"
-        ),
-        inline=False,
-    )
-    embed.add_field(
-        name="Verify Setup (staff)",
-        value=(
-            "- Re-run auto-setup\n"
-            "- Validate channels, roles, and permissions"
-        ),
-        inline=False,
-    )
-    embed.add_field(
-        name="Repost Portal (staff)",
-        value="- Clean up and repost the staff portal messages",
         inline=False,
     )
     return embed
@@ -296,19 +241,64 @@ def db_embed() -> discord.Embed:
 class AdminPortalView(SafeView):
     def __init__(self) -> None:
         super().__init__(timeout=None)
-
-        buttons = [
-            ("Tournaments", discord.ButtonStyle.primary, self.on_tournaments),
-            ("Managers", discord.ButtonStyle.primary, self.on_managers),
-            ("Players", discord.ButtonStyle.primary, self.on_players),
-            ("DB Analytics", discord.ButtonStyle.primary, self.on_db),
-            ("Verify Setup (staff)", discord.ButtonStyle.secondary, self.on_verify_setup),
-            ("Repost Portal (staff)", discord.ButtonStyle.secondary, self.on_repost_portal),
+        options = [
+            discord.SelectOption(
+                label="Tournaments",
+                value="tournaments",
+                description="Bracket + match flow tools",
+            ),
+            discord.SelectOption(
+                label="Managers Portal",
+                value="managers",
+                description="Open the managers portal channel",
+            ),
+            discord.SelectOption(
+                label="Players",
+                value="players",
+                description="Eligibility checks + bans",
+            ),
+            discord.SelectOption(
+                label="DB Analytics",
+                value="db",
+                description="Health checks + exports",
+            ),
+            discord.SelectOption(
+                label="Verify Setup",
+                value="verify_setup",
+                description="Re-run auto-setup checks",
+            ),
+            discord.SelectOption(
+                label="Repost Portal",
+                value="repost",
+                description="Clean up and repost this portal",
+            ),
         ]
-        for label, style, handler in buttons:
-            button: discord.ui.Button = discord.ui.Button(label=label, style=style)
-            setattr(button, "callback", handler)
-            self.add_item(button)
+        self.action_select = discord.ui.Select(
+            placeholder="Select a staff action...",
+            options=options,
+        )
+        self.action_select.callback = self.on_action_select
+        self.add_item(self.action_select)
+
+    async def on_action_select(self, interaction: discord.Interaction) -> None:
+        selection = self.action_select.values[0] if self.action_select.values else ""
+        if selection == "tournaments":
+            await self.on_tournaments(interaction)
+        elif selection == "managers":
+            await self.on_managers(interaction)
+        elif selection == "players":
+            await self.on_players(interaction)
+        elif selection == "db":
+            await self.on_db(interaction)
+        elif selection == "verify_setup":
+            await self.on_verify_setup(interaction)
+        elif selection == "repost":
+            await self.on_repost_portal(interaction)
+        else:
+            await interaction.response.send_message(
+                "Select a valid action.",
+                ephemeral=True,
+            )
 
     def _staff_only(self, interaction: discord.Interaction) -> bool:
         settings = getattr(interaction.client, "settings", None)
@@ -894,6 +884,7 @@ async def send_admin_portal_message(
                 if message.embeds and message.embeds[0].title in {
                     "Admin Control Panel",
                     "Staff Portal Overview",
+                    "Staff Portal",
                 }:
                     try:
                         await message.delete()
@@ -902,15 +893,9 @@ async def send_admin_portal_message(
     except discord.DiscordException:
         pass
 
-    intro_embed = build_admin_intro_embed()
-    embed = build_admin_embed()
+    embed = build_admin_portal_embed()
     view = AdminPortalView()
     try:
-        await send_message(
-            channel,
-            embed=intro_embed,
-            allowed_mentions=discord.AllowedMentions.none(),
-        )
         await send_message(
             channel,
             embed=embed,
@@ -920,12 +905,12 @@ async def send_admin_portal_message(
     except discord.DiscordException as exc:
         logging.warning("Failed to post admin portal to channel %s: %s", target_channel_id, exc)
         await interaction.response.send_message(
-            f"Could not post admin control panel to <#{target_channel_id}>.",
+            f"Could not post staff portal to <#{target_channel_id}>.",
             ephemeral=True,
         )
         return
     await interaction.response.send_message(
-        f"Posted admin control panel to <#{target_channel_id}>.",
+        f"Posted staff portal to <#{target_channel_id}>.",
         ephemeral=True,
     )
 
@@ -964,6 +949,7 @@ async def post_admin_portal(
                     if message.embeds and message.embeds[0].title in {
                         "Admin Control Panel",
                         "Staff Portal Overview",
+                        "Staff Portal",
                     }:
                         try:
                             await message.delete()
@@ -972,15 +958,9 @@ async def post_admin_portal(
         except discord.DiscordException:
             pass
 
-        intro_embed = build_admin_intro_embed()
-        embed = build_admin_embed()
+        embed = build_admin_portal_embed()
         view = AdminPortalView()
         try:
-            await send_message(
-                channel,
-                embed=intro_embed,
-                allowed_mentions=discord.AllowedMentions.none(),
-            )
             await send_message(
                 channel,
                 embed=embed,

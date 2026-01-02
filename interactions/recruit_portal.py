@@ -29,66 +29,22 @@ def _portal_footer() -> str:
     return f"Last refreshed: {discord.utils.format_dt(datetime.now(timezone.utc), style='R')}"
 
 
-def build_recruit_intro_embed() -> discord.Embed:
-    return make_embed(
-        title="Recruitment Portal Overview",
-        description=(
-            "**Purpose**\n"
-            "Create a free agent profile so clubs/coaches can find you.\n\n"
-            "**Who should use this**\n"
-            "- Players/free agents.\n\n"
-            "**Quick rules**\n"
-            "- Set Availability to publish to the listing channel.\n"
-            "- Keep positions/archetypes consistent so coaches can filter/search.\n"
-            "- Update your profile when availability changes."
-        ),
-        color=DEFAULT_COLOR,
-        footer=_portal_footer(),
-    )
-
-
 def build_recruit_portal_embed() -> discord.Embed:
     embed = make_embed(
         title="Recruitment Portal",
         description=(
-            "Use the buttons below to manage your profile. Responses are ephemeral."
+            "**Create and manage your free agent profile.**\n"
+            "- Set Availability to publish to listings.\n"
+            "- Keep positions/archetypes consistent for search.\n"
+            "- Toggle Retirement when you are inactive.\n\n"
+            "Use the action menu below. Responses are ephemeral."
         ),
         color=DEFAULT_COLOR,
         footer=_portal_footer(),
     )
     embed.add_field(
-        name="Register / Edit",
-        value="- Opens a short 2-step form (modal).",
-        inline=False,
-    )
-    embed.add_field(
-        name="Preview",
-        value="- Shows what your listing embed will look like.",
-        inline=False,
-    )
-    embed.add_field(
-        name="Availability",
-        value="- Pick days and hours using a selector (no free text).",
-        inline=False,
-    )
-    embed.add_field(
-        name="Unregister",
-        value="- Deletes your stored profile and removes listing posts when possible.",
-        inline=False,
-    )
-    embed.add_field(
-        name="Retirement",
-        value="- Toggle the **Retired** role to mark yourself inactive.",
-        inline=False,
-    )
-    embed.add_field(
-        name="Help",
-        value="- Guidance and tips for keeping your profile high-signal.",
-        inline=False,
-    )
-    embed.add_field(
-        name="Repost Portal (staff)",
-        value="- Clean up and repost this portal message set.",
+        name="Pro features",
+        value="- FC25 stats linking + rich embeds are Pro-only for this server.",
         inline=False,
     )
     return embed
@@ -112,15 +68,94 @@ def build_recruit_help_embed() -> discord.Embed:
 class RecruitPortalView(SafeView):
     def __init__(self) -> None:
         super().__init__(timeout=None)
+        options = [
+            discord.SelectOption(
+                label="Register / Edit",
+                value="register_edit",
+                description="Create or update your profile",
+            ),
+            discord.SelectOption(
+                label="Preview",
+                value="preview",
+                description="See your listing embed",
+            ),
+            discord.SelectOption(
+                label="Availability",
+                value="availability",
+                description="Set days and hours",
+            ),
+            discord.SelectOption(
+                label="Retirement",
+                value="retirement",
+                description="Toggle inactive status",
+            ),
+            discord.SelectOption(
+                label="Link FC25 Stats",
+                value="link_fc25",
+                description="Connect your FC25 stats",
+            ),
+            discord.SelectOption(
+                label="Refresh FC25 Stats",
+                value="refresh_fc25",
+                description="Refresh your FC25 snapshot",
+            ),
+            discord.SelectOption(
+                label="Unlink FC25 Stats",
+                value="unlink_fc25",
+                description="Remove FC25 stats link",
+            ),
+            discord.SelectOption(
+                label="Unregister",
+                value="unregister",
+                description="Delete your profile",
+            ),
+            discord.SelectOption(
+                label="Help",
+                value="help",
+                description="Guidance and tips",
+            ),
+            discord.SelectOption(
+                label="Repost Portal",
+                value="repost",
+                description="Staff-only portal cleanup",
+            ),
+        ]
+        self.action_select = discord.ui.Select(
+            placeholder="Select a recruitment action...",
+            options=options,
+        )
+        self.action_select.callback = self.on_action_select
+        self.add_item(self.action_select)
 
-    @discord.ui.button(
-        label="Register / Edit",
-        style=discord.ButtonStyle.primary,
-        custom_id="recruit:register_edit",
-    )
-    async def register_edit(
-        self, interaction: discord.Interaction, button: discord.ui.Button
-    ) -> None:
+    async def on_action_select(self, interaction: discord.Interaction) -> None:
+        selection = self.action_select.values[0] if self.action_select.values else ""
+        if selection == "register_edit":
+            await self._register_edit(interaction)
+        elif selection == "preview":
+            await self._preview(interaction)
+        elif selection == "availability":
+            await self._availability(interaction)
+        elif selection == "retirement":
+            await self._toggle_retired(interaction)
+        elif selection == "link_fc25":
+            await self._link_fc25_stats(interaction)
+        elif selection == "refresh_fc25":
+            await self._refresh_fc25_stats(interaction)
+        elif selection == "unlink_fc25":
+            await self._unlink_fc25_stats(interaction)
+        elif selection == "unregister":
+            await self._unregister(interaction)
+        elif selection == "help":
+            await self._help(interaction)
+        elif selection == "repost":
+            await self._repost_portal(interaction)
+        else:
+            await interaction.response.send_message(
+                "Select a valid action.",
+                ephemeral=True,
+            )
+
+    async def _register_edit(self, interaction: discord.Interaction) -> None:
         guild = interaction.guild
         if guild is None:
             await interaction.response.send_message(
@@ -142,14 +177,7 @@ class RecruitPortalView(SafeView):
             RecruitProfileModalStep1(existing_profile=existing)
         )
 
-    @discord.ui.button(
-        label="Preview",
-        style=discord.ButtonStyle.secondary,
-        custom_id="recruit:preview",
-    )
-    async def preview(
-        self, interaction: discord.Interaction, button: discord.ui.Button
-    ) -> None:
+    async def _preview(self, interaction: discord.Interaction) -> None:
         guild = interaction.guild
         if guild is None:
             await interaction.response.send_message(
@@ -206,14 +234,7 @@ class RecruitPortalView(SafeView):
             ephemeral=True,
         )
 
-    @discord.ui.button(
-        label="Availability",
-        style=discord.ButtonStyle.secondary,
-        custom_id="recruit:availability",
-    )
-    async def availability(
-        self, interaction: discord.Interaction, button: discord.ui.Button
-    ) -> None:
+    async def _availability(self, interaction: discord.Interaction) -> None:
         guild = interaction.guild
         if guild is None:
             await interaction.response.send_message(
@@ -268,14 +289,7 @@ class RecruitPortalView(SafeView):
             ephemeral=True,
         )
 
-    @discord.ui.button(
-        label="Retirement",
-        style=discord.ButtonStyle.secondary,
-        custom_id="recruit:toggle_retired",
-    )
-    async def toggle_retired(
-        self, interaction: discord.Interaction, button: discord.ui.Button
-    ) -> None:
+    async def _toggle_retired(self, interaction: discord.Interaction) -> None:
         guild = interaction.guild
         if guild is None:
             await interaction.response.send_message(
@@ -373,14 +387,7 @@ class RecruitPortalView(SafeView):
             ephemeral=True,
         )
 
-    @discord.ui.button(
-        label="Link FC25 Stats",
-        style=discord.ButtonStyle.secondary,
-        custom_id="recruit:link_fc25_stats",
-    )
-    async def link_fc25_stats(
-        self, interaction: discord.Interaction, button: discord.ui.Button
-    ) -> None:
+    async def _link_fc25_stats(self, interaction: discord.Interaction) -> None:
         guild = interaction.guild
         if guild is None:
             await interaction.response.send_message(
@@ -408,14 +415,7 @@ class RecruitPortalView(SafeView):
         )
         await interaction.response.send_modal(LinkFC25StatsModal())
 
-    @discord.ui.button(
-        label="Unlink FC25 Stats",
-        style=discord.ButtonStyle.secondary,
-        custom_id="recruit:unlink_fc25_stats",
-    )
-    async def unlink_fc25_stats_button(
-        self, interaction: discord.Interaction, button: discord.ui.Button
-    ) -> None:
+    async def _unlink_fc25_stats(self, interaction: discord.Interaction) -> None:
         guild = interaction.guild
         if guild is not None:
             logging.info(
@@ -425,14 +425,7 @@ class RecruitPortalView(SafeView):
             )
         await unlink_fc25_stats(interaction)
 
-    @discord.ui.button(
-        label="Refresh FC25 Stats",
-        style=discord.ButtonStyle.secondary,
-        custom_id="recruit:refresh_fc25_stats",
-    )
-    async def refresh_fc25_stats_button(
-        self, interaction: discord.Interaction, button: discord.ui.Button
-    ) -> None:
+    async def _refresh_fc25_stats(self, interaction: discord.Interaction) -> None:
         guild = interaction.guild
         if guild is not None:
             logging.info(
@@ -442,14 +435,7 @@ class RecruitPortalView(SafeView):
             )
         await refresh_fc25_stats(interaction)
 
-    @discord.ui.button(
-        label="Unregister",
-        style=discord.ButtonStyle.danger,
-        custom_id="recruit:unregister",
-    )
-    async def unregister(
-        self, interaction: discord.Interaction, button: discord.ui.Button
-    ) -> None:
+    async def _unregister(self, interaction: discord.Interaction) -> None:
         guild = interaction.guild
         if guild is None:
             await interaction.response.send_message(
@@ -492,27 +478,13 @@ class RecruitPortalView(SafeView):
             ephemeral=True,
         )
 
-    @discord.ui.button(
-        label="Help",
-        style=discord.ButtonStyle.secondary,
-        custom_id="recruit:help",
-    )
-    async def help(
-        self, interaction: discord.Interaction, button: discord.ui.Button
-    ) -> None:
+    async def _help(self, interaction: discord.Interaction) -> None:
         await interaction.response.send_message(
             embed=build_recruit_help_embed(),
             ephemeral=True,
         )
 
-    @discord.ui.button(
-        label="Repost Portal (staff)",
-        style=discord.ButtonStyle.secondary,
-        custom_id="recruit:repost_portal",
-    )
-    async def repost_portal(
-        self, interaction: discord.Interaction, button: discord.ui.Button
-    ) -> None:
+    async def _repost_portal(self, interaction: discord.Interaction) -> None:
         settings = getattr(interaction.client, "settings", None)
         if not is_staff_user(interaction.user, settings, guild_id=getattr(interaction, "guild_id", None)):
             await interaction.response.send_message("Not authorized.", ephemeral=True)
@@ -596,15 +568,9 @@ async def post_recruit_portal(
         except discord.DiscordException:
             pass
 
-        intro_embed = build_recruit_intro_embed()
         embed = build_recruit_portal_embed()
         view = RecruitPortalView()
         try:
-            await send_message(
-                channel,
-                embed=intro_embed,
-                allowed_mentions=discord.AllowedMentions.none(),
-            )
             await send_message(
                 channel,
                 embed=embed,

@@ -43,82 +43,25 @@ def _portal_footer() -> str:
     return f"Last refreshed: {discord.utils.format_dt(datetime.now(timezone.utc), style='R')}"
 
 
-def build_manager_intro_embed() -> discord.Embed:
-    return make_embed(
-        title="Managers Portal Overview",
+def build_manager_portal_embed() -> discord.Embed:
+    embed = make_embed(
+        title="Managers Portal",
         description=(
-            "**Purpose**\n"
-            "Manage coach roles, roster unlocks, and pro coach listings.\n\n"
-            "**Who should use this**\n"
-            "- Staff / managers only.\n\n"
-            "**Quick rules**\n"
+            "**Staff-only controls**\n"
+            "- Assign coach roles and caps\n"
+            "- Unlock rosters after rejection\n"
+            "- Pro coaches report and cap sync\n\n"
+            "Use the action menu below. Responses are ephemeral."
+        ),
+        color=DEFAULT_COLOR,
+        footer=_portal_footer(),
+    )
+    embed.add_field(
+        name="Guardrails",
+        value=(
             "- The bot needs `Manage Roles` for role changes.\n"
             "- Cap downgrades will not reduce below current roster size."
         ),
-        color=DEFAULT_COLOR,
-        footer=_portal_footer(),
-    )
-
-
-def build_manager_embed() -> discord.Embed:
-    embed = make_embed(
-        title="Managers Control Panel",
-        description=(
-            "Use the buttons below to manage roles and listings. Responses are ephemeral."
-        ),
-        color=DEFAULT_COLOR,
-        footer=_portal_footer(),
-    )
-    embed.add_field(
-        name="Set Coach Role",
-        value=(
-            "- Assign Team Coach / Club Manager\n"
-            "- Optionally sync roster cap to the role"
-        ),
-        inline=False,
-    )
-    embed.add_field(
-        name="Unlock Roster",
-        value=(
-            "- Unlock a roster after rejection\n"
-            "- Clears stale submission cards"
-        ),
-        inline=False,
-    )
-    embed.add_field(
-        name="Refresh Pro coaches",
-        value="- Update the Pro coaches report embed.",
-        inline=False,
-    )
-    embed.add_field(
-        name="Toggle Pro Pin",
-        value="- Pin/unpin the Pro coaches embed (if permitted).",
-        inline=False,
-    )
-    embed.add_field(
-        name="Force Rebuild Pro",
-        value=(
-            "- Delete stale bot messages in the Pro coaches channel\n"
-            "- Rebuild the report"
-        ),
-        inline=False,
-    )
-    embed.add_field(
-        name="Sync Caps (Active Cycle)",
-        value=(
-            "- Sync active roster caps to Team Coach / Club Manager roles\n"
-            "- Safe downgrade rules apply"
-        ),
-        inline=False,
-    )
-    embed.add_field(
-        name="Delete Roster",
-        value="- Delete a roster (administrator-only; last resort).",
-        inline=False,
-    )
-    embed.add_field(
-        name="Repost Portal (staff)",
-        value="- Clean up and repost this portal message set.",
         inline=False,
     )
     return embed
@@ -586,21 +529,78 @@ class DeleteRosterManagerModal(discord.ui.Modal, title="Delete Roster"):
 class ManagerPortalView(SafeView):
     def __init__(self) -> None:
         super().__init__(timeout=None)
-
-        buttons = [
-            ("Set Coach Role", discord.ButtonStyle.primary, self.on_set_tier),
-            ("Unlock Roster", discord.ButtonStyle.secondary, self.on_unlock),
-            ("Refresh Pro coaches", discord.ButtonStyle.success, self.on_refresh_premium),
-            ("Toggle Pro Pin", discord.ButtonStyle.secondary, self.on_toggle_premium_pin),
-            ("Force Rebuild Pro", discord.ButtonStyle.danger, self.on_force_rebuild_premium),
-            ("Sync Caps (Active Cycle)", discord.ButtonStyle.secondary, self.on_sync_caps),
-            ("Repost Portal (staff)", discord.ButtonStyle.secondary, self.on_repost_portal),
-            ("Delete Roster", discord.ButtonStyle.danger, self.on_delete_roster),
+        options = [
+            discord.SelectOption(
+                label="Set Coach Role",
+                value="set_role",
+                description="Assign Team Coach / Club Manager",
+            ),
+            discord.SelectOption(
+                label="Unlock Roster",
+                value="unlock",
+                description="Unlock after rejection",
+            ),
+            discord.SelectOption(
+                label="Sync Caps (Active Cycle)",
+                value="sync_caps",
+                description="Sync caps to roles",
+            ),
+            discord.SelectOption(
+                label="Refresh Pro Coaches",
+                value="refresh_pro",
+                description="Update the Pro coaches report",
+            ),
+            discord.SelectOption(
+                label="Toggle Pro Pin",
+                value="toggle_pin",
+                description="Pin/unpin Pro coaches embed",
+            ),
+            discord.SelectOption(
+                label="Force Rebuild Pro",
+                value="force_rebuild",
+                description="Rebuild Pro coaches report",
+            ),
+            discord.SelectOption(
+                label="Delete Roster",
+                value="delete_roster",
+                description="Admin-only last resort",
+            ),
+            discord.SelectOption(
+                label="Repost Portal",
+                value="repost",
+                description="Clean up and repost this portal",
+            ),
         ]
-        for label, style, handler in buttons:
-            button: discord.ui.Button = discord.ui.Button(label=label, style=style)
-            setattr(button, "callback", handler)
-            self.add_item(button)
+        self.action_select = discord.ui.Select(
+            placeholder="Select a manager action...",
+            options=options,
+        )
+        self.action_select.callback = self.on_action_select
+        self.add_item(self.action_select)
+
+    async def on_action_select(self, interaction: discord.Interaction) -> None:
+        selection = self.action_select.values[0] if self.action_select.values else ""
+        if selection == "set_role":
+            await self.on_set_tier(interaction)
+        elif selection == "unlock":
+            await self.on_unlock(interaction)
+        elif selection == "sync_caps":
+            await self.on_sync_caps(interaction)
+        elif selection == "refresh_pro":
+            await self.on_refresh_premium(interaction)
+        elif selection == "toggle_pin":
+            await self.on_toggle_premium_pin(interaction)
+        elif selection == "force_rebuild":
+            await self.on_force_rebuild_premium(interaction)
+        elif selection == "delete_roster":
+            await self.on_delete_roster(interaction)
+        elif selection == "repost":
+            await self.on_repost_portal(interaction)
+        else:
+            await interaction.response.send_message(
+                "Select a valid action.",
+                ephemeral=True,
+            )
 
     async def on_set_tier(self, interaction: discord.Interaction) -> None:
         if not is_staff_user(
@@ -1091,6 +1091,7 @@ async def post_manager_portal(
                     if message.embeds and message.embeds[0].title in {
                         "Managers Control Panel",
                         "Managers Portal Overview",
+                        "Managers Portal",
                     }:
                         try:
                             await message.delete()
@@ -1099,15 +1100,9 @@ async def post_manager_portal(
         except discord.DiscordException:
             pass
 
-        intro_embed = build_manager_intro_embed()
-        embed = build_manager_embed()
+        embed = build_manager_portal_embed()
         view = ManagerPortalView()
         try:
-            await send_message(
-                channel,
-                embed=intro_embed,
-                allowed_mentions=discord.AllowedMentions.none(),
-            )
             await send_message(
                 channel,
                 embed=embed,
