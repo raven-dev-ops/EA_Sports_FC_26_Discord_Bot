@@ -140,7 +140,7 @@ async def test_visual_regression(monkeypatch) -> None:
 
         async with async_playwright() as playwright:
             browser = await playwright.chromium.launch()
-            context = await browser.new_context(viewport=VIEWPORT)
+            context = await browser.new_context(viewport=VIEWPORT, reduced_motion="reduce")
             await context.add_cookies(
                 [
                     {

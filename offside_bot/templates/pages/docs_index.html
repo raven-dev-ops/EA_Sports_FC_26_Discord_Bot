@@ -1,20 +1,25 @@
 {% extends "layouts/public.html" %}
 
 {% block content %}
-  <div class="card hero-card">
-    <h1 class="mt-0 text-hero-sm">{{ heading|default("Docs") }}</h1>
-    <p class="muted text-lg mt-10">
-      {{ subtitle|default("Guides and checklists to run your EA Sports FC 26 Discord server.") }}
-    </p>
-  </div>
+  <section class="section">
+    <div class="card hero-card">
+      <div class="kicker">{{ heading|default("Docs") }}</div>
+      <h1 class="mt-6 text-hero-sm">{{ heading|default("Docs") }}</h1>
+      <p class="muted text-lg mt-10">
+        {{ subtitle|default("Guides and checklists to run your EA Sports FC 26 Discord server.") }}
+      </p>
+    </div>
+  </section>
 
-  <div class="row">
-    {% for doc in docs %}
-      <a class="card card-link" href="{{ doc.href }}">
-        <strong>{{ doc.title }}</strong>
-        <div class="muted mt-6">{{ doc.summary }}</div>
-        <div class="mt-10 link-arrow">Read doc</div>
-      </a>
-    {% endfor %}
-  </div>
+  <section class="section">
+    <div class="card-grid">
+      {% for doc in docs %}
+        <a class="card card-link card-hover" href="{{ doc.href }}">
+          <strong>{{ doc.title }}</strong>
+          <div class="muted mt-6">{{ doc.summary }}</div>
+          <div class="mt-10 link-arrow">Read doc</div>
+        </a>
+      {% endfor %}
+    </div>
+  </section>
 {% endblock %}

@@ -31,7 +31,7 @@
     <link rel="stylesheet" href="{{ static_url('app.css') }}" />
     <script src="{{ static_url('app.js') }}" defer></script>
   </head>
-  <body>
+  <body class="{{ body_class|default('') }}">
     <a class="skip-link" href="#main-content">Skip to content</a>
     {% block body %}{{ body|default("")|safe }}{% endblock %}
     {% include "partials/footer.html" %}

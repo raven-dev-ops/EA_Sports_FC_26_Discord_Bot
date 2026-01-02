@@ -1,40 +1,43 @@
 {% extends "base.html" %}
 {% from "macros/ui.html" import button %}
+{% set body_class = "public-page" %}
 
 {% block body %}
-  <div class="topbar max-w-1100">
-    <div class="flex gap-14 items-center flex-wrap">
-      <a class="brand" href="/">
-        <img
-          class="brand-logo"
-          src="{{ static_url('brand/logo.svg') }}"
-          alt="{{ brand|default('Offside') }}"
-          width="24"
-          height="24"
-        />
-        <span>{{ brand|default("Offside") }}</span>
-      </a>
-      <nav class="topbar-links" aria-label="Primary">
-        <a href="/features" {% if active_nav == "features" %}aria-current="page"{% endif %}>{{ t("nav.features") }}</a>
-        <a href="/pricing" {% if active_nav == "pricing" %}aria-current="page"{% endif %}>{{ t("nav.pricing") }}</a>
-        <a href="/support" {% if active_nav == "support" %}aria-current="page"{% endif %}>{{ t("nav.support") }}</a>
-      </nav>
-    </div>
-    <div class="flex gap-10 items-center topbar-cta">
-      {% if right_cta %}
-        {{ right_cta|safe }}
-      {% else %}
-        {{ button("Add to Discord", "/install", "blue") }}
-        {% if session %}
-          {{ button("Open Dashboard", "/app", "secondary") }}
+  <div class="page-shell">
+    <header class="topbar max-w-1100">
+      <div class="flex gap-14 items-center flex-wrap">
+        <a class="brand" href="/">
+          <img
+            class="brand-logo"
+            src="{{ static_url('brand/logo.svg') }}"
+            alt="{{ brand|default('Offside') }}"
+            width="24"
+            height="24"
+          />
+          <span>{{ brand|default("Offside") }}</span>
+        </a>
+        <nav class="topbar-links" aria-label="Primary">
+          <a href="/features" {% if active_nav == "features" %}aria-current="page"{% endif %}>{{ t("nav.features") }}</a>
+          <a href="/pricing" {% if active_nav == "pricing" %}aria-current="page"{% endif %}>{{ t("nav.pricing") }}</a>
+          <a href="/support" {% if active_nav == "support" %}aria-current="page"{% endif %}>{{ t("nav.support") }}</a>
+        </nav>
+      </div>
+      <div class="flex gap-10 items-center topbar-cta">
+        {% if right_cta %}
+          {{ right_cta|safe }}
         {% else %}
-          {{ button("Login", "/login", "secondary") }}
+          {{ button("Add to Discord", "/install", "blue") }}
+          {% if session %}
+            {{ button("Open Dashboard", "/app", "secondary") }}
+          {% else %}
+            {{ button("Login", "/login", "secondary") }}
+          {% endif %}
         {% endif %}
-      {% endif %}
-    </div>
-  </div>
+      </div>
+    </header>
 
-  <main class="content max-w-1100" id="main-content" tabindex="-1">
-    {% block content %}{% endblock %}
-  </main>
+    <main class="content max-w-1100" id="main-content" tabindex="-1">
+      {% block content %}{% endblock %}
+    </main>
+  </div>
 {% endblock %}

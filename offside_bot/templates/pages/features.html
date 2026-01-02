@@ -2,133 +2,169 @@
 {% from "macros/ui.html" import button %}
 
 {% block content %}
-  <p><a href="/">&larr; Back</a></p>
-
-  <div class="card hero-card">
-    <h1 class="mt-0 text-hero-sm">Features</h1>
-    <p class="muted text-lg mt-10">
-      Everything you need to run EA Sports FC 26 leagues on Discord: setup wizard, rosters, recruiting, clubs, tournaments,
-      and analytics.
-    </p>
-    <div class="flex gap-10 flex-wrap mt-14">
-      {{ button("Compare plans", "/pricing", "blue") }}
-      {{ button("Commands", "/commands", "secondary") }}
-      {{ button("Invite bot", "/install", "") }}
-    </div>
-  </div>
-
-  <h2>At a glance</h2>
-  <div class="row">
-    <div class="card">
-      <strong>Dashboards + setup wizard</strong>
-      <div class="muted mt-6">Guided setup with Discord dashboards and listing channels.</div>
-    </div>
-    <div class="card">
-      <strong>Rosters</strong>
-      <div class="muted mt-6">Coach workflows: create rosters, manage caps, submit teams.</div>
-    </div>
-    <div class="card">
-      <strong>Recruiting</strong>
-      <div class="muted mt-6">Player profiles, free-agent listings, and availability tracking.</div>
-    </div>
-    <div class="card">
-      <strong>Clubs</strong>
-      <div class="muted mt-6">Club listings, manager workflows, and premium coach reporting.</div>
-    </div>
-    <div class="card">
-      <strong>Tournaments</strong>
-      <div class="muted mt-6">Tournament command suite: fixtures, brackets, reporting, and disputes.</div>
-    </div>
-    <div class="card">
-      <strong>Analytics</strong>
-      <div class="muted mt-6">Per-server analytics and operational visibility.</div>
-    </div>
-  </div>
-
-  <h2>Rosters</h2>
-  <div class="card">
-    <p class="muted mt-0">
-      Built for coaches running FC 26 teams inside your server.
-    </p>
-    <ul>
-      <li>Create and manage rosters with caps, openings, and roster updates.</li>
-      <li>Coach-facing dashboard flow for add/remove/view/submit.</li>
-      <li>Roster listings for staff visibility and recruiting.</li>
-    </ul>
-    <p class="muted">Related: <a href="/commands">commands</a> in the Roster category.</p>
-  </div>
-
-  <h2>Recruiting</h2>
-  <div class="card">
-    <p class="muted mt-0">
-      Designed for staff teams that need a consistent free-agent intake flow and a searchable player pool.
-    </p>
-    <ul>
-      <li>Player pool search with structured free-agent profiles.</li>
-      <li>Free-agent listing channels and workflows for availability.</li>
-      <li>Staff tools to post/update indices and keep listings clean.</li>
-    </ul>
-    <p class="muted">Related: <a href="/commands">commands</a> in the Recruitment and Staff categories.</p>
-  </div>
-
-  <h2>Clubs</h2>
-  <div class="card">
-    <p class="muted mt-0">
-      For multi-club leagues and orgs that want consistent club operations.
-    </p>
-    <ul>
-      <li>Club listings and club-specific dashboards.</li>
-      <li>Manager workflows for managing coaches, roles, and premium tiers.</li>
-      <li>Pro coaches report channel for public listings (Pro).</li>
-    </ul>
-  </div>
-
-  <h2>Tournaments</h2>
-  <div class="card">
-    <p class="muted mt-0">
-      Staff tooling for running tournaments end-to-end.
-    </p>
-    <ul>
-      <li>Create tournaments, register teams, generate fixtures, and publish brackets.</li>
-      <li>Match reporting, confirmations, forfeits, disputes, and deadlines.</li>
-      <li>Leaderboards and basic tournament stats.</li>
-    </ul>
-    <p class="muted">Related: <a href="/commands">commands</a> in the Tournament category.</p>
-  </div>
-
-  <h2>Dashboards + setup</h2>
-  <div class="card">
-    <p class="muted mt-0">
-      Offside is designed to deploy cleanly into a server with a consistent layout.
-    </p>
-    <ul>
-      <li>Setup wizard in the web dashboard verifies roles, channels, and permissions.</li>
-      <li>Dashboard embeds guide staff/managers/coaches through common flows.</li>
-      <li>Listing channels keep rosters/recruits/clubs visible in one place.</li>
-    </ul>
-  </div>
-
-  <h2>Analytics</h2>
-  <div class="card">
-    <p class="muted mt-0">
-      Visibility into what your league produces, by module and collection.
-    </p>
-    <ul>
-      <li>Per-guild analytics view in the web dashboard.</li>
-      <li>Collection counts and operational checks to help troubleshoot setup.</li>
-    </ul>
-  </div>
-
-  <div class="card cta-card">
-    <div class="flex justify-between items-center gap-12 flex-wrap">
-      <div>
-        <div><strong>Want the full breakdown?</strong></div>
-        <div class="muted mt-6">Compare Free vs Pro and see what's included.</div>
-      </div>
-      <div class="flex gap-10 flex-wrap">
+  <section class="section">
+    <div class="card hero-card">
+      <div class="kicker">EA SPORTS FC 26 DISCORD BOT</div>
+      <h1 class="mt-6 text-hero-sm">Features</h1>
+      <p class="muted text-lg mt-10">
+        Everything you need to run EA Sports FC 26 leagues on Discord: setup wizard, rosters, recruiting, clubs, tournaments,
+        and analytics.
+      </p>
+      <div class="flex gap-10 flex-wrap mt-14">
         {{ button("Compare plans", "/pricing", "blue") }}
-        {{ button("View commands", "/commands", "secondary") }}
+        {{ button("Commands", "/commands", "secondary") }}
+        {{ button("Invite bot", "/install", "") }}
       </div>
     </div>
-  </div>
+  </section>
+
+  <section class="section">
+    <div class="section-head">
+      <div>
+        <h2 class="section-title">At a glance</h2>
+        <p class="section-subtitle">A quick view of the core modules and workflows.</p>
+      </div>
+    </div>
+    <div class="card-grid">
+      <div class="card card-hover">
+        <strong>Dashboards + setup wizard</strong>
+        <div class="muted mt-6">Guided setup with Discord dashboards and listing channels.</div>
+      </div>
+      <div class="card card-hover">
+        <strong>Rosters</strong>
+        <div class="muted mt-6">Coach workflows: create rosters, manage caps, submit teams.</div>
+      </div>
+      <div class="card card-hover">
+        <strong>Recruiting</strong>
+        <div class="muted mt-6">Player profiles, free-agent listings, and availability tracking.</div>
+      </div>
+      <div class="card card-hover">
+        <strong>Clubs</strong>
+        <div class="muted mt-6">Club listings, manager workflows, and pro coach reporting.</div>
+      </div>
+      <div class="card card-hover">
+        <strong>Tournaments</strong>
+        <div class="muted mt-6">Tournament command suite: fixtures, brackets, reporting, and disputes.</div>
+      </div>
+      <div class="card card-hover">
+        <strong>Analytics</strong>
+        <div class="muted mt-6">Per-server analytics and operational visibility.</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="section-head">
+      <div>
+        <h2 class="section-title">Rosters</h2>
+        <p class="section-subtitle">Built for coaches running FC 26 teams inside your server.</p>
+      </div>
+    </div>
+    <div class="card">
+      <ul>
+        <li>Create and manage rosters with caps, openings, and roster updates.</li>
+        <li>Coach-facing dashboard flow for add/remove/view/submit.</li>
+        <li>Roster listings for staff visibility and recruiting.</li>
+      </ul>
+      <p class="muted">Related: <a href="/commands">commands</a> in the Roster category.</p>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="section-head">
+      <div>
+        <h2 class="section-title">Recruiting</h2>
+        <p class="section-subtitle">
+          Designed for staff teams that need a consistent free-agent intake flow and a searchable player pool.
+        </p>
+      </div>
+    </div>
+    <div class="card">
+      <ul>
+        <li>Player pool search with structured free-agent profiles.</li>
+        <li>Free-agent listing channels and workflows for availability.</li>
+        <li>Staff tools to post/update indices and keep listings clean.</li>
+      </ul>
+      <p class="muted">Related: <a href="/commands">commands</a> in the Recruitment and Staff categories.</p>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="section-head">
+      <div>
+        <h2 class="section-title">Clubs</h2>
+        <p class="section-subtitle">For multi-club leagues and orgs that want consistent club operations.</p>
+      </div>
+    </div>
+    <div class="card">
+      <ul>
+        <li>Club listings and club-specific dashboards.</li>
+        <li>Manager workflows for managing coaches, roles, and premium tiers.</li>
+        <li>Pro coaches report channel for public listings (Pro).</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="section-head">
+      <div>
+        <h2 class="section-title">Tournaments</h2>
+        <p class="section-subtitle">Staff tooling for running tournaments end-to-end.</p>
+      </div>
+    </div>
+    <div class="card">
+      <ul>
+        <li>Create tournaments, register teams, generate fixtures, and publish brackets.</li>
+        <li>Match reporting, confirmations, forfeits, disputes, and deadlines.</li>
+        <li>Leaderboards and basic tournament stats.</li>
+      </ul>
+      <p class="muted">Related: <a href="/commands">commands</a> in the Tournament category.</p>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="section-head">
+      <div>
+        <h2 class="section-title">Dashboards + setup</h2>
+        <p class="section-subtitle">Offside deploys cleanly into a server with a consistent layout.</p>
+      </div>
+    </div>
+    <div class="card">
+      <ul>
+        <li>Setup wizard in the web dashboard verifies roles, channels, and permissions.</li>
+        <li>Dashboard embeds guide staff/managers/coaches through common flows.</li>
+        <li>Listing channels keep rosters/recruits/clubs visible in one place.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="section-head">
+      <div>
+        <h2 class="section-title">Analytics</h2>
+        <p class="section-subtitle">Visibility into what your league produces, by module and collection.</p>
+      </div>
+    </div>
+    <div class="card">
+      <ul>
+        <li>Per-guild analytics view in the web dashboard.</li>
+        <li>Collection counts and operational checks to help troubleshoot setup.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="card cta-card">
+      <div class="flex justify-between items-center gap-12 flex-wrap">
+        <div>
+          <div><strong>Want the full breakdown?</strong></div>
+          <div class="muted mt-6">Compare Free vs Pro and see what's included.</div>
+        </div>
+        <div class="flex gap-10 flex-wrap">
+          {{ button("Compare plans", "/pricing", "blue") }}
+          {{ button("View commands", "/commands", "secondary") }}
+        </div>
+      </div>
+    </div>
+  </section>
 {% endblock %}

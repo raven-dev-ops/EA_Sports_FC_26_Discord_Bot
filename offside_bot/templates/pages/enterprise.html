@@ -2,38 +2,45 @@
 {% from "macros/ui.html" import button %}
 
 {% block content %}
-  <div class="card hero-card">
-    <h1 class="mt-0 text-hero-sm">Enterprise</h1>
-    <p class="muted text-lg mt-10">Custom onboarding and billing for multi-server EA Sports FC 26 communities.</p>
-  </div>
-
-  <div class="row">
-    <div class="card">
-      <strong>Contact sales</strong>
-      <div class="muted mt-6">Tell us about your league and server count.</div>
-      {% if contact_email %}
-        <div class="mt-10">{{ button("Email sales", mailto_href, "blue") }}</div>
-        <div class="muted mt-6">{{ contact_email }}</div>
-      {% else %}
-        <div class="muted mt-10">Set SALES_EMAIL or SUPPORT_EMAIL to enable direct contact.</div>
-      {% endif %}
-      {% if support_discord %}
-        <div class="mt-10"><a href="{{ support_discord }}">Join support Discord</a></div>
-      {% endif %}
+  <section class="section">
+    <div class="card hero-card">
+      <div class="kicker">Enterprise</div>
+      <h1 class="mt-6 text-hero-sm">Enterprise</h1>
+      <p class="muted text-lg mt-10">Custom onboarding and billing for multi-server EA Sports FC 26 communities.</p>
     </div>
-    <div class="card">
-      <strong>What you get</strong>
-      <ul class="mt-10">
-        <li>Multi-server onboarding and migrations</li>
-        <li>Dedicated support and SLA options</li>
-        <li>Custom feature flags and reporting</li>
-        <li>Invoice or PO billing</li>
-      </ul>
-    </div>
-  </div>
+  </section>
 
-  <div class="card">
-    <strong>What to include</strong>
-    <p class="muted mt-6">Share your server count, season cadence, and billing requirements.</p>
-  </div>
+  <section class="section">
+    <div class="card-grid">
+      <div class="card card-hover">
+        <strong>Contact sales</strong>
+        <div class="muted mt-6">Tell us about your league and server count.</div>
+        {% if contact_email %}
+          <div class="mt-10">{{ button("Email sales", mailto_href, "blue") }}</div>
+          <div class="muted mt-6">{{ contact_email }}</div>
+        {% else %}
+          <div class="muted mt-10">Set SALES_EMAIL or SUPPORT_EMAIL to enable direct contact.</div>
+        {% endif %}
+        {% if support_discord %}
+          <div class="mt-10"><a href="{{ support_discord }}">Join support Discord</a></div>
+        {% endif %}
+      </div>
+      <div class="card card-hover">
+        <strong>What you get</strong>
+        <ul class="mt-10">
+          <li>Multi-server onboarding and migrations</li>
+          <li>Dedicated support and SLA options</li>
+          <li>Custom feature flags and reporting</li>
+          <li>Invoice or PO billing</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="card">
+      <strong>What to include</strong>
+      <p class="muted mt-6">Share your server count, season cadence, and billing requirements.</p>
+    </div>
+  </section>
 {% endblock %}

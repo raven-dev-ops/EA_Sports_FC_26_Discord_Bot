@@ -1545,11 +1545,15 @@ async def terms_page(request: web.Request) -> web.Response:
         raise web.HTTPNotFound(text="TERMS_OF_SERVICE.md not found.")
     html = _markdown_to_html(text)
     content = f"""
-      <div class="card hero-card">
-        <p class="mt-0"><a href="/">&larr; Back</a></p>
-        <h1 class="mt-6 text-hero-sm">Terms of Service</h1>
-      </div>
-      <div class="card prose">{html}</div>
+      <section class="section">
+        <div class="card hero-card">
+          <a class="back-link" href="/">&larr; Back</a>
+          <h1 class="mt-6 text-hero-sm">Terms of Service</h1>
+        </div>
+      </section>
+      <section class="section">
+        <div class="card prose">{html}</div>
+      </section>
     """
     from offside_bot.web_templates import render, safe_html
 
@@ -1569,11 +1573,15 @@ async def privacy_page(request: web.Request) -> web.Response:
         raise web.HTTPNotFound(text="PRIVACY_POLICY.md not found.")
     html = _markdown_to_html(text)
     content = f"""
-      <div class="card hero-card">
-        <p class="mt-0"><a href="/">&larr; Back</a></p>
-        <h1 class="mt-6 text-hero-sm">Privacy Policy</h1>
-      </div>
-      <div class="card prose">{html}</div>
+      <section class="section">
+        <div class="card hero-card">
+          <a class="back-link" href="/">&larr; Back</a>
+          <h1 class="mt-6 text-hero-sm">Privacy Policy</h1>
+        </div>
+      </section>
+      <section class="section">
+        <div class="card prose">{html}</div>
+      </section>
     """
     from offside_bot.web_templates import render, safe_html
 
@@ -1593,11 +1601,15 @@ async def product_copy_page(request: web.Request) -> web.Response:
         raise web.HTTPNotFound(text="docs/public/product-copy.md not found.")
     html = _markdown_to_html(text)
     content = f"""
-      <div class="card hero-card">
-        <p class="mt-0"><a href="/">&larr; Back</a></p>
-        <h1 class="mt-6 text-hero-sm">Product</h1>
-      </div>
-      <div class="card prose">{html}</div>
+      <section class="section">
+        <div class="card hero-card">
+          <a class="back-link" href="/">&larr; Back</a>
+          <h1 class="mt-6 text-hero-sm">Product</h1>
+        </div>
+      </section>
+      <section class="section">
+        <div class="card prose">{html}</div>
+      </section>
     """
     from offside_bot.web_templates import render, safe_html
 
@@ -1749,11 +1761,15 @@ def _render_doc_page(
     else:
         description = "Offside help for EA Sports FC 26 Discord servers."
     content = f"""
-      <div class="card hero-card">
-        <p class="mt-0"><a href="{_escape_html(back_href)}">&larr; {_escape_html(back_label)}</a></p>
-        <h1 class="mt-6 text-hero-sm">{_escape_html(doc["title"])}</h1>
-      </div>
-      <div class="card prose">{html}</div>
+      <section class="section">
+        <div class="card hero-card">
+          <a class="back-link" href="{_escape_html(back_href)}">&larr; {_escape_html(back_label)}</a>
+          <h1 class="mt-6 text-hero-sm">{_escape_html(doc["title"])}</h1>
+        </div>
+      </section>
+      <section class="section">
+        <div class="card prose">{html}</div>
+      </section>
     """
     from offside_bot.web_templates import render, safe_html
 
@@ -1885,34 +1901,38 @@ async def support_page(request: web.Request) -> web.Response:
         issue_items.append("<li><span class='muted'>GitHub links unavailable (set PUBLIC_REPO_URL)</span></li>")
 
     content = f"""
-      <div class="card hero-card">
-        <p class="mt-0"><a href="/">&larr; Back</a></p>
-        <h1 class="mt-6 text-hero-sm">Support</h1>
-        <p class="muted mt-10">Help center, contact options, and issue reporting.</p>
-      </div>
-      <div class="row">
-        <div class="card">
-          <p><strong>Get help</strong></p>
-          <p class="muted mt-6">Reach the team directly for support requests.</p>
-          <ul>
-            {"".join(support_items)}
-          </ul>
+      <section class="section">
+        <div class="card hero-card">
+          <div class="kicker">Support</div>
+          <h1 class="mt-6 text-hero-sm">Support</h1>
+          <p class="muted mt-10">Help center, contact options, and issue reporting.</p>
         </div>
-        <div class="card">
-          <p><strong>Docs</strong></p>
-          <p class="muted mt-6">Guides, checklists, and troubleshooting.</p>
-          <ul>
-            {"".join(docs_items)}
-          </ul>
+      </section>
+      <section class="section">
+        <div class="card-grid">
+          <div class="card card-hover">
+            <p><strong>Get help</strong></p>
+            <p class="muted mt-6">Reach the team directly for support requests.</p>
+            <ul>
+              {"".join(support_items)}
+            </ul>
+          </div>
+          <div class="card card-hover">
+            <p><strong>Docs</strong></p>
+            <p class="muted mt-6">Guides, checklists, and troubleshooting.</p>
+            <ul>
+              {"".join(docs_items)}
+            </ul>
+          </div>
+          <div class="card card-hover">
+            <p><strong>Report an issue</strong></p>
+            <p class="muted mt-6">Use GitHub if you manage the repo.</p>
+            <ul>
+              {"".join(issue_items)}
+            </ul>
+          </div>
         </div>
-        <div class="card">
-          <p><strong>Report an issue</strong></p>
-          <p class="muted mt-6">Use GitHub if you manage the repo.</p>
-          <ul>
-            {"".join(issue_items)}
-          </ul>
-        </div>
-      </div>
+      </section>
     """
     from offside_bot.web_templates import render, safe_html
 

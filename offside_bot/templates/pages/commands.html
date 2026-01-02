@@ -1,39 +1,45 @@
 {% extends "layouts/public.html" %}
 
 {% block content %}
-  <div class="card hero-card">
-    <p class="mt-0"><a href="/">&larr; Back</a></p>
-    <h1 class="mt-6 text-hero-sm">Commands</h1>
-    <p class="muted mt-10">Browse Offside slash commands for EA Sports FC 26 league operations.</p>
-  </div>
-
-  <div class="card">
-    <div class="flex gap-10 flex-wrap items-center">
-      <input
-        id="commands-search"
-        type="search"
-        placeholder="Search commands..."
-        aria-label="Search commands"
-        class="input-grow"
-      />
-      <div class="flex gap-10 flex-wrap">
-        <button class="btn secondary" type="button" data-commands-filter="all">All</button>
-        <button class="btn secondary" type="button" data-commands-filter="coach">Coach</button>
-        <button class="btn secondary" type="button" data-commands-filter="staff">Staff</button>
-        <button class="btn secondary" type="button" data-commands-filter="tournament">Tournament</button>
-        <button class="btn secondary" type="button" data-commands-filter="ops">Ops</button>
-      </div>
+  <section class="section">
+    <div class="card hero-card">
+      <div class="kicker">Command Reference</div>
+      <h1 class="mt-6 text-hero-sm">Commands</h1>
+      <p class="muted mt-10">Browse Offside slash commands for EA Sports FC 26 league operations.</p>
     </div>
-    <div class="muted mt-10" id="commands-count" role="status" aria-live="polite"></div>
-  </div>
+  </section>
+
+  <section class="section">
+    <div class="card">
+      <div class="flex gap-10 flex-wrap items-center">
+        <input
+          id="commands-search"
+          type="search"
+          placeholder="Search commands..."
+          aria-label="Search commands"
+          class="input-grow"
+        />
+        <div class="flex gap-10 flex-wrap">
+          <button class="btn secondary" type="button" data-commands-filter="all">All</button>
+          <button class="btn secondary" type="button" data-commands-filter="coach">Coach</button>
+          <button class="btn secondary" type="button" data-commands-filter="staff">Staff</button>
+          <button class="btn secondary" type="button" data-commands-filter="tournament">Tournament</button>
+          <button class="btn secondary" type="button" data-commands-filter="ops">Ops</button>
+        </div>
+      </div>
+      <div class="muted mt-10" id="commands-count" role="status" aria-live="polite"></div>
+    </div>
+  </section>
 
   <div id="commands-empty" class="muted hidden" role="status" aria-live="polite">
     No commands match your search.
   </div>
 
   {% for category in categories %}
-    <section data-commands-section data-commands-group="{{ category.group }}" class="mt-18">
-      <h2>{{ category.name }}</h2>
+    <section data-commands-section data-commands-group="{{ category.group }}" class="section">
+      <div class="section-head">
+        <h2 class="section-title">{{ category.name }}</h2>
+      </div>
 
       {% for command in category.commands %}
         <details
