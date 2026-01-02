@@ -57,10 +57,10 @@ def build_coach_intro_embed() -> discord.Embed:
             "**Purpose**\n"
             "Build and submit your roster for the current tournament cycle.\n\n"
             "**Who should use this**\n"
-            "- Coaches only (Coach / Coach Premium / Coach Premium+).\n\n"
+            "- Coaches only (Team Coach / Club Manager).\n\n"
             "**Quick rules**\n"
             "- Minimum 8 players to submit.\n"
-            "- Caps: Coach=16, Premium=22, Premium+=25.\n"
+            "- Caps: Team Coach=16, Club Manager=22.\n"
             "- After submit, your roster locks until staff approves/rejects.\n"
             "- Pro coaches: set Practice Times to appear in the Pro coaches report."
         ),

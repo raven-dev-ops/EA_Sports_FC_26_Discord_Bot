@@ -791,12 +791,12 @@ class StaffReviewView(SafeView):
                 roster_channel_id = resolve_channel_id(
                     settings,
                     guild_id=getattr(interaction.guild, "id", None),
-                    field="channel_roster_listing_id",
+                    field="channel_club_listing_id",
                     test_mode=test_mode,
                 )
                 if not roster_channel_id:
                     await interaction.followup.send(
-                        "Roster was approved, but the roster listing channel is not configured. "
+                        "Roster was approved, but the club listings channel is not configured. "
                         "Ensure the bot has `Manage Channels` and MongoDB is configured, then restart the bot.",
                         ephemeral=True,
                     )

@@ -503,7 +503,7 @@ def _pro_locked_page(
     upgrade_href = upgrade_href or f"/app/upgrade?guild_id={guild_id}&from=locked&section={urllib.parse.quote(section)}"
     if benefits is None:
         benefits = [
-            ("Premium coach tiers", "Coach Premium and Coach Premium+ roles, caps, and workflow."),
+            ("Club Manager role", "Expanded roster caps (22) and club manager workflow."),
             ("Pro coaches report", "Public listing embed of Pro coaches and openings."),
             ("FC stats integration", "FC25/FC26 stats lookup, caching, and richer player profiles."),
             ("Banlist integration", "Google Sheets-driven banlist checks and moderation tooling."),
@@ -2209,15 +2209,15 @@ async def pricing_page(request: web.Request) -> web.Response:
             "enterprise": True,
         },
         {
-            "name": "Premium coach tiers",
-            "description": "Premium caps (22/25) and premium coach tier management.",
+            "name": "Club Manager role",
+            "description": "Expanded roster caps (22) and club manager workflow.",
             "free": False,
             "pro": entitlements_service.FEATURE_PREMIUM_COACH_TIERS in entitlements_service.PRO_FEATURE_KEYS,
             "enterprise": True,
         },
         {
             "name": "Pro coaches report",
-            "description": "Premium coach listing embed and related controls.",
+            "description": "Pro coaches listing embed and related controls.",
             "free": False,
             "pro": entitlements_service.FEATURE_PREMIUM_COACHES_REPORT in entitlements_service.PRO_FEATURE_KEYS,
             "enterprise": True,
@@ -2252,7 +2252,7 @@ async def pricing_page(request: web.Request) -> web.Response:
         title="FC 26 Discord bot pricing",
         description=(
             "Offside pricing for EA Sports FC 26 Discord servers. Start free, upgrade to Pro for "
-            "premium coach tiers, stats, banlist checks, and tournaments."
+            "club manager roles, stats, banlist checks, and tournaments."
         ),
         session=session,
         billing=billing,
@@ -2809,10 +2809,9 @@ async def guild_settings_page(request: web.Request) -> web.Response:
             )
     roles_available = bool(roles)
 
-    coach_role_id = _parse_int(cfg.get("role_coach_id"))
-    premium_role_id = _parse_int(cfg.get("role_coach_premium_id"))
-    premium_plus_role_id = _parse_int(cfg.get("role_coach_premium_plus_id"))
+    role_ids = {field: _parse_int(cfg.get(field)) for field, _label in GUILD_COACH_ROLE_FIELDS}
     premium_badge_class = "pro" if premium_tiers_enabled else "warn"
+    pro_role_fields = {"role_club_manager_id"}
 
     coach_role_fields: list[dict[str, Any]] = []
     if roles:
@@ -2853,65 +2852,35 @@ async def guild_settings_page(request: web.Request) -> web.Response:
                 )
             return option_lines
 
-        coach_role_fields = [
-            {
-                "label": "Coach role",
-                "name": "role_coach_id",
-                "options": _role_options(coach_role_id),
-                "value": str(coach_role_id or ""),
-                "disabled": False,
-                "show_pro_badge": False,
-                "pro_badge_class": premium_badge_class,
-            },
-            {
-                "label": "Coach Premium role",
-                "name": "role_coach_premium_id",
-                "options": _role_options(premium_role_id),
-                "value": str(premium_role_id or ""),
-                "disabled": not premium_tiers_enabled,
-                "show_pro_badge": True,
-                "pro_badge_class": premium_badge_class,
-            },
-            {
-                "label": "Coach Premium+ role",
-                "name": "role_coach_premium_plus_id",
-                "options": _role_options(premium_plus_role_id),
-                "value": str(premium_plus_role_id or ""),
-                "disabled": not premium_tiers_enabled,
-                "show_pro_badge": True,
-                "pro_badge_class": premium_badge_class,
-            },
-        ]
+        for field, label in GUILD_COACH_ROLE_FIELDS:
+            selected_id = role_ids.get(field)
+            is_pro_field = field in pro_role_fields
+            coach_role_fields.append(
+                {
+                    "label": label,
+                    "name": field,
+                    "options": _role_options(selected_id),
+                    "value": str(selected_id or ""),
+                    "disabled": is_pro_field and not premium_tiers_enabled,
+                    "show_pro_badge": is_pro_field,
+                    "pro_badge_class": premium_badge_class,
+                }
+            )
     else:
-        coach_role_fields = [
-            {
-                "label": "Coach role",
-                "name": "role_coach_id",
-                "options": [],
-                "value": str(coach_role_id or ""),
-                "disabled": False,
-                "show_pro_badge": False,
-                "pro_badge_class": premium_badge_class,
-            },
-            {
-                "label": "Coach Premium role",
-                "name": "role_coach_premium_id",
-                "options": [],
-                "value": str(premium_role_id or ""),
-                "disabled": not premium_tiers_enabled,
-                "show_pro_badge": True,
-                "pro_badge_class": premium_badge_class,
-            },
-            {
-                "label": "Coach Premium+ role",
-                "name": "role_coach_premium_plus_id",
-                "options": [],
-                "value": str(premium_plus_role_id or ""),
-                "disabled": not premium_tiers_enabled,
-                "show_pro_badge": True,
-                "pro_badge_class": premium_badge_class,
-            },
-        ]
+        for field, label in GUILD_COACH_ROLE_FIELDS:
+            selected_id = role_ids.get(field)
+            is_pro_field = field in pro_role_fields
+            coach_role_fields.append(
+                {
+                    "label": label,
+                    "name": field,
+                    "options": [],
+                    "value": str(selected_id or ""),
+                    "disabled": is_pro_field and not premium_tiers_enabled,
+                    "show_pro_badge": is_pro_field,
+                    "pro_badge_class": premium_badge_class,
+                }
+            )
 
     selected_channels: dict[str, int | None] = {
         field: _parse_int(cfg.get(field)) for field, _label in GUILD_CHANNEL_FIELDS
@@ -3162,13 +3131,12 @@ async def guild_settings_save(request: web.Request) -> web.Response:
         cfg[field] = value
 
     if not premium_tiers_enabled:
-        for field in ("role_coach_premium_id", "role_coach_premium_plus_id"):
-            attempted = str(data.get(field) or "").strip()
-            if attempted:
-                raise web.HTTPForbidden(text="Premium coach tiers require Pro.")
+        attempted = str(data.get("role_club_manager_id") or "").strip()
+        if attempted:
+            raise web.HTTPForbidden(text="Club Manager role requires Pro.")
 
     for field, _label in GUILD_COACH_ROLE_FIELDS:
-        if field in {"role_coach_premium_id", "role_coach_premium_plus_id"} and not premium_tiers_enabled:
+        if field == "role_club_manager_id" and not premium_tiers_enabled:
             continue
         _apply_int_field(field=field, raw_value=data.get(field), valid_ids=valid_role_ids, kind="role")
 
@@ -3454,7 +3422,6 @@ async def guild_overview_page(request: web.Request) -> web.Response:
                 "channel_manager_portal_id",
                 "channel_coach_portal_id",
                 "channel_recruit_portal_id",
-                "channel_roster_listing_id",
                 "channel_recruit_listing_id",
                 "channel_club_listing_id",
                 "channel_premium_coaches_id",
@@ -3710,14 +3677,9 @@ async def guild_setup_wizard_page(request: web.Request) -> web.Response:
         channels_details = "Channels are configured."
 
     # Step 3: Roles
-    required_role_fields = [("role_coach_id", "Coach role")]
+    required_role_fields = [("role_team_coach_id", "Team Coach role")]
     if is_pro:
-        required_role_fields.extend(
-            [
-                ("role_coach_premium_id", "Coach Premium role"),
-                ("role_coach_premium_plus_id", "Coach Premium+ role"),
-            ]
-        )
+        required_role_fields.append(("role_club_manager_id", "Club Manager role"))
     roles_missing_settings: list[str] = []
     roles_missing_discord: list[str] = []
     for field, _label in required_role_fields:
@@ -3770,7 +3732,6 @@ async def guild_setup_wizard_page(request: web.Request) -> web.Response:
                 "channel_manager_portal_id",
                 "channel_coach_portal_id",
                 "channel_recruit_portal_id",
-                "channel_roster_listing_id",
                 "channel_recruit_listing_id",
                 "channel_club_listing_id",
             ]
@@ -3976,7 +3937,7 @@ async def guild_permissions_page(request: web.Request) -> web.Response:
 
         required_guild_perms = [
             ("Manage Channels", PERM_MANAGE_CHANNELS, "Create/repair Offside channels and categories."),
-            ("Manage Roles", PERM_MANAGE_ROLES, "Create/assign Coach tier roles."),
+            ("Manage Roles", PERM_MANAGE_ROLES, "Create/assign Offside roles."),
             ("Manage Messages", PERM_MANAGE_MESSAGES, "Pin/unpin listings and clean up bot messages."),
         ]
         for name, bit, why in required_guild_perms:
@@ -4006,6 +3967,10 @@ async def guild_permissions_page(request: web.Request) -> web.Response:
             cfg = get_guild_config(guild_id)
         except Exception:
             cfg = {}
+        is_pro = (
+            entitlements_service.get_guild_plan(settings, guild_id=guild_id)
+            == entitlements_service.PLAN_PRO
+        )
 
         def _best_role_id_by_name(name: str) -> int | None:
             best_id = None
@@ -4021,17 +3986,17 @@ async def guild_permissions_page(request: web.Request) -> web.Response:
                     best_pos = pos
             return best_id
 
-        coach_role_ids = [
-            ("Coach", _parse_int(cfg.get("role_coach_id")) or _best_role_id_by_name("Coach")),
-            (
-                "Coach Premium",
-                _parse_int(cfg.get("role_coach_premium_id")) or _best_role_id_by_name("Coach Premium"),
-            ),
-            (
-                "Coach Premium+",
-                _parse_int(cfg.get("role_coach_premium_plus_id")) or _best_role_id_by_name("Coach Premium+"),
-            ),
-        ]
+        coach_role_ids: list[tuple[str, int | None]] = []
+        for field, label in GUILD_COACH_ROLE_FIELDS:
+            if field == "role_club_manager_id" and not is_pro:
+                continue
+            role_name = label.removesuffix(" role")
+            coach_role_ids.append(
+                (
+                    role_name,
+                    _parse_int(cfg.get(field)) or _best_role_id_by_name(role_name),
+                )
+            )
 
         for label, rid in coach_role_ids:
             if rid is None:
@@ -4057,7 +4022,7 @@ async def guild_permissions_page(request: web.Request) -> web.Response:
             ok = top_role_pos > role_pos
             status = "OK" if ok else "Bot role too low"
             if not ok:
-                details = "Move the bot's role above the Coach roles in Server Settings -> Roles."
+                details = "Move the bot's role above the Offside roles in Server Settings -> Roles."
             else:
                 details = (
                     f"Bot top role: {top_role_name or 'unknown'} (pos {top_role_pos}); "

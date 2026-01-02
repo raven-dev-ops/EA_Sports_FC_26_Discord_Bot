@@ -479,7 +479,7 @@ class PracticeTimesModal(SafeModal, title="Practice Times"):
             )
 
 
-class RecruitProfileModalStep1(SafeModal, title="Recruit Profile (1/2)"):
+class RecruitProfileModalStep1(SafeModal, title="Free Agent Profile (1/2)"):
     age: discord.ui.TextInput = discord.ui.TextInput(
         label="Age (optional)",
         required=False,
@@ -583,7 +583,7 @@ class RecruitProfileModalStep1(SafeModal, title="Recruit Profile (1/2)"):
         )
 
 
-class RecruitProfileModalStep2(SafeModal, title="Recruit Profile (2/2)"):
+class RecruitProfileModalStep2(SafeModal, title="Free Agent Profile (2/2)"):
     main_position: discord.ui.TextInput = discord.ui.TextInput(
         label="Main position",
         max_length=20,
@@ -713,7 +713,7 @@ class RecruitProfileModalStep2(SafeModal, title="Recruit Profile (2/2)"):
 
         listing_ready = recruit_profile_is_listing_ready(saved)
         logging.info(
-            "Recruit profile saved guild=%s user=%s listing_ready=%s",
+            "Free agent profile saved guild=%s user=%s listing_ready=%s",
             guild.id,
             interaction.user.id,
             listing_ready,

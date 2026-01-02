@@ -4,21 +4,20 @@ from typing import Any
 
 import discord
 
-COACH_ROLE_NAME = "Coach"
-COACH_PREMIUM_ROLE_NAME = "Coach Premium"
-COACH_PREMIUM_PLUS_ROLE_NAME = "Coach Premium+"
-
-OWNER_ROLE_NAME = "League Owner"
-MANAGER_ROLE_NAME = "Manager"
-FREE_PLAYER_ROLE_NAME = "Free Player"
-PREMIUM_PLAYER_ROLE_NAME = "Premium Player"
+TEAM_COACH_ROLE_NAME = "Team Coach"
+CLUB_MANAGER_ROLE_NAME = "Club Manager"
+LEAGUE_STAFF_ROLE_NAME = "League Staff"
+LEAGUE_OWNER_ROLE_NAME = "League Owner"
 FREE_AGENT_ROLE_NAME = "Free Agent"
+PRO_PLAYER_ROLE_NAME = "Pro Player"
 RETIRED_ROLE_NAME = "Retired"
 
 STAFF_ROLE_IDS_KEY = "staff_role_ids"
 
-LEGACY_COACH_ROLE_NAMES = ("Super League Coach",)
-LEGACY_COACH_PREMIUM_PLUS_ROLE_NAMES = ("Coach Premium Plus",)
+LEGACY_TEAM_COACH_ROLE_NAMES = ("Coach", "Super League Coach")
+LEGACY_CLUB_MANAGER_ROLE_NAMES = ("Manager", "Coach Premium", "Coach Premium+", "Coach Premium Plus")
+LEGACY_FREE_AGENT_ROLE_NAMES = ("Recruit", "Free Player")
+LEGACY_PRO_PLAYER_ROLE_NAMES = ("Premium Player",)
 
 
 async def ensure_offside_roles(
@@ -40,61 +39,54 @@ async def ensure_offside_roles(
         actions.append("Role setup skipped (missing Manage Roles permission).")
         return config
 
-    coach_role = await _ensure_role(
+    team_coach_role = await _ensure_role(
         guild,
-        name=COACH_ROLE_NAME,
-        aliases=LEGACY_COACH_ROLE_NAMES,
-        existing_role_id=_parse_int(config.get("role_coach_id")),
+        name=TEAM_COACH_ROLE_NAME,
+        aliases=LEGACY_TEAM_COACH_ROLE_NAMES,
+        existing_role_id=_parse_int(config.get("role_team_coach_id"))
+        or _parse_int(config.get("role_coach_id")),
         actions=actions,
     )
-    premium_role = await _ensure_role(
+    club_manager_role = await _ensure_role(
         guild,
-        name=COACH_PREMIUM_ROLE_NAME,
-        aliases=(),
-        existing_role_id=_parse_int(config.get("role_coach_premium_id")),
+        name=CLUB_MANAGER_ROLE_NAME,
+        aliases=LEGACY_CLUB_MANAGER_ROLE_NAMES,
+        existing_role_id=_parse_int(config.get("role_club_manager_id"))
+        or _parse_int(config.get("role_manager_id"))
+        or _parse_int(config.get("role_coach_premium_plus_id"))
+        or _parse_int(config.get("role_coach_premium_id")),
         actions=actions,
     )
-    premium_plus_role = await _ensure_role(
+    league_staff_role = await _ensure_role(
         guild,
-        name=COACH_PREMIUM_PLUS_ROLE_NAME,
-        aliases=LEGACY_COACH_PREMIUM_PLUS_ROLE_NAMES,
-        existing_role_id=_parse_int(config.get("role_coach_premium_plus_id")),
+        name=LEAGUE_STAFF_ROLE_NAME,
+        aliases=("Staff",),
+        existing_role_id=_parse_int(config.get("role_league_staff_id")),
         actions=actions,
     )
-
-    owner_role = await _ensure_role(
+    league_owner_role = await _ensure_role(
         guild,
-        name=OWNER_ROLE_NAME,
+        name=LEAGUE_OWNER_ROLE_NAME,
         aliases=("Owner",),
-        existing_role_id=_parse_int(config.get("role_owner_id")),
-        actions=actions,
-    )
-    manager_role = await _ensure_role(
-        guild,
-        name=MANAGER_ROLE_NAME,
-        aliases=(),
-        existing_role_id=_parse_int(config.get("role_manager_id")),
-        actions=actions,
-    )
-    free_player_role = await _ensure_role(
-        guild,
-        name=FREE_PLAYER_ROLE_NAME,
-        aliases=(),
-        existing_role_id=_parse_int(config.get("role_free_player_id")),
-        actions=actions,
-    )
-    premium_player_role = await _ensure_role(
-        guild,
-        name=PREMIUM_PLAYER_ROLE_NAME,
-        aliases=(),
-        existing_role_id=_parse_int(config.get("role_premium_player_id")),
+        existing_role_id=_parse_int(config.get("role_league_owner_id"))
+        or _parse_int(config.get("role_owner_id")),
         actions=actions,
     )
     free_agent_role = await _ensure_role(
         guild,
         name=FREE_AGENT_ROLE_NAME,
-        aliases=("Recruit",),
-        existing_role_id=_parse_int(config.get("role_recruit_id")),
+        aliases=LEGACY_FREE_AGENT_ROLE_NAMES,
+        existing_role_id=_parse_int(config.get("role_free_agent_id"))
+        or _parse_int(config.get("role_recruit_id"))
+        or _parse_int(config.get("role_free_player_id")),
+        actions=actions,
+    )
+    pro_player_role = await _ensure_role(
+        guild,
+        name=PRO_PLAYER_ROLE_NAME,
+        aliases=LEGACY_PRO_PLAYER_ROLE_NAMES,
+        existing_role_id=_parse_int(config.get("role_pro_player_id"))
+        or _parse_int(config.get("role_premium_player_id")),
         actions=actions,
     )
     retired_role = await _ensure_role(
@@ -105,24 +97,31 @@ async def ensure_offside_roles(
         actions=actions,
     )
 
-    config["role_coach_id"] = coach_role.id
-    config["role_coach_premium_id"] = premium_role.id
-    config["role_coach_premium_plus_id"] = premium_plus_role.id
-    config["role_owner_id"] = owner_role.id
-    config["role_manager_id"] = manager_role.id
-    config["role_free_player_id"] = free_player_role.id
-    config["role_premium_player_id"] = premium_player_role.id
-    config["role_recruit_id"] = free_agent_role.id
+    config["role_team_coach_id"] = team_coach_role.id
+    config["role_club_manager_id"] = club_manager_role.id
+    config["role_league_staff_id"] = league_staff_role.id
+    config["role_league_owner_id"] = league_owner_role.id
+    config["role_free_agent_id"] = free_agent_role.id
+    config["role_pro_player_id"] = pro_player_role.id
     config["role_retired_id"] = retired_role.id
 
     staff_role_ids = _parse_int_set(config.get(STAFF_ROLE_IDS_KEY))
     updated_staff_role_ids = set(staff_role_ids)
-    updated_staff_role_ids.update({owner_role.id, manager_role.id})
+    updated_staff_role_ids.update(
+        {
+            team_coach_role.id,
+            club_manager_role.id,
+            league_staff_role.id,
+            league_owner_role.id,
+        }
+    )
     if updated_staff_role_ids != staff_role_ids:
         config[STAFF_ROLE_IDS_KEY] = sorted(updated_staff_role_ids)
         actions.append("Updated staff role IDs to include Owner/Manager roles.")
 
-    await _maybe_assign_league_owner_role(guild, owner_role=owner_role, actions=actions)
+    await _maybe_assign_league_owner_role(
+        guild, owner_role=league_owner_role, actions=actions
+    )
 
     return config
 

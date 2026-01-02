@@ -50,14 +50,13 @@ def _build_embed(
         embed.set_footer(text=f"Last updated: {discord.utils.format_dt(updated_at, style='R')}")
         return embed
 
-    _add_listing_fields(embed, heading="Pro+ (25 cap)", listings=premium_plus_listings)
-    _add_listing_fields(embed, heading="Pro (22 cap)", listings=premium_listings)
-    embed.set_footer(
-        text=(
-            f"Last updated: {discord.utils.format_dt(updated_at, style='R')} | "
-            "Pro=22 | Pro+=25"
-        )
-    )
+    if premium_plus_listings:
+        _add_listing_fields(embed, heading="Legacy Pro+ (25 cap)", listings=premium_plus_listings)
+    _add_listing_fields(embed, heading="Club Manager (22 cap)", listings=premium_listings)
+    footer = f"Last updated: {discord.utils.format_dt(updated_at, style='R')} | Club Manager=22"
+    if premium_plus_listings:
+        footer = f"{footer} | Legacy Pro+=25"
+    embed.set_footer(text=footer)
     return embed
 
 
@@ -193,7 +192,7 @@ def _format_listing(roster: dict[str, Any], *, count: int, openings: int) -> str
     cap_raw = roster.get("cap")
     cap = int(cap_raw) if isinstance(cap_raw, int) else 0
     practice = str(roster.get("practice_times") or "").strip() or "Not set"
-    tier = "Pro+" if cap >= 25 else "Pro"
+    tier = "Legacy Pro+" if cap >= 25 else "Club Manager"
     return (
         f"{coach} - **{team_name}** - {tier} - "
         f"Openings: {openings} ({count}/{cap}) - Practice: {practice}"

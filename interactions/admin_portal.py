@@ -76,7 +76,7 @@ def build_admin_intro_embed() -> discord.Embed:
             "**Guardrails**\n"
             "- Approve/reject with clear feedback.\n"
             "- Unlock rosters only after rejection (Managers portal).\n"
-            "- Approved rosters are final once posted to the roster listing channel."
+            "- Approved rosters are final once posted to the club listings channel."
         ),
         color=DEFAULT_COLOR,
         footer=_portal_footer(),
@@ -104,7 +104,7 @@ def build_admin_embed() -> discord.Embed:
     embed.add_field(
         name="Managers",
         value=(
-            "- Assign coach tiers and caps\n"
+            "- Assign coach roles and caps\n"
             "- Unlock rosters after rejection\n"
             "- Refresh pro coach listings"
         ),
@@ -419,7 +419,7 @@ class AdminPortalView(SafeView):
         if not me.guild_permissions.manage_channels:
             warnings.append("Missing `Manage Channels` (cannot create/repair channels).")
         if not me.guild_permissions.manage_roles:
-            warnings.append("Missing `Manage Roles` (cannot create/repair coach tier roles).")
+            warnings.append("Missing `Manage Roles` (cannot create/repair Offside roles).")
         if not me.guild_permissions.manage_messages:
             warnings.append("Missing `Manage Messages` (pin/unpin and some cleanup actions may fail).")
 

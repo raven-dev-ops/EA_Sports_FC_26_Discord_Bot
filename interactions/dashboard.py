@@ -76,12 +76,11 @@ def build_roster_dashboard(
 
     if cap is None and not has_roster:
         logging.warning(
-            "Roster eligibility failed for user %s roles=%s (expected: coach=%s, premium=%s, premium_plus=%s)",
+            "Roster eligibility failed for user %s roles=%s (expected: team_coach=%s, club_manager=%s)",
             interaction.user.id if interaction.user else "unknown",
             role_ids,
-            getattr(settings, "role_coach_id", None),
-            settings.role_coach_premium_id,
-            settings.role_coach_premium_plus_id,
+            getattr(settings, "role_team_coach_id", None),
+            settings.role_club_manager_id,
         )
         embed.add_field(
             name="Eligibility",

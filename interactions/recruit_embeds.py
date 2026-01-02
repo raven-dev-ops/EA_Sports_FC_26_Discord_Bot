@@ -18,7 +18,7 @@ def build_recruit_profile_embed(
 ) -> discord.Embed:
     display_name = profile.get("display_name") or profile.get("user_tag") or str(profile.get("user_id", "Unknown"))
     embed = make_embed(
-        title=f"Recruit Profile: {display_name}",
+        title=f"Free Agent Profile: {display_name}",
         description=f"User ID: `{profile.get('user_id', 'unknown')}`",
         color=DEFAULT_COLOR,
     )

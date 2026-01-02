@@ -44,16 +44,19 @@ def _build_settings(
         interactions_endpoint_url=None,
         test_mode=True,
         role_broskie_id=None,
-        role_coach_id=None,
-        role_coach_premium_id=None,
-        role_coach_premium_plus_id=None,
+        role_team_coach_id=None,
+        role_club_manager_id=None,
+        role_league_staff_id=None,
+        role_league_owner_id=None,
+        role_free_agent_id=None,
+        role_pro_player_id=None,
+        role_retired_id=None,
         channel_staff_portal_id=None,
         channel_club_portal_id=None,
         channel_manager_portal_id=None,
         channel_coach_portal_id=None,
         channel_recruit_portal_id=None,
         channel_staff_monitor_id=None,
-        channel_roster_listing_id=None,
         channel_recruit_listing_id=None,
         channel_club_listing_id=None,
         channel_premium_coaches_id=None,
@@ -261,7 +264,7 @@ def main() -> None:
         {
             "coach_discord_id": 999_000_000_000_000_003,
             "team_name": f"[SEED:{seed_tag}] Titans FC",
-            "cap": 25,
+            "cap": 22,
             "practice_times": "Sat/Sun 18:00-20:00 UTC",
             "status": "APPROVED",
             "player_count": 22,
@@ -392,7 +395,7 @@ def main() -> None:
         if not isinstance(coach_id, int):
             continue
         cap = int(roster.get("cap") or 0)
-        tier = "premium_plus" if cap >= 25 else "premium" if cap >= 22 else "standard"
+        tier = "club_manager" if cap >= 22 else "team_coach"
         coach_doc = {
             "record_type": "coach",
             "guild_id": guild_id,

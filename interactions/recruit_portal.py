@@ -34,7 +34,7 @@ def build_recruit_intro_embed() -> discord.Embed:
         title="Recruitment Portal Overview",
         description=(
             "**Purpose**\n"
-            "Create a recruit profile so clubs/coaches can find you.\n\n"
+            "Create a free agent profile so clubs/coaches can find you.\n\n"
             "**Who should use this**\n"
             "- Players/free agents.\n\n"
             "**Quick rules**\n"
@@ -177,7 +177,7 @@ class RecruitPortalView(SafeView):
                 )
             except PermissionError:
                 await interaction.response.send_message(
-                    "Recruit profiles with FC stats and rich embeds are available on the Pro plan for this server.",
+                    "Free agent profiles with FC stats and rich embeds are available on the Pro plan for this server.",
                     ephemeral=True,
                 )
                 return

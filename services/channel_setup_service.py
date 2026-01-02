@@ -91,6 +91,12 @@ async def ensure_offside_channels(
         reports_category=reports_category,
         actions=actions,
     )
+    await _migrate_roster_listing_channel(
+        guild,
+        config=config,
+        reports_category=reports_category,
+        actions=actions,
+    )
 
     dashboard_channels: list[discord.TextChannel] = []
     dashboard_specs: list[tuple[str, str, dict[discord.Role | discord.Member | discord.Object, discord.PermissionOverwrite]]] = [
@@ -180,7 +186,6 @@ async def ensure_offside_channels(
                 )
 
     reports_specs: list[tuple[str, str]] = [
-        (ROSTER_LISTING_CHANNEL_NAME, "channel_roster_listing_id"),
         (RECRUITMENT_BOARDS_CHANNEL_NAME, "channel_recruit_listing_id"),
         (CLUB_LISTING_CHANNEL_NAME, "channel_club_listing_id"),
         (PRO_COACHES_CHANNEL_NAME, "channel_premium_coaches_id"),
@@ -473,9 +478,19 @@ def _resolve_staff_roles(
             if role.permissions.administrator or role.permissions.manage_guild:
                 role_ids.add(role.id)
 
-    # Always include owner/manager roles (if present) when env staff roles aren't configured.
+    # Always include staff roles (if present) when env staff roles aren't configured.
     if not settings.staff_role_ids:
-        for key in ("role_owner_id", "role_manager_id"):
+        for key in (
+            "role_league_owner_id",
+            "role_club_manager_id",
+            "role_league_staff_id",
+            "role_team_coach_id",
+            "role_owner_id",
+            "role_manager_id",
+            "role_coach_id",
+            "role_coach_premium_id",
+            "role_coach_premium_plus_id",
+        ):
             role_id = _parse_int(config.get(key))
             if role_id:
                 role_ids.add(role_id)
@@ -798,6 +813,85 @@ async def _migrate_recruitment_boards_channel(
     config["channel_recruit_listing_id"] = legacy_channel.id
 
 
+async def _migrate_roster_listing_channel(
+    guild: discord.Guild,
+    *,
+    config: dict[str, Any],
+    reports_category: discord.CategoryChannel,
+    actions: list[str],
+) -> None:
+    target_name = CLUB_LISTING_CHANNEL_NAME
+    legacy_name = ROSTER_LISTING_CHANNEL_NAME
+    roster_id = _parse_int(config.get("channel_roster_listing_id"))
+    club_id = _parse_int(config.get("channel_club_listing_id"))
+
+    roster_channel: discord.TextChannel | None = None
+    if roster_id:
+        existing = guild.get_channel(roster_id)
+        if isinstance(existing, discord.TextChannel):
+            roster_channel = existing
+
+    club_channel: discord.TextChannel | None = None
+    if club_id:
+        existing = guild.get_channel(club_id)
+        if isinstance(existing, discord.TextChannel):
+            club_channel = existing
+
+    existing_target = club_channel
+    if existing_target is None:
+        existing_target = discord.utils.get(reports_category.text_channels, name=target_name)
+    if existing_target is None:
+        existing_target = discord.utils.get(guild.text_channels, name=target_name)
+
+    if existing_target is not None:
+        if club_id != existing_target.id:
+            config["channel_club_listing_id"] = existing_target.id
+            actions.append("Found existing `club-listing` channel; updated config to use it.")
+        if roster_id and roster_id != config.get("channel_club_listing_id"):
+            config.pop("channel_roster_listing_id", None)
+            actions.append("Deprecated `roster-listing` config cleared (club listings now used).")
+        return
+
+    if roster_channel is not None:
+        config["channel_club_listing_id"] = roster_channel.id
+        config.pop("channel_roster_listing_id", None)
+        if roster_channel.name != target_name:
+            try:
+                await roster_channel.edit(
+                    name=target_name,
+                    reason="Offside setup: merge roster listing into club listings",
+                )
+            except discord.Forbidden:
+                actions.append(
+                    "Could not rename `roster-listing` (missing permissions). "
+                    "Using it as the club listings channel."
+                )
+            else:
+                actions.append("Renamed `roster-listing` to `club-listing`.")
+        return
+
+    legacy_channel = discord.utils.get(reports_category.text_channels, name=legacy_name)
+    if legacy_channel is None:
+        legacy_channel = discord.utils.get(guild.text_channels, name=legacy_name)
+    if legacy_channel is None:
+        return
+
+    config["channel_club_listing_id"] = legacy_channel.id
+    config.pop("channel_roster_listing_id", None)
+    try:
+        await legacy_channel.edit(
+            name=target_name,
+            reason="Offside setup: merge roster listing into club listings",
+        )
+    except discord.Forbidden:
+        actions.append(
+            "Could not rename `roster-listing` (missing permissions). "
+            "Using it as the club listings channel."
+        )
+    else:
+        actions.append("Renamed `roster-listing` to `club-listing`.")
+
+
 def _filter_roles_for_overwrites(
     roles: list[discord.Role],
     *,
@@ -837,8 +931,8 @@ def _resolve_portal_roles(guild: discord.Guild, config: dict[str, Any], *, key: 
             return [resolved_role]
 
     fallback_names = {
-        "role_free_player_id": "Free Player",
-        "role_premium_player_id": "Premium Player",
+        "role_free_agent_id": "Free Agent",
+        "role_pro_player_id": "Pro Player",
     }
     fallback_name = fallback_names.get(key)
     if fallback_name:
@@ -950,7 +1044,13 @@ def _public_readonly_overwrites(
 def _resolve_coach_roles(guild: discord.Guild, config: dict[str, Any]) -> list[discord.Role]:
     resolved: dict[int, discord.Role] = {}
 
-    for key in ("role_coach_id", "role_coach_premium_id", "role_coach_premium_plus_id"):
+    for key in (
+        "role_team_coach_id",
+        "role_club_manager_id",
+        "role_coach_id",
+        "role_coach_premium_id",
+        "role_coach_premium_plus_id",
+    ):
         role_id = _parse_int(config.get(key))
         if not role_id:
             continue
@@ -961,7 +1061,7 @@ def _resolve_coach_roles(guild: discord.Guild, config: dict[str, Any]) -> list[d
     if resolved:
         return list(resolved.values())
 
-    for name in ("Coach", "Coach Premium", "Coach Premium+"):
+    for name in ("Team Coach", "Club Manager", "Coach", "Coach Premium", "Coach Premium+"):
         role = discord.utils.get(guild.roles, name=name)
         if role is not None and not role.is_default():
             resolved[role.id] = role

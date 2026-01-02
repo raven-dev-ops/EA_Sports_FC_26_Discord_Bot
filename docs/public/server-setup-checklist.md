@@ -8,12 +8,12 @@ Invite the bot with:
 - Scopes: `bot`, `applications.commands`
 - Bot permissions (recommended):
   - `Manage Channels` (auto-creates the Offside categories/channels)
-  - `Manage Roles` (auto-creates coach tier roles and assigns tiers)
+  - `Manage Roles` (auto-creates Offside roles and assigns tiers)
   - `Manage Messages` (optional; used for portal cleanup, pin/unpin Pro coaches)
   - `Read Message History`, `Send Messages`, `Embed Links`, `Attach Files`
 
 Role hierarchy:
-- Ensure the bot's top role is **above** the coach tier roles it needs to manage.
+- Ensure the bot's top role is **above** the Offside roles it needs to manage.
 
 ## 2) Configure MongoDB (required)
 
@@ -51,15 +51,18 @@ Dashboard channels:
 - `recruit-portal`
 
 Report channels:
-- `roster-listing`
 - `recruitment-boards`
 - `club-listing`
 - `pro-coaches`
 
 Roles:
-- `Coach`
-- `Coach Premium`
-- `Coach Premium+`
+- `Team Coach`
+- `Club Manager` (Pro)
+- `League Staff`
+- `League Owner`
+- `Free Agent`
+- `Pro Player`
+- `Retired`
 
 ## 6) Permissions intent (recommended)
 
@@ -69,11 +72,12 @@ This is the default intent for auto-created channels:
 - `managers-portal`: staff-only (staff can post)
 - `coach-portal`: coaches-only (read-only; use buttons)
 - `recruit-portal`: public read-only (use buttons)
-- `roster-listing`, `recruitment-boards`, `club-listing`, `pro-coaches`: public read-only (bot-managed listings)
+- `recruitment-boards`, `club-listing`, `pro-coaches`: public read-only (bot-managed listings)
 - `staff-monitor`: staff-only (test mode only)
 
 Notes:
 - Listing channels include a pinned bot "About" embed explaining what appears there.
+- `club-listing` includes approved rosters and club ads.
 - Staff can moderate listing channels; chat is intentionally disabled to keep them clean.
 
 ## 7) Operational buttons

@@ -48,11 +48,11 @@ def build_manager_intro_embed() -> discord.Embed:
         title="Managers Portal Overview",
         description=(
             "**Purpose**\n"
-            "Manage coach tiers, roster unlocks, and pro coach listings.\n\n"
+            "Manage coach roles, roster unlocks, and pro coach listings.\n\n"
             "**Who should use this**\n"
             "- Staff / managers only.\n\n"
             "**Quick rules**\n"
-            "- The bot needs `Manage Roles` for tier changes.\n"
+            "- The bot needs `Manage Roles` for role changes.\n"
             "- Cap downgrades will not reduce below current roster size."
         ),
         color=DEFAULT_COLOR,
@@ -64,16 +64,16 @@ def build_manager_embed() -> discord.Embed:
     embed = make_embed(
         title="Managers Control Panel",
         description=(
-            "Use the buttons below to manage tiers and listings. Responses are ephemeral."
+            "Use the buttons below to manage roles and listings. Responses are ephemeral."
         ),
         color=DEFAULT_COLOR,
         footer=_portal_footer(),
     )
     embed.add_field(
-        name="Set Coach Tier",
+        name="Set Coach Role",
         value=(
-            "- Assign Coach / Premium / Premium+\n"
-            "- Optionally sync roster cap to the tier"
+            "- Assign Team Coach / Club Manager\n"
+            "- Optionally sync roster cap to the role"
         ),
         inline=False,
     )
@@ -106,7 +106,7 @@ def build_manager_embed() -> discord.Embed:
     embed.add_field(
         name="Sync Caps (Active Cycle)",
         value=(
-            "- Sync active roster caps to coach tier roles\n"
+            "- Sync active roster caps to Team Coach / Club Manager roles\n"
             "- Safe downgrade rules apply"
         ),
         inline=False,
@@ -138,12 +138,21 @@ def _parse_discord_id(value: str) -> int | None:
 
 def _tier_to_cap(tier: str) -> int | None:
     normalized = tier.strip().casefold()
-    if normalized in {"coach", "standard", "base"}:
+    if normalized in {"team coach", "coach", "standard", "base"}:
         return 16
-    if normalized in {"premium", "coach premium"}:
+    if normalized in {
+        "club manager",
+        "manager",
+        "base+",
+        "pro",
+        "premium",
+        "premium+",
+        "premium plus",
+        "coach premium",
+        "coach premium+",
+        "coach premium plus",
+    }:
         return 22
-    if normalized in {"premium+", "premium plus", "coach premium+", "coach premium plus"}:
-        return 25
     return None
 
 
@@ -164,16 +173,19 @@ def _parse_bool(value: object) -> bool:
 def _desired_cap_for_member(
     member: discord.Member,
     *,
-    coach_role_id: int | None,
-    premium_role_id: int | None,
-    premium_plus_role_id: int | None,
+    team_coach_role_id: int | None,
+    club_manager_role_id: int | None,
+    league_staff_role_id: int | None,
+    league_owner_role_id: int | None,
 ) -> int | None:
     role_ids = {role.id for role in member.roles}
-    if premium_plus_role_id and premium_plus_role_id in role_ids:
-        return 25
-    if premium_role_id and premium_role_id in role_ids:
+    if league_owner_role_id and league_owner_role_id in role_ids:
         return 22
-    if coach_role_id and coach_role_id in role_ids:
+    if league_staff_role_id and league_staff_role_id in role_ids:
+        return 22
+    if club_manager_role_id and club_manager_role_id in role_ids:
+        return 22
+    if team_coach_role_id and team_coach_role_id in role_ids:
         return 16
     return None
 
@@ -204,17 +216,16 @@ async def _set_coach_tier(
 
     me = guild.me
     if me is None or not me.guild_permissions.manage_roles:
-        return False, "I need the `Manage Roles` permission to assign coach tier roles."
+        return False, "I need the `Manage Roles` permission to assign coach roles."
 
-    coach_role_id = resolve_role_id(settings, guild_id=guild.id, field="role_coach_id")
-    premium_role_id = resolve_role_id(settings, guild_id=guild.id, field="role_coach_premium_id")
-    premium_plus_role_id = resolve_role_id(
-        settings, guild_id=guild.id, field="role_coach_premium_plus_id"
+    team_coach_role_id = resolve_role_id(settings, guild_id=guild.id, field="role_team_coach_id")
+    club_manager_role_id = resolve_role_id(
+        settings, guild_id=guild.id, field="role_club_manager_id"
     )
-    if not coach_role_id or not premium_role_id or not premium_plus_role_id:
+    if not team_coach_role_id:
         return (
             False,
-            "Coach tier roles are not configured yet. Ensure the bot has `Manage Roles` and MongoDB is configured, then restart the bot.",
+            "Coach roles are not configured yet. Ensure the bot has `Manage Roles` and MongoDB is configured, then restart the bot.",
         )
 
     member = await _fetch_member(guild, coach_id)
@@ -223,7 +234,7 @@ async def _set_coach_tier(
 
     desired_cap = _tier_to_cap(tier)
     if desired_cap is None:
-        return False, "Tier must be one of: Coach, Premium, Premium+."
+        return False, "Role must be one of: Team Coach, Club Manager."
     if desired_cap > 16:
         try:
             entitlements_service.require_feature(
@@ -232,15 +243,19 @@ async def _set_coach_tier(
                 feature_key=entitlements_service.FEATURE_PREMIUM_COACH_TIERS,
             )
         except PermissionError:
-            return False, "Premium coach tiers are a Pro feature for this server."
+            return False, "Club Manager role is a Pro feature for this server."
+        if not club_manager_role_id:
+            return (
+                False,
+                "Club Manager role is not configured yet. Ensure the bot has `Manage Roles` and MongoDB is configured, then restart the bot.",
+            )
 
-    tier_role_id: int
-    if desired_cap == 16:
-        tier_role_id = coach_role_id
-    elif desired_cap == 22:
-        tier_role_id = premium_role_id
-    else:
-        tier_role_id = premium_plus_role_id
+    tier_role_id = team_coach_role_id if desired_cap == 16 else club_manager_role_id
+    if tier_role_id is None:
+        return (
+            False,
+            "Coach role is not configured yet. Ensure the bot has `Manage Roles` and MongoDB is configured, then restart the bot.",
+        )
 
     tier_role = guild.get_role(tier_role_id)
     if tier_role is None:
@@ -249,27 +264,27 @@ async def _set_coach_tier(
             "Tier role not found. Ensure the bot has `Manage Roles` and MongoDB is configured, then restart the bot.",
         )
 
-    remove_ids = {coach_role_id, premium_role_id, premium_plus_role_id} - {tier_role_id}
+    remove_ids = {team_coach_role_id, club_manager_role_id} - {tier_role_id}
     to_remove = [r for r in member.roles if r.id in remove_ids]
 
     try:
         if to_remove:
-            await member.remove_roles(*to_remove, reason="Offside: set coach tier")
+            await member.remove_roles(*to_remove, reason="Offside: set coach role")
         if tier_role not in member.roles:
-            await member.add_roles(tier_role, reason="Offside: set coach tier")
+            await member.add_roles(tier_role, reason="Offside: set coach role")
     except discord.Forbidden:
         return False, "I couldn't edit this member's roles (role hierarchy / permissions)."
     except discord.DiscordException:
         return False, "Failed to update roles due to a Discord API error."
 
     if not settings.mongodb_uri:
-        return True, f"Updated tier role for <@{coach_id}>. (MongoDB not configured; roster cap not synced.)"
+        return True, f"Updated coach role for <@{coach_id}>. (MongoDB not configured; roster cap not synced.)"
 
     try:
         # Best-effort: sync roster cap to match the tier.
         roster = get_roster_for_coach(coach_id)
         if roster is None:
-            return True, f"Updated tier role for <@{coach_id}>. No roster found to sync."
+            return True, f"Updated coach role for <@{coach_id}>. No roster found to sync."
 
         record_staff_action(
             roster_id=roster["_id"],
@@ -305,7 +320,7 @@ async def _set_coach_tier(
                 },
             )
             return True, (
-                f"Updated tier role for <@{coach_id}>, but did not reduce roster cap below current "
+                f"Updated coach role for <@{coach_id}>, but did not reduce roster cap below current "
                 f"player count ({current_count}). Remove players, then re-run Sync Caps."
             )
 
@@ -327,9 +342,9 @@ async def _set_coach_tier(
                 },
             )
 
-        return True, f"Updated tier role for <@{coach_id}> and synced roster cap to {desired_cap}."
+        return True, f"Updated coach role for <@{coach_id}> and synced roster cap to {desired_cap}."
     except Exception:
-        return True, f"Updated tier role for <@{coach_id}>. (DB unavailable; roster cap not synced.)"
+        return True, f"Updated coach role for <@{coach_id}>. (DB unavailable; roster cap not synced.)"
 
 
 async def _unlock_roster(
@@ -394,14 +409,14 @@ async def _unlock_roster(
     return True, f"Roster unlocked for <@{coach_id}>.{suffix}"
 
 
-class SetCoachTierModal(discord.ui.Modal, title="Set Coach Tier"):
+class SetCoachTierModal(discord.ui.Modal, title="Set Coach Role"):
     coach_id: discord.ui.TextInput = discord.ui.TextInput(
         label="Coach Discord ID or mention",
         placeholder="@Coach or 1234567890",
     )
     tier: discord.ui.TextInput = discord.ui.TextInput(
-        label="Tier (Coach / Premium / Premium+)",
-        placeholder="Premium+",
+        label="Role (Team Coach / Club Manager)",
+        placeholder="Club Manager",
         max_length=32,
     )
 
@@ -423,7 +438,7 @@ class SetCoachTierModal(discord.ui.Modal, title="Set Coach Tier"):
         ok, message = await _set_coach_tier(interaction, coach_id=coach_id, tier=self.tier.value)
         await interaction.response.send_message(
             embed=make_embed(
-                title="Coach tier updated" if ok else "Coach tier update failed",
+                title="Coach role updated" if ok else "Coach role update failed",
                 description=message,
                 color=SUCCESS_COLOR if ok else ERROR_COLOR,
             ),
@@ -573,7 +588,7 @@ class ManagerPortalView(SafeView):
         super().__init__(timeout=None)
 
         buttons = [
-            ("Set Coach Tier", discord.ButtonStyle.primary, self.on_set_tier),
+            ("Set Coach Role", discord.ButtonStyle.primary, self.on_set_tier),
             ("Unlock Roster", discord.ButtonStyle.secondary, self.on_unlock),
             ("Refresh Pro coaches", discord.ButtonStyle.success, self.on_refresh_premium),
             ("Toggle Pro Pin", discord.ButtonStyle.secondary, self.on_toggle_premium_pin),
@@ -804,34 +819,29 @@ class ManagerPortalView(SafeView):
 
         await interaction.response.defer(ephemeral=True)
 
-        try:
-            entitlements_service.require_feature(
-                settings,
-                guild_id=guild.id,
-                feature_key=entitlements_service.FEATURE_PREMIUM_COACH_TIERS,
-            )
-        except PermissionError:
-            await interaction.followup.send(
-                embed=make_embed(
-                    title="Sync failed",
-                    description="Premium coach tiers are a Pro feature for this server.",
-                    color=ERROR_COLOR,
-                ),
-                ephemeral=True,
-            )
-            return
-        premium_tiers_enabled = True
-        coach_role_id = resolve_role_id(settings, guild_id=guild.id, field="role_coach_id")
-        premium_role_id = resolve_role_id(settings, guild_id=guild.id, field="role_coach_premium_id")
-        premium_plus_role_id = resolve_role_id(
-            settings, guild_id=guild.id, field="role_coach_premium_plus_id"
+        premium_tiers_enabled = entitlements_service.is_feature_enabled(
+            settings, guild_id=guild.id, feature_key=entitlements_service.FEATURE_PREMIUM_COACH_TIERS
         )
-        if not coach_role_id or (premium_tiers_enabled and (not premium_role_id or not premium_plus_role_id)):
+        team_coach_role_id = resolve_role_id(
+            settings, guild_id=guild.id, field="role_team_coach_id"
+        )
+        club_manager_role_id = (
+            resolve_role_id(settings, guild_id=guild.id, field="role_club_manager_id")
+            if premium_tiers_enabled
+            else None
+        )
+        league_staff_role_id = resolve_role_id(
+            settings, guild_id=guild.id, field="role_league_staff_id"
+        )
+        league_owner_role_id = resolve_role_id(
+            settings, guild_id=guild.id, field="role_league_owner_id"
+        )
+        if not team_coach_role_id:
             await interaction.followup.send(
                 embed=make_embed(
                     title="Sync failed",
                     description=(
-                        "Coach tier roles are not configured yet. Ensure the bot has `Manage Roles` "
+                        "Coach roles are not configured yet. Ensure the bot has `Manage Roles` "
                         "and MongoDB is configured, then restart the bot."
                     ),
                     color=ERROR_COLOR,
@@ -839,9 +849,6 @@ class ManagerPortalView(SafeView):
                 ephemeral=True,
             )
             return
-        if not premium_tiers_enabled:
-            premium_role_id = None
-            premium_plus_role_id = None
 
         try:
             cycle_collection = get_collection(settings, record_type="tournament_cycle", guild_id=guild.id)
@@ -923,9 +930,10 @@ class ManagerPortalView(SafeView):
 
             desired_cap = _desired_cap_for_member(
                 member,
-                coach_role_id=coach_role_id,
-                premium_role_id=premium_role_id,
-                premium_plus_role_id=premium_plus_role_id,
+                team_coach_role_id=team_coach_role_id,
+                club_manager_role_id=club_manager_role_id,
+                league_staff_role_id=league_staff_role_id,
+                league_owner_role_id=league_owner_role_id,
             )
             if desired_cap is None:
                 skipped_no_role += 1

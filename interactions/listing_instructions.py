@@ -145,20 +145,11 @@ async def post_listing_channel_instructions(
 
         listing_specs = [
             (
-                "channel_roster_listing_id",
-                "roster-listing",
-                _build_listing_about_embed(
-                    title="About: roster-listing",
-                    description="Approved rosters are posted here automatically.",
-                    portal_ref=_format_channel_ref(coach_portal_id, fallback_name="coach-portal"),
-                ),
-            ),
-            (
                 "channel_recruit_listing_id",
                 "recruitment-boards",
                 _build_listing_about_embed(
                     title="About: recruitment-boards",
-                    description="Recruit profiles are posted here automatically when a player registers/updates.",
+                    description="Free agent profiles are posted here automatically when a player registers/updates.",
                     portal_ref=_format_channel_ref(recruit_portal_id, fallback_name="recruit-portal"),
                 ),
             ),
@@ -167,8 +158,11 @@ async def post_listing_channel_instructions(
                 "club-listing",
                 _build_listing_about_embed(
                     title="About: club-listing",
-                    description="Club ads are posted here automatically when a club registers/updates.",
-                    portal_ref="Contact staff to submit a club ad.",
+                    description="Approved rosters and club ads are posted here automatically.",
+                    portal_ref=(
+                        f"Rosters: {_format_channel_ref(coach_portal_id, fallback_name='coach-portal')}\n"
+                        "Clubs: Contact staff to submit a club ad."
+                    ),
                 ),
             ),
             (

@@ -32,7 +32,7 @@
           <strong>Premium features locked</strong>
         </div>
         <p class="muted spacer-sm">
-          Premium coach tiers, Pro coaches report, and FC25 stats are available on the Pro plan.
+          Club Manager role, Pro coaches report, and FC25 stats are available on the Pro plan.
         </p>
       </div>
       <div class="btn-group">
@@ -75,7 +75,7 @@
           {% endcall %}
         {% endif %}
 
-        <h3 class="mt-14">Coach tiers</h3>
+        <h3 class="mt-14">Roles</h3>
         {% for field in coach_role_fields %}
           <label class="{% if loop.index > 1 %}mt-10 block{% else %}block{% endif %}">
             {{ field.label }}
@@ -98,7 +98,7 @@
         {% if not premium_tiers_enabled %}
           <p class="muted">
             <span class="badge warn">LOCKED</span>
-            Premium coach tiers require Pro. <a href="{{ upgrade_href }}">Upgrade</a>
+            Club Manager role requires Pro. <a href="{{ upgrade_href }}">Upgrade</a>
           </p>
         {% endif %}
 

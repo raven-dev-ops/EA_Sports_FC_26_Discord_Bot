@@ -16,16 +16,19 @@ class Settings:
     interactions_endpoint_url: str | None
     test_mode: bool
     role_broskie_id: int | None
-    role_coach_id: int | None
-    role_coach_premium_id: int | None
-    role_coach_premium_plus_id: int | None
+    role_team_coach_id: int | None
+    role_club_manager_id: int | None
+    role_league_staff_id: int | None
+    role_league_owner_id: int | None
+    role_free_agent_id: int | None
+    role_pro_player_id: int | None
+    role_retired_id: int | None
     channel_staff_portal_id: int | None
     channel_club_portal_id: int | None
     channel_manager_portal_id: int | None
     channel_coach_portal_id: int | None
     channel_recruit_portal_id: int | None
     channel_staff_monitor_id: int | None
-    channel_roster_listing_id: int | None
     channel_recruit_listing_id: int | None
     channel_club_listing_id: int | None
     channel_premium_coaches_id: int | None
@@ -166,11 +169,12 @@ def load_settings() -> Settings:
 
     channel_staff_monitor_id = _optional_int(constants.CHANNEL_STAFF_MONITOR_ID_ENV)
 
-    channel_roster_listing_id = _optional_int(constants.CHANNEL_ROSTER_LISTING_ID_ENV)
-    if channel_roster_listing_id is None:
-        channel_roster_listing_id = _optional_int(constants.CHANNEL_ROSTER_PORTAL_ID_ENV)
     channel_recruit_listing_id = _optional_int(constants.CHANNEL_RECRUIT_LISTING_ID_ENV)
     channel_club_listing_id = _optional_int(constants.CHANNEL_CLUB_LISTING_ID_ENV)
+    if channel_club_listing_id is None:
+        channel_club_listing_id = _optional_int(constants.CHANNEL_ROSTER_LISTING_ID_ENV)
+    if channel_club_listing_id is None:
+        channel_club_listing_id = _optional_int(constants.CHANNEL_ROSTER_PORTAL_ID_ENV)
     channel_premium_coaches_id = _optional_int(constants.CHANNEL_PREMIUM_COACHES_ID_ENV)
 
     fc25_stats_cache_ttl_seconds = _optional_int_default(
@@ -197,11 +201,21 @@ def load_settings() -> Settings:
         raise RuntimeError("FC25_STATS_RATE_LIMIT_PER_GUILD must be > 0.")
 
     role_broskie_id = _optional_int(constants.ROLE_BROSKIE_ID_ENV)
-    role_coach_id = _optional_int(constants.ROLE_COACH_ID_ENV) or _optional_int(
-        constants.ROLE_SUPER_LEAGUE_COACH_ID_ENV
-    )
-    role_coach_premium_id = _optional_int(constants.ROLE_COACH_PREMIUM_ID_ENV)
-    role_coach_premium_plus_id = _optional_int(constants.ROLE_COACH_PREMIUM_PLUS_ID_ENV)
+    role_team_coach_id = _optional_int(constants.ROLE_TEAM_COACH_ID_ENV)
+    if role_team_coach_id is None:
+        role_team_coach_id = _optional_int(constants.ROLE_COACH_ID_ENV) or _optional_int(
+            constants.ROLE_SUPER_LEAGUE_COACH_ID_ENV
+        )
+    role_club_manager_id = _optional_int(constants.ROLE_CLUB_MANAGER_ID_ENV)
+    if role_club_manager_id is None:
+        role_club_manager_id = _optional_int(constants.ROLE_COACH_PREMIUM_PLUS_ID_ENV)
+    if role_club_manager_id is None:
+        role_club_manager_id = _optional_int(constants.ROLE_COACH_PREMIUM_ID_ENV)
+    role_league_staff_id = _optional_int(constants.ROLE_LEAGUE_STAFF_ID_ENV)
+    role_league_owner_id = _optional_int(constants.ROLE_LEAGUE_OWNER_ID_ENV)
+    role_free_agent_id = _optional_int(constants.ROLE_FREE_AGENT_ID_ENV)
+    role_pro_player_id = _optional_int(constants.ROLE_PRO_PLAYER_ID_ENV)
+    role_retired_id = _optional_int(constants.ROLE_RETIRED_ID_ENV)
 
     return Settings(
         discord_token=discord_token,
@@ -211,16 +225,19 @@ def load_settings() -> Settings:
         interactions_endpoint_url=_optional_str(constants.DISCORD_INTERACTIONS_ENDPOINT_URL_ENV),
         test_mode=test_mode,
         role_broskie_id=role_broskie_id,
-        role_coach_id=role_coach_id,
-        role_coach_premium_id=role_coach_premium_id,
-        role_coach_premium_plus_id=role_coach_premium_plus_id,
+        role_team_coach_id=role_team_coach_id,
+        role_club_manager_id=role_club_manager_id,
+        role_league_staff_id=role_league_staff_id,
+        role_league_owner_id=role_league_owner_id,
+        role_free_agent_id=role_free_agent_id,
+        role_pro_player_id=role_pro_player_id,
+        role_retired_id=role_retired_id,
         channel_staff_portal_id=channel_staff_portal_id,
         channel_club_portal_id=channel_club_portal_id,
         channel_manager_portal_id=channel_manager_portal_id,
         channel_coach_portal_id=channel_coach_portal_id,
         channel_recruit_portal_id=channel_recruit_portal_id,
         channel_staff_monitor_id=channel_staff_monitor_id,
-        channel_roster_listing_id=channel_roster_listing_id,
         channel_recruit_listing_id=channel_recruit_listing_id,
         channel_club_listing_id=channel_club_listing_id,
         channel_premium_coaches_id=channel_premium_coaches_id,
@@ -273,16 +290,19 @@ def summarize_settings(settings: Settings) -> dict[str, object]:
             "coach_portal": settings.channel_coach_portal_id,
             "recruit_portal": settings.channel_recruit_portal_id,
             "staff_monitor": settings.channel_staff_monitor_id,
-            "roster_listing": settings.channel_roster_listing_id,
             "recruit_listing": settings.channel_recruit_listing_id,
             "club_listing": settings.channel_club_listing_id,
             "premium_coaches": settings.channel_premium_coaches_id,
         },
         "roles": {
             "broskie": settings.role_broskie_id,
-            "coach": settings.role_coach_id,
-            "coach_premium": settings.role_coach_premium_id,
-            "coach_premium_plus": settings.role_coach_premium_plus_id,
+            "team_coach": settings.role_team_coach_id,
+            "club_manager": settings.role_club_manager_id,
+            "league_staff": settings.role_league_staff_id,
+            "league_owner": settings.role_league_owner_id,
+            "free_agent": settings.role_free_agent_id,
+            "pro_player": settings.role_pro_player_id,
+            "retired": settings.role_retired_id,
             "staff_roles_defined": bool(settings.staff_role_ids),
         },
         "banlist_enabled": bool(settings.banlist_sheet_id),

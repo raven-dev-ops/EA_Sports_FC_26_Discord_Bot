@@ -15,7 +15,7 @@ async def enforce_paid_access(interaction: discord.Interaction) -> bool:
 
     Policy (guild interactions only):
     - Staff and coaches are always allowed.
-    - Members with Free/Premium Player roles are allowed.
+    - Members with Free Agent or Pro Player roles are allowed.
     - Members with Free Agent role are allowed (and never auto-marked Retired).
     - Everyone else is denied and (best-effort) given the Retired role.
     """
@@ -54,9 +54,10 @@ async def enforce_paid_access(interaction: discord.Interaction) -> bool:
         return False
 
     coach_role_ids = {
-        resolve_role_id(settings, guild_id=guild.id, field="role_coach_id"),
-        resolve_role_id(settings, guild_id=guild.id, field="role_coach_premium_id"),
-        resolve_role_id(settings, guild_id=guild.id, field="role_coach_premium_plus_id"),
+        resolve_role_id(settings, guild_id=guild.id, field="role_team_coach_id"),
+        resolve_role_id(settings, guild_id=guild.id, field="role_club_manager_id"),
+        resolve_role_id(settings, guild_id=guild.id, field="role_league_staff_id"),
+        resolve_role_id(settings, guild_id=guild.id, field="role_league_owner_id"),
     }
     coach_role_ids.discard(None)
     if coach_role_ids.intersection(role_ids):
@@ -66,12 +67,14 @@ async def enforce_paid_access(interaction: discord.Interaction) -> bool:
         settings,
         guild_id=guild.id,
         field="role_free_agent_id",
-    ) or resolve_role_id(settings, guild_id=guild.id, field="role_recruit_id")
+    ) or resolve_role_id(settings, guild_id=guild.id, field="role_recruit_id") or resolve_role_id(
+        settings, guild_id=guild.id, field="role_free_player_id"
+    )
     if free_agent_role_id and free_agent_role_id in role_ids:
         return True
 
     paid_role_ids = {
-        resolve_role_id(settings, guild_id=guild.id, field="role_free_player_id"),
+        resolve_role_id(settings, guild_id=guild.id, field="role_pro_player_id"),
         resolve_role_id(settings, guild_id=guild.id, field="role_premium_player_id"),
     }
     paid_role_ids.discard(None)
@@ -92,7 +95,7 @@ async def enforce_paid_access(interaction: discord.Interaction) -> bool:
     await _send_ephemeral(
         interaction,
         "Offside access is limited to paid members. "
-        "Ask staff to assign **Free Player** or **Premium Player** (or give you the **Free Agent** role)."
+        "Ask staff to assign **Pro Player** (or give you the **Free Agent** role)."
         f"{suffix}",
     )
     return False

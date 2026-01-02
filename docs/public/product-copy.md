@@ -27,7 +27,7 @@ analytics with guided setup dashboards.
 | Dashboards + Setup Wizard | owners + staff | guided setup checks, portal dashboards, and idempotent reposting |
 | Rosters | coaches + staff | roster lifecycle: create, add/remove, caps, submit, review, approve/reject/unlock |
 | Recruiting | staff | recruit profiles + player pool search; recruitment boards and availability workflows |
-| Clubs | managers + staff | club ads, club listings, premium coach workflows and reporting |
+| Clubs | managers + staff | club ads, club listings, club manager workflows and reporting |
 | Tournaments | staff | tournament creation, registration, brackets, fixtures, match/dispute flows |
 | Analytics | owners + staff | per-guild collection analytics + operational visibility |
 | Billing | owners/admins | per-guild Stripe billing, invoices, and entitlements status |
@@ -45,7 +45,7 @@ Free is the default plan and includes all core workflows.
 
 Pro unlocks feature-keys listed in `services/entitlements_service.py` `PRO_FEATURE_KEYS`:
 
-- `premium_coach_tiers` (Coach Premium / Coach Premium+ roles and caps)
+- `premium_coach_tiers` (Club Manager role and expanded roster caps)
 - `premium_coaches_report` (Pro coaches listing channel/report)
 - `fc25_stats` (FC stats integration)
 - `banlist` (Google Sheets banlist integration)

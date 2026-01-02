@@ -10,17 +10,20 @@ from utils.role_routing import resolve_role_id
 def resolve_roster_cap(
     member_role_ids: Iterable[int],
     *,
-    coach_role_id: int | None,
-    premium_role_id: int | None,
-    premium_plus_role_id: int | None,
+    team_coach_role_id: int | None,
+    club_manager_role_id: int | None,
+    league_staff_role_id: int | None,
+    league_owner_role_id: int | None,
 ) -> int | None:
     role_set = set(member_role_ids)
 
-    if premium_plus_role_id in role_set:
-        return 25
-    if premium_role_id in role_set:
+    if league_owner_role_id in role_set:
         return 22
-    if coach_role_id in role_set:
+    if league_staff_role_id in role_set:
+        return 22
+    if club_manager_role_id in role_set:
+        return 22
+    if team_coach_role_id in role_set:
         return 16
 
     return None
@@ -31,9 +34,10 @@ def resolve_roster_cap_from_settings(
 ) -> int | None:
     return resolve_roster_cap(
         member_role_ids,
-        coach_role_id=settings.role_coach_id,
-        premium_role_id=settings.role_coach_premium_id,
-        premium_plus_role_id=settings.role_coach_premium_plus_id,
+        team_coach_role_id=settings.role_team_coach_id,
+        club_manager_role_id=settings.role_club_manager_id,
+        league_staff_role_id=settings.role_league_staff_id,
+        league_owner_role_id=settings.role_league_owner_id,
     )
 
 
@@ -50,15 +54,12 @@ def resolve_roster_cap_for_guild(
         )
     return resolve_roster_cap(
         member_role_ids,
-        coach_role_id=resolve_role_id(settings, guild_id=guild_id, field="role_coach_id"),
-        premium_role_id=(
-            resolve_role_id(settings, guild_id=guild_id, field="role_coach_premium_id")
+        team_coach_role_id=resolve_role_id(settings, guild_id=guild_id, field="role_team_coach_id"),
+        club_manager_role_id=(
+            resolve_role_id(settings, guild_id=guild_id, field="role_club_manager_id")
             if premium_tiers_enabled
             else None
         ),
-        premium_plus_role_id=(
-            resolve_role_id(settings, guild_id=guild_id, field="role_coach_premium_plus_id")
-            if premium_tiers_enabled
-            else None
-        ),
+        league_staff_role_id=resolve_role_id(settings, guild_id=guild_id, field="role_league_staff_id"),
+        league_owner_role_id=resolve_role_id(settings, guild_id=guild_id, field="role_league_owner_id"),
     )

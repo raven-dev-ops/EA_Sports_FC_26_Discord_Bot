@@ -14,7 +14,7 @@ class MeCog(commands.Cog):
     def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
 
-    @app_commands.command(name="me", description="Show your stored recruit profile preview.")
+    @app_commands.command(name="me", description="Show your stored free agent profile preview.")
     async def me(self, interaction: discord.Interaction) -> None:
         guild = interaction.guild
         if guild is None:
@@ -31,7 +31,7 @@ class MeCog(commands.Cog):
             profile = None
         if not profile:
             await interaction.response.send_message(
-                "No recruit profile found yet. Use the Recruitment Portal to register.",
+                "No free agent profile found yet. Use the Recruitment Portal to register.",
                 ephemeral=True,
             )
             return

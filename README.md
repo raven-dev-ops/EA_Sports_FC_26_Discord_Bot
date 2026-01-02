@@ -9,8 +9,8 @@ Roster management and staff review bot for Discord tournaments.
 
 1. Set up Discord channels and roles:
    - Invite the bot with permissions to manage channels/roles, send messages, read message history, and use slash commands.
-   - On join/startup, the bot auto-creates the `--OFFSIDE DASHBOARD--` / `--OFFSIDE REPORTS--` layout, required channels (including Managers + Pro coaches), and the coach roles (`Coach`, `Coach Premium`, `Coach Premium+`).
-   - Assign the coach roles to your coaches (premium tiers control roster caps).
+   - On join/startup, the bot auto-creates the `--OFFSIDE DASHBOARD--` / `--OFFSIDE REPORTS--` layout, required channels (including Managers + Pro coaches), and the Offside roles (`Team Coach`, `Club Manager`, `League Staff`, `League Owner`, `Free Agent`, `Pro Player`, `Retired`).
+   - Assign Team Coach / Club Manager (Pro) roles to your coaches (Club Manager controls the 22-player cap).
    - Checklist: `docs/public/server-setup-checklist.md`
 2. Configure the bot:
    - Copy `.env.example` to `.env` and fill in the required IDs and tokens.
@@ -19,7 +19,7 @@ Roster management and staff review bot for Discord tournaments.
    - Run locally (`python -m offside_bot`) or deploy to your host (e.g., Heroku worker).
    - Maintainers: release + rollback checklist: `docs/internal/release-playbook.md`
    - Confirm the coach and staff portal embeds appear in their channels (or run the portal refresh buttons).
-   - Submit a test roster, approve/reject, and confirm approved rosters flow to the roster listing channel.
+   - Submit a test roster, approve/reject, and confirm approved rosters flow to the club listing channel.
 
 ## Features (current)
 
@@ -43,18 +43,17 @@ Roster management and staff review bot for Discord tournaments.
 ## Portals (auto-posted on startup)
 
 - **Staff Portal** (`channel_staff_portal_id`): staff review (approve/reject) + quick-reference panel.
-- **Managers Portal** (`channel_manager_portal_id`): coach tiers (Coach/Premium/Premium+), roster unlock/delete, pro coaches refresh, and cap sync tools.
+- **Managers Portal** (`channel_manager_portal_id`): coach roles (Team Coach/Club Manager), roster unlock/delete, pro coaches refresh, and cap sync tools.
 - **Coach Portal** (`channel_coach_portal_id`): roster dashboard + coach help (buttons; responses are ephemeral). Channel is coaches-only.
 - **Recruit Portal** (`channel_recruit_portal_id`): recruit profile register/edit/preview/unregister (buttons; responses are ephemeral).
-- **Roster Listing** (`channel_roster_listing_id`): approved roster embeds reposted here after staff approval.
 - **Recruitment Boards** (`channel_recruit_listing_id`): recruit profile listing embeds.
-- **Club Listing** (`channel_club_listing_id`): club ad listing embeds.
+- **Club Listing** (`channel_club_listing_id`): approved roster embeds + club ad listings.
 - **Pro coaches** (`channel_premium_coaches_id`): pro coach roster listings (openings + practice times).
 
 ### Dashboard embeds & buttons
 - Coach portal: intro embed + roster portal embed. Buttons open the roster dashboard (add/remove/view/submit, rename) and coach help. Responses are ephemeral; portal is idempotent and cleans prior portal embeds.
 - Staff portal: intro embed + admin control panel. Buttons for Tournaments, Managers portal link, Players, DB/Analytics, and Verify Setup. Staff actions are ephemeral; the submission review message is cleaned after approve/reject.
-- Managers portal: intro embed + control panel. Buttons for Set Coach Tier, Unlock Roster, Refresh Pro coaches, Toggle Pro Pin, Force Rebuild Pro, Sync Caps (Active Cycle), and Delete Roster (admin-only).
+- Managers portal: intro embed + control panel. Buttons for Set Coach Role, Unlock Roster, Refresh Pro coaches, Toggle Pro Pin, Force Rebuild Pro, Sync Caps (Active Cycle), and Delete Roster (admin-only).
 - All portals include a staff-only "Repost Portal" action for quick cleanup/repost.
 - Help command: `/help` returns an embed with coach/staff/tournament/ops categories and submission steps; all responses are ephemeral.
 
@@ -115,14 +114,19 @@ Optional:
 - `STAFF_ROLE_IDS` (comma-separated role IDs)
 - `TEST_MODE` (defaults to `true`, set `false` for production)
 - Role env overrides (optional; primary source is per-guild config created by auto-setup):
-  - `ROLE_COACH_ID` (or legacy `ROLE_SUPER_LEAGUE_COACH_ID`)
-  - `ROLE_COACH_PREMIUM_ID`
-  - `ROLE_COACH_PREMIUM_PLUS_ID`
+  - `ROLE_TEAM_COACH_ID`
+  - `ROLE_CLUB_MANAGER_ID` (Pro)
+  - `ROLE_LEAGUE_STAFF_ID`
+  - `ROLE_LEAGUE_OWNER_ID`
+  - `ROLE_FREE_AGENT_ID`
+  - `ROLE_PRO_PLAYER_ID`
+  - `ROLE_RETIRED_ID`
+  - Legacy fallbacks (migration only): `ROLE_COACH_ID`, `ROLE_SUPER_LEAGUE_COACH_ID`, `ROLE_COACH_PREMIUM_ID`, `ROLE_COACH_PREMIUM_PLUS_ID`, `ROLE_RECRUIT_ID`, `ROLE_FREE_PLAYER_ID`, `ROLE_PREMIUM_PLAYER_ID`
 - Channel env overrides (optional; primary source is per-guild config created by auto-setup):
   - `CHANNEL_STAFF_PORTAL_ID`, `CHANNEL_MANAGER_PORTAL_ID`, `CHANNEL_COACH_PORTAL_ID`, `CHANNEL_RECRUIT_PORTAL_ID`
   - `CHANNEL_STAFF_MONITOR_ID` (test-mode sink)
-  - `CHANNEL_ROSTER_LISTING_ID` (fallback to legacy `CHANNEL_ROSTER_PORTAL_ID`)
   - `CHANNEL_RECRUIT_LISTING_ID`, `CHANNEL_CLUB_LISTING_ID`, `CHANNEL_PREMIUM_COACHES_ID`
+  - Legacy roster listing envs (mapped to club listings): `CHANNEL_ROSTER_LISTING_ID`, `CHANNEL_ROSTER_PORTAL_ID`
 
 Optional (billing / Pro plan):
 - `STRIPE_SECRET_KEY`

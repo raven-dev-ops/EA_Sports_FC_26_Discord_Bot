@@ -24,16 +24,19 @@ def _settings(*, mongodb_per_guild_db: bool = False) -> Settings:
         interactions_endpoint_url=None,
         test_mode=True,
         role_broskie_id=None,
-        role_coach_id=2,
-        role_coach_premium_id=3,
-        role_coach_premium_plus_id=4,
+        role_team_coach_id=2,
+        role_club_manager_id=3,
+        role_league_staff_id=4,
+        role_league_owner_id=5,
+        role_free_agent_id=6,
+        role_pro_player_id=7,
+        role_retired_id=8,
         channel_staff_portal_id=None,
         channel_club_portal_id=None,
         channel_manager_portal_id=None,
         channel_coach_portal_id=None,
         channel_recruit_portal_id=None,
         channel_staff_monitor_id=None,
-        channel_roster_listing_id=None,
         channel_recruit_listing_id=None,
         channel_club_listing_id=None,
         channel_premium_coaches_id=None,
@@ -870,9 +873,13 @@ async def test_permissions_page_renders(monkeypatch) -> None:
             return [
                 {"id": "123", "name": "@everyone", "permissions": "0", "position": 0},
                 {"id": "10", "name": "Offside Bot", "permissions": str(bot_perms), "position": 10},
-                {"id": "11", "name": "Coach", "permissions": "0", "position": 1},
-                {"id": "12", "name": "Coach Premium", "permissions": "0", "position": 2},
-                {"id": "13", "name": "Coach Premium+", "permissions": "0", "position": 3},
+                {"id": "11", "name": "Team Coach", "permissions": "0", "position": 1},
+                {"id": "12", "name": "Club Manager", "permissions": "0", "position": 2},
+                {"id": "13", "name": "League Staff", "permissions": "0", "position": 3},
+                {"id": "14", "name": "League Owner", "permissions": "0", "position": 4},
+                {"id": "15", "name": "Free Agent", "permissions": "0", "position": 5},
+                {"id": "16", "name": "Pro Player", "permissions": "0", "position": 6},
+                {"id": "17", "name": "Retired", "permissions": "0", "position": 7},
             ]
         if url.endswith("/guilds/123/channels"):
             return [
@@ -893,9 +900,13 @@ async def test_permissions_page_renders(monkeypatch) -> None:
         dashboard,
         "get_guild_config",
         lambda _gid: {
-            "role_coach_id": 11,
-            "role_coach_premium_id": 12,
-            "role_coach_premium_plus_id": 13,
+            "role_team_coach_id": 11,
+            "role_club_manager_id": 12,
+            "role_league_staff_id": 13,
+            "role_league_owner_id": 14,
+            "role_free_agent_id": 15,
+            "role_pro_player_id": 16,
+            "role_retired_id": 17,
             "channel_staff_portal_id": 20,
         },
     )
@@ -945,9 +956,13 @@ async def test_overview_page_renders(monkeypatch) -> None:
         if url.endswith("/guilds/123/roles"):
             return [
                 {"id": "123", "name": "@everyone", "permissions": "0", "position": 0},
-                {"id": "11", "name": "Coach", "permissions": "0", "position": 1},
-                {"id": "12", "name": "Coach Premium", "permissions": "0", "position": 2},
-                {"id": "13", "name": "Coach Premium+", "permissions": "0", "position": 3},
+                {"id": "11", "name": "Team Coach", "permissions": "0", "position": 1},
+                {"id": "12", "name": "Club Manager", "permissions": "0", "position": 2},
+                {"id": "13", "name": "League Staff", "permissions": "0", "position": 3},
+                {"id": "14", "name": "League Owner", "permissions": "0", "position": 4},
+                {"id": "15", "name": "Free Agent", "permissions": "0", "position": 5},
+                {"id": "16", "name": "Pro Player", "permissions": "0", "position": 6},
+                {"id": "17", "name": "Retired", "permissions": "0", "position": 7},
             ]
         if url.endswith("/guilds/123/channels"):
             return [
@@ -956,7 +971,6 @@ async def test_overview_page_renders(monkeypatch) -> None:
                 {"id": "22", "type": 0, "name": "coach-portal", "position": 3, "permission_overwrites": []},
                 {"id": "23", "type": 0, "name": "recruit-portal", "position": 4, "permission_overwrites": []},
                 {"id": "30", "type": 0, "name": "staff-monitor", "position": 6, "permission_overwrites": []},
-                {"id": "31", "type": 0, "name": "roster-listing", "position": 7, "permission_overwrites": []},
                 {"id": "32", "type": 0, "name": "recruitment-boards", "position": 8, "permission_overwrites": []},
                 {"id": "33", "type": 0, "name": "club-listing", "position": 9, "permission_overwrites": []},
                 {"id": "34", "type": 0, "name": "pro-coaches", "position": 10, "permission_overwrites": []},
@@ -970,15 +984,18 @@ async def test_overview_page_renders(monkeypatch) -> None:
         dashboard,
         "get_guild_config",
         lambda _gid: {
-            "role_coach_id": 11,
-            "role_coach_premium_id": 12,
-            "role_coach_premium_plus_id": 13,
+            "role_team_coach_id": 11,
+            "role_club_manager_id": 12,
+            "role_league_staff_id": 13,
+            "role_league_owner_id": 14,
+            "role_free_agent_id": 15,
+            "role_pro_player_id": 16,
+            "role_retired_id": 17,
             "channel_staff_portal_id": 20,
             "channel_manager_portal_id": 21,
             "channel_coach_portal_id": 22,
             "channel_recruit_portal_id": 23,
             "channel_staff_monitor_id": 30,
-            "channel_roster_listing_id": 31,
             "channel_recruit_listing_id": 32,
             "channel_club_listing_id": 33,
             "channel_premium_coaches_id": 34,
@@ -1221,7 +1238,7 @@ async def test_setup_wizard_page_renders(monkeypatch) -> None:
             return [
                 {"id": "123", "name": "@everyone", "permissions": "0", "position": 0},
                 {"id": "10", "name": "Offside Bot", "permissions": str(bot_perms), "position": 10},
-                {"id": "11", "name": "Coach", "permissions": "0", "position": 1},
+                {"id": "11", "name": "Team Coach", "permissions": "0", "position": 1},
             ]
         if url.endswith("/guilds/123/channels"):
             return [
@@ -1230,7 +1247,6 @@ async def test_setup_wizard_page_renders(monkeypatch) -> None:
                 {"id": "22", "type": 0, "name": "coach-portal", "position": 3, "permission_overwrites": []},
                 {"id": "23", "type": 0, "name": "recruit-portal", "position": 4, "permission_overwrites": []},
                 {"id": "30", "type": 0, "name": "staff-monitor", "position": 6, "permission_overwrites": []},
-                {"id": "31", "type": 0, "name": "roster-listing", "position": 7, "permission_overwrites": []},
                 {"id": "32", "type": 0, "name": "recruitment-boards", "position": 8, "permission_overwrites": []},
                 {"id": "33", "type": 0, "name": "club-listing", "position": 9, "permission_overwrites": []},
             ]
@@ -1245,13 +1261,12 @@ async def test_setup_wizard_page_renders(monkeypatch) -> None:
         dashboard,
         "get_guild_config",
         lambda _gid: {
-            "role_coach_id": 11,
+            "role_team_coach_id": 11,
             "channel_staff_portal_id": 20,
             "channel_manager_portal_id": 21,
             "channel_coach_portal_id": 22,
             "channel_recruit_portal_id": 23,
             "channel_staff_monitor_id": 30,
-            "channel_roster_listing_id": 31,
             "channel_recruit_listing_id": 32,
             "channel_club_listing_id": 33,
         },

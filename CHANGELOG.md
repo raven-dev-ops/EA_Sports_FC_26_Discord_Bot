@@ -244,7 +244,7 @@ All notable changes to this project will be documented in this file.
 - Listing channels: pinned "About" instruction embeds (prod only; idempotent).
 
 ### Changed
-- Auto-setup order: coach tier roles are ensured before channel permissions are applied.
+- Auto-setup order: coach roles are ensured before channel permissions are applied.
 - Channel permissions: `coach-portal` is coaches-only; public portals and listing channels are read-only (staff can still moderate).
 
 ## [0.2.18] - 2025-12-30
@@ -275,7 +275,7 @@ All notable changes to this project will be documented in this file.
 ## [0.2.16] - 2025-12-30
 
 ### Added
-- Club Managers portal: `/setup_channels` now creates `club-managers-portal` and the bot auto-posts a control panel for coach tier management and roster unlocks.
+- Club Managers portal: `/setup_channels` now creates `club-managers-portal` and the bot auto-posts a control panel for coach role management and roster unlocks.
 - Staff portal now links to the Club Managers portal for coach-management actions.
 - Approved rosters now post as rich embeds in the roster listing channel (mentions suppressed).
 - New backlog file: `futwiz_player_evolution_github_issues.md` (repurposed for Offside bot issue planning).
@@ -286,7 +286,7 @@ All notable changes to this project will be documented in this file.
 ## [0.2.15] - 2025-12-30
 
 ### Added
-- `/setup_channels` now also ensures coach roles (`Coach`, `Coach Premium`, `Coach Premium+`) and stores per-guild role IDs in Mongo.
+- `/setup_channels` now also ensures Offside roles (`Team Coach`, `Club Manager`, `League Staff`, `League Owner`, `Free Agent`, `Pro Player`, `Retired`) and stores per-guild role IDs in Mongo.
 - Offside Reports: `premium-coaches` channel and an auto-updating Premium Coaches embed (roster name, openings, practice times).
 - Roster dashboard: Practice Times button + modal; premium listings refresh on roster changes.
 

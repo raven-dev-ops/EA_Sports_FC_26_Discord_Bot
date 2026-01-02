@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 import discord
@@ -78,7 +78,9 @@ def build_roster_listing_embed(
 
     updated_at = roster.get("updated_at") or roster.get("created_at")
     if isinstance(updated_at, datetime):
-        embed.set_footer(text=f"Updated: {updated_at.strftime('%Y-%m-%d %H:%M UTC')}")
+        if updated_at.tzinfo is None:
+            updated_at = updated_at.replace(tzinfo=timezone.utc)
+        embed.set_footer(text=f"Updated: {discord.utils.format_dt(updated_at, style='R')}")
 
     return embed
 
