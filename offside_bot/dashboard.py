@@ -1579,7 +1579,7 @@ async def docs_index_page(_request: web.Request) -> web.Response:
         for page in DOCS_PAGES
     ]
     docs.extend(DOCS_EXTRAS)
-    page_html = render("pages/docs_index.html", title="Docs", docs=docs, active_nav="docs")
+    page_html = render("pages/docs_index.html", title="Docs", docs=docs, active_nav="support")
     return web.Response(text=page_html, content_type="text/html")
 
 
@@ -1605,7 +1605,7 @@ async def docs_page(request: web.Request) -> web.Response:
         "pages/markdown_page.html",
         title=doc["title"],
         content=safe_html(content),
-        active_nav="docs",
+        active_nav="support",
     )
     return web.Response(text=page_html, content_type="text/html")
 
@@ -1695,7 +1695,7 @@ async def commands_page(_request: web.Request) -> web.Response:
     categories = _parse_commands_markdown(text)
     from offside_bot.web_templates import render
 
-    page = render("pages/commands.html", title="Commands", categories=categories, active_nav="docs")
+    page = render("pages/commands.html", title="Commands", categories=categories, active_nav="support")
     return web.Response(text=page, content_type="text/html")
 
 
