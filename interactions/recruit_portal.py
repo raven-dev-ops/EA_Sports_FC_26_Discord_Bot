@@ -22,7 +22,6 @@ from utils.channel_routing import resolve_channel_id
 from utils.discord_wrappers import delete_message, fetch_channel, send_message
 from utils.embeds import DEFAULT_COLOR, SUCCESS_COLOR, make_embed
 from utils.permissions import is_staff_user
-from utils.role_routing import resolve_role_id
 
 
 def _portal_footer() -> str:
@@ -35,8 +34,7 @@ def build_recruit_portal_embed() -> discord.Embed:
         description=(
             "**Create and manage your free agent profile.**\n"
             "- Set Availability to publish to listings.\n"
-            "- Keep positions/archetypes consistent for search.\n"
-            "- Toggle Retirement when you are inactive.\n\n"
+            "- Keep positions/archetypes consistent for search.\n\n"
             "Use the action menu below. Responses are ephemeral."
         ),
         color=DEFAULT_COLOR,
@@ -85,11 +83,6 @@ class RecruitPortalView(SafeView):
                 description="Set days and hours",
             ),
             discord.SelectOption(
-                label="Retirement",
-                value="retirement",
-                description="Toggle inactive status",
-            ),
-            discord.SelectOption(
                 label="Link FC25 Stats",
                 value="link_fc25",
                 description="Connect your FC25 stats",
@@ -120,11 +113,11 @@ class RecruitPortalView(SafeView):
                 description="Staff-only portal cleanup",
             ),
         ]
-        self.action_select = discord.ui.Select(
+        self.action_select: discord.ui.Select = discord.ui.Select(
             placeholder="Select a recruitment action...",
             options=options,
         )
-        self.action_select.callback = self.on_action_select
+        setattr(self.action_select, "callback", self.on_action_select)
         self.add_item(self.action_select)
 
     async def on_action_select(self, interaction: discord.Interaction) -> None:
@@ -135,8 +128,6 @@ class RecruitPortalView(SafeView):
             await self._preview(interaction)
         elif selection == "availability":
             await self._availability(interaction)
-        elif selection == "retirement":
-            await self._toggle_retired(interaction)
         elif selection == "link_fc25":
             await self._link_fc25_stats(interaction)
         elif selection == "refresh_fc25":
@@ -286,104 +277,6 @@ class RecruitPortalView(SafeView):
         await interaction.response.send_message(
             embed=view.build_embed(),
             view=view,
-            ephemeral=True,
-        )
-
-    async def _toggle_retired(self, interaction: discord.Interaction) -> None:
-        guild = interaction.guild
-        if guild is None:
-            await interaction.response.send_message(
-                "This portal must be used in a guild.",
-                ephemeral=True,
-            )
-            return
-
-        settings = getattr(interaction.client, "settings", None)
-        if settings is None:
-            await interaction.response.send_message(
-                "Bot configuration is not loaded.",
-                ephemeral=True,
-            )
-            return
-
-        member = interaction.user if isinstance(interaction.user, discord.Member) else None
-        if member is None:
-            try:
-                member = await guild.fetch_member(interaction.user.id)
-            except discord.DiscordException:
-                await interaction.response.send_message(
-                    "Could not resolve your guild membership.",
-                    ephemeral=True,
-                )
-                return
-
-        retired_role_id = resolve_role_id(settings, guild_id=guild.id, field="role_retired_id")
-        if not retired_role_id:
-            await interaction.response.send_message(
-                "Retirement role is not configured for this server.",
-                ephemeral=True,
-            )
-            return
-
-        role = guild.get_role(retired_role_id)
-        if role is None:
-            await interaction.response.send_message(
-                "Retirement role could not be found on this server.",
-                ephemeral=True,
-            )
-            return
-
-        bot_member = guild.me
-        if bot_member is None or not bot_member.guild_permissions.manage_roles:
-            await interaction.response.send_message(
-                "Bot is missing `Manage Roles` and cannot toggle retirement.",
-                ephemeral=True,
-            )
-            return
-        if not _can_manage_role(bot_member, role):
-            await interaction.response.send_message(
-                "Bot cannot manage the Retired role. Move the bot role above it and try again.",
-                ephemeral=True,
-            )
-            return
-
-        if role in member.roles:
-            try:
-                await member.remove_roles(role, reason="Offside: player retirement toggle (active)")
-            except discord.DiscordException:
-                await interaction.response.send_message(
-                    "Could not remove the Retired role. Please contact staff.",
-                    ephemeral=True,
-                )
-                return
-            await interaction.response.send_message(
-                embed=make_embed(
-                    title="Welcome back",
-                    description="You are now **Active**. The Retired role has been removed.",
-                    color=SUCCESS_COLOR,
-                ),
-                ephemeral=True,
-            )
-            return
-
-        try:
-            await member.add_roles(role, reason="Offside: player retirement toggle (inactive)")
-        except discord.DiscordException:
-            await interaction.response.send_message(
-                "Could not add the Retired role. Please contact staff.",
-                ephemeral=True,
-            )
-            return
-
-        await interaction.response.send_message(
-            embed=make_embed(
-                title="Marked as retired",
-                description=(
-                    "You are now **Retired** (inactive) and Offside interactions are disabled.\n"
-                    "Use the Retirement button again to become active."
-                ),
-                color=SUCCESS_COLOR,
-            ),
             ephemeral=True,
         )
 
@@ -589,12 +482,3 @@ async def post_recruit_portal(
                 guild.id,
                 exc,
             )
-
-
-def _can_manage_role(bot_member: discord.Member, role: discord.Role) -> bool:
-    if bot_member.guild_permissions.administrator:
-        return True
-    try:
-        return role < bot_member.top_role
-    except TypeError:
-        return role.position < bot_member.top_role.position

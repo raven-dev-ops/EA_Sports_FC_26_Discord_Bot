@@ -286,7 +286,7 @@ All notable changes to this project will be documented in this file.
 ## [0.2.15] - 2025-12-30
 
 ### Added
-- `/setup_channels` now also ensures Offside roles (`Team Coach`, `Club Manager`, `League Staff`, `League Owner`, `Free Agent`, `Pro Player`, `Retired`) and stores per-guild role IDs in Mongo.
+- `/setup_channels` now also ensures Offside roles (`Coach`, `Coach+`, `Club Manager`, `Club Manager+`, `League Staff`, `League Owner`, `Free Agent`, `Pro Player`) and stores per-guild role IDs in Mongo.
 - Offside Reports: `premium-coaches` channel and an auto-updating Premium Coaches embed (roster name, openings, practice times).
 - Roster dashboard: Practice Times button + modal; premium listings refresh on roster changes.
 

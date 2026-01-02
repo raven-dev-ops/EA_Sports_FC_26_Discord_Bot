@@ -17,12 +17,13 @@ class Settings:
     test_mode: bool
     role_broskie_id: int | None
     role_team_coach_id: int | None
+    role_coach_plus_id: int | None
     role_club_manager_id: int | None
+    role_club_manager_plus_id: int | None
     role_league_staff_id: int | None
     role_league_owner_id: int | None
     role_free_agent_id: int | None
     role_pro_player_id: int | None
-    role_retired_id: int | None
     channel_staff_portal_id: int | None
     channel_club_portal_id: int | None
     channel_manager_portal_id: int | None
@@ -201,21 +202,22 @@ def load_settings() -> Settings:
         raise RuntimeError("FC25_STATS_RATE_LIMIT_PER_GUILD must be > 0.")
 
     role_broskie_id = _optional_int(constants.ROLE_BROSKIE_ID_ENV)
-    role_team_coach_id = _optional_int(constants.ROLE_TEAM_COACH_ID_ENV)
+    role_team_coach_id = _optional_int(constants.ROLE_COACH_ID_ENV)
     if role_team_coach_id is None:
-        role_team_coach_id = _optional_int(constants.ROLE_COACH_ID_ENV) or _optional_int(
-            constants.ROLE_SUPER_LEAGUE_COACH_ID_ENV
-        )
+        role_team_coach_id = _optional_int(constants.ROLE_TEAM_COACH_ID_ENV)
+    if role_team_coach_id is None:
+        role_team_coach_id = _optional_int(constants.ROLE_SUPER_LEAGUE_COACH_ID_ENV)
+    role_coach_plus_id = _optional_int(constants.ROLE_COACH_PLUS_ID_ENV)
+    if role_coach_plus_id is None:
+        role_coach_plus_id = _optional_int(constants.ROLE_COACH_PREMIUM_ID_ENV)
     role_club_manager_id = _optional_int(constants.ROLE_CLUB_MANAGER_ID_ENV)
-    if role_club_manager_id is None:
-        role_club_manager_id = _optional_int(constants.ROLE_COACH_PREMIUM_PLUS_ID_ENV)
-    if role_club_manager_id is None:
-        role_club_manager_id = _optional_int(constants.ROLE_COACH_PREMIUM_ID_ENV)
+    role_club_manager_plus_id = _optional_int(constants.ROLE_CLUB_MANAGER_PLUS_ID_ENV)
+    if role_club_manager_plus_id is None:
+        role_club_manager_plus_id = _optional_int(constants.ROLE_COACH_PREMIUM_PLUS_ID_ENV)
     role_league_staff_id = _optional_int(constants.ROLE_LEAGUE_STAFF_ID_ENV)
     role_league_owner_id = _optional_int(constants.ROLE_LEAGUE_OWNER_ID_ENV)
     role_free_agent_id = _optional_int(constants.ROLE_FREE_AGENT_ID_ENV)
     role_pro_player_id = _optional_int(constants.ROLE_PRO_PLAYER_ID_ENV)
-    role_retired_id = _optional_int(constants.ROLE_RETIRED_ID_ENV)
 
     return Settings(
         discord_token=discord_token,
@@ -226,12 +228,13 @@ def load_settings() -> Settings:
         test_mode=test_mode,
         role_broskie_id=role_broskie_id,
         role_team_coach_id=role_team_coach_id,
+        role_coach_plus_id=role_coach_plus_id,
         role_club_manager_id=role_club_manager_id,
+        role_club_manager_plus_id=role_club_manager_plus_id,
         role_league_staff_id=role_league_staff_id,
         role_league_owner_id=role_league_owner_id,
         role_free_agent_id=role_free_agent_id,
         role_pro_player_id=role_pro_player_id,
-        role_retired_id=role_retired_id,
         channel_staff_portal_id=channel_staff_portal_id,
         channel_club_portal_id=channel_club_portal_id,
         channel_manager_portal_id=channel_manager_portal_id,
@@ -297,12 +300,13 @@ def summarize_settings(settings: Settings) -> dict[str, object]:
         "roles": {
             "broskie": settings.role_broskie_id,
             "team_coach": settings.role_team_coach_id,
+            "coach_plus": settings.role_coach_plus_id,
             "club_manager": settings.role_club_manager_id,
+            "club_manager_plus": settings.role_club_manager_plus_id,
             "league_staff": settings.role_league_staff_id,
             "league_owner": settings.role_league_owner_id,
             "free_agent": settings.role_free_agent_id,
             "pro_player": settings.role_pro_player_id,
-            "retired": settings.role_retired_id,
             "staff_roles_defined": bool(settings.staff_role_ids),
         },
         "banlist_enabled": bool(settings.banlist_sheet_id),

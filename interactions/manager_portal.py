@@ -45,7 +45,7 @@ def _portal_footer() -> str:
 
 def build_manager_portal_embed() -> discord.Embed:
     embed = make_embed(
-        title="Managers Portal",
+        title="Club Managers Portal",
         description=(
             "**Staff-only controls**\n"
             "- Assign coach roles and caps\n"
@@ -79,23 +79,31 @@ def _parse_discord_id(value: str) -> int | None:
     return int(cleaned) if cleaned.isdigit() else None
 
 
-def _tier_to_cap(tier: str) -> int | None:
+def _parse_tier(tier: str) -> tuple[str, int] | None:
     normalized = tier.strip().casefold()
     if normalized in {"team coach", "coach", "standard", "base"}:
-        return 16
+        return "coach", 16
     if normalized in {
-        "club manager",
-        "manager",
-        "base+",
-        "pro",
-        "premium",
-        "premium+",
-        "premium plus",
+        "coach+",
+        "coach plus",
         "coach premium",
         "coach premium+",
         "coach premium plus",
+        "premium",
+        "base+",
+        "pro",
     }:
-        return 22
+        return "coach_plus", 22
+    if normalized in {"club manager", "manager"}:
+        return "club_manager", 22
+    if normalized in {
+        "club manager+",
+        "club manager plus",
+        "manager+",
+        "premium plus",
+        "pro+",
+    }:
+        return "club_manager_plus", 25
     return None
 
 
@@ -117,20 +125,27 @@ def _desired_cap_for_member(
     member: discord.Member,
     *,
     team_coach_role_id: int | None,
+    coach_plus_role_id: int | None,
     club_manager_role_id: int | None,
+    club_manager_plus_role_id: int | None,
     league_staff_role_id: int | None,
     league_owner_role_id: int | None,
 ) -> int | None:
     role_ids = {role.id for role in member.roles}
+    caps: list[int] = []
+    if club_manager_plus_role_id and club_manager_plus_role_id in role_ids:
+        caps.append(25)
     if league_owner_role_id and league_owner_role_id in role_ids:
-        return 22
+        caps.append(22)
     if league_staff_role_id and league_staff_role_id in role_ids:
-        return 22
+        caps.append(22)
     if club_manager_role_id and club_manager_role_id in role_ids:
-        return 22
+        caps.append(22)
+    if coach_plus_role_id and coach_plus_role_id in role_ids:
+        caps.append(22)
     if team_coach_role_id and team_coach_role_id in role_ids:
-        return 16
-    return None
+        caps.append(16)
+    return max(caps) if caps else None
 
 
 async def _fetch_member(guild: discord.Guild, user_id: int) -> discord.Member | None:
@@ -162,8 +177,10 @@ async def _set_coach_tier(
         return False, "I need the `Manage Roles` permission to assign coach roles."
 
     team_coach_role_id = resolve_role_id(settings, guild_id=guild.id, field="role_team_coach_id")
-    club_manager_role_id = resolve_role_id(
-        settings, guild_id=guild.id, field="role_club_manager_id"
+    coach_plus_role_id = resolve_role_id(settings, guild_id=guild.id, field="role_coach_plus_id")
+    club_manager_role_id = resolve_role_id(settings, guild_id=guild.id, field="role_club_manager_id")
+    club_manager_plus_role_id = resolve_role_id(
+        settings, guild_id=guild.id, field="role_club_manager_plus_id"
     )
     if not team_coach_role_id:
         return (
@@ -175,9 +192,10 @@ async def _set_coach_tier(
     if member is None:
         return False, "Coach not found in this server."
 
-    desired_cap = _tier_to_cap(tier)
-    if desired_cap is None:
-        return False, "Role must be one of: Team Coach, Club Manager."
+    parsed_tier = _parse_tier(tier)
+    if parsed_tier is None:
+        return False, "Role must be one of: Coach, Coach+, Club Manager, Club Manager+."
+    tier_key, desired_cap = parsed_tier
     if desired_cap > 16:
         try:
             entitlements_service.require_feature(
@@ -186,18 +204,22 @@ async def _set_coach_tier(
                 feature_key=entitlements_service.FEATURE_PREMIUM_COACH_TIERS,
             )
         except PermissionError:
-            return False, "Club Manager role is a Pro feature for this server."
-        if not club_manager_role_id:
-            return (
-                False,
-                "Club Manager role is not configured yet. Ensure the bot has `Manage Roles` and MongoDB is configured, then restart the bot.",
-            )
+            return False, "Coach+/Club Manager/Club Manager+ roles are Pro features for this server."
 
-    tier_role_id = team_coach_role_id if desired_cap == 16 else club_manager_role_id
+    tier_role_id: int | None
+    if tier_key == "coach":
+        tier_role_id = team_coach_role_id
+    elif tier_key == "coach_plus":
+        tier_role_id = coach_plus_role_id
+    elif tier_key == "club_manager":
+        tier_role_id = club_manager_role_id
+    else:
+        tier_role_id = club_manager_plus_role_id
+
     if tier_role_id is None:
         return (
             False,
-            "Coach role is not configured yet. Ensure the bot has `Manage Roles` and MongoDB is configured, then restart the bot.",
+            "Selected role is not configured yet. Ensure the bot has `Manage Roles` and MongoDB is configured, then restart the bot.",
         )
 
     tier_role = guild.get_role(tier_role_id)
@@ -207,7 +229,14 @@ async def _set_coach_tier(
             "Tier role not found. Ensure the bot has `Manage Roles` and MongoDB is configured, then restart the bot.",
         )
 
-    remove_ids = {team_coach_role_id, club_manager_role_id} - {tier_role_id}
+    remove_ids = {
+        team_coach_role_id,
+        coach_plus_role_id,
+        club_manager_role_id,
+        club_manager_plus_role_id,
+    }
+    remove_ids.discard(None)
+    remove_ids.discard(tier_role_id)
     to_remove = [r for r in member.roles if r.id in remove_ids]
 
     try:
@@ -358,8 +387,8 @@ class SetCoachTierModal(discord.ui.Modal, title="Set Coach Role"):
         placeholder="@Coach or 1234567890",
     )
     tier: discord.ui.TextInput = discord.ui.TextInput(
-        label="Role (Team Coach / Club Manager)",
-        placeholder="Club Manager",
+        label="Role (Coach / Coach+ / Club Manager / Club Manager+)",
+        placeholder="Coach+",
         max_length=32,
     )
 
@@ -533,7 +562,7 @@ class ManagerPortalView(SafeView):
             discord.SelectOption(
                 label="Set Coach Role",
                 value="set_role",
-                description="Assign Team Coach / Club Manager",
+                description="Assign Coach / Coach+ / Club Manager / Club Manager+",
             ),
             discord.SelectOption(
                 label="Unlock Roster",
@@ -571,11 +600,11 @@ class ManagerPortalView(SafeView):
                 description="Clean up and repost this portal",
             ),
         ]
-        self.action_select = discord.ui.Select(
+        self.action_select: discord.ui.Select = discord.ui.Select(
             placeholder="Select a manager action...",
             options=options,
         )
-        self.action_select.callback = self.on_action_select
+        setattr(self.action_select, "callback", self.on_action_select)
         self.add_item(self.action_select)
 
     async def on_action_select(self, interaction: discord.Interaction) -> None:
@@ -825,8 +854,18 @@ class ManagerPortalView(SafeView):
         team_coach_role_id = resolve_role_id(
             settings, guild_id=guild.id, field="role_team_coach_id"
         )
+        coach_plus_role_id = (
+            resolve_role_id(settings, guild_id=guild.id, field="role_coach_plus_id")
+            if premium_tiers_enabled
+            else None
+        )
         club_manager_role_id = (
             resolve_role_id(settings, guild_id=guild.id, field="role_club_manager_id")
+            if premium_tiers_enabled
+            else None
+        )
+        club_manager_plus_role_id = (
+            resolve_role_id(settings, guild_id=guild.id, field="role_club_manager_plus_id")
             if premium_tiers_enabled
             else None
         )
@@ -931,7 +970,9 @@ class ManagerPortalView(SafeView):
             desired_cap = _desired_cap_for_member(
                 member,
                 team_coach_role_id=team_coach_role_id,
+                coach_plus_role_id=coach_plus_role_id,
                 club_manager_role_id=club_manager_role_id,
+                club_manager_plus_role_id=club_manager_plus_role_id,
                 league_staff_role_id=league_staff_role_id,
                 league_owner_role_id=league_owner_role_id,
             )
@@ -1031,7 +1072,7 @@ class ManagerPortalView(SafeView):
         await interaction.response.send_message(
             embed=make_embed(
                 title="Reposting portal...",
-                description="Cleaning up and reposting the Managers portal now.",
+                description="Cleaning up and reposting the Club Managers portal now.",
                 color=SUCCESS_COLOR,
             ),
             ephemeral=True,
@@ -1092,6 +1133,9 @@ async def post_manager_portal(
                         "Managers Control Panel",
                         "Managers Portal Overview",
                         "Managers Portal",
+                        "Club Managers Control Panel",
+                        "Club Managers Portal Overview",
+                        "Club Managers Portal",
                     }:
                         try:
                             await message.delete()

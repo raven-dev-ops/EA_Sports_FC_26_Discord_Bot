@@ -552,7 +552,7 @@ def _pro_locked_page(
     upgrade_href = upgrade_href or f"/app/upgrade?guild_id={guild_id}&from=locked&section={urllib.parse.quote(section)}"
     if benefits is None:
         benefits = [
-            ("Club Manager role", "Expanded roster caps (22) and club manager workflow."),
+            ("Coach+/Club Manager/Club Manager+ roles", "Expanded roster caps and club manager workflow."),
             ("Pro coaches report", "Public listing embed of Pro coaches and openings."),
             ("FC stats integration", "FC25/FC26 stats lookup, caching, and richer player profiles."),
             ("Banlist integration", "Google Sheets-driven banlist checks and moderation tooling."),
@@ -1678,14 +1678,16 @@ async def terms_page(request: web.Request) -> web.Response:
         raise web.HTTPNotFound(text="TERMS_OF_SERVICE.md not found.")
     html = _markdown_to_html(text)
     content = f"""
-      <section class="section">
-        <div class="card hero-card">
-          <a class="back-link" href="/">&larr; Back</a>
-          <h1 class="mt-6 text-hero-sm">Terms of Service</h1>
+      <section class="pt-6">
+        <div class="rounded-2xl border border-slate-800/80 bg-surface-dark p-10">
+          <a class="inline-flex items-center gap-2 rounded-full border border-slate-700/70 bg-slate-900/60 px-3 py-1 text-xs font-semibold text-slate-300" href="/">
+            &larr; Back
+          </a>
+          <h1 class="mt-4 text-3xl font-bold tracking-tight text-white md:text-4xl">Terms of Service</h1>
         </div>
       </section>
-      <section class="section">
-        <div class="card prose">{html}</div>
+      <section class="pt-8">
+        <div class="rounded-xl border border-slate-800/80 bg-surface-dark p-8 prose prose-invert max-w-none">{html}</div>
       </section>
     """
     from offside_bot.web_templates import render, safe_html
@@ -1706,14 +1708,16 @@ async def privacy_page(request: web.Request) -> web.Response:
         raise web.HTTPNotFound(text="PRIVACY_POLICY.md not found.")
     html = _markdown_to_html(text)
     content = f"""
-      <section class="section">
-        <div class="card hero-card">
-          <a class="back-link" href="/">&larr; Back</a>
-          <h1 class="mt-6 text-hero-sm">Privacy Policy</h1>
+      <section class="pt-6">
+        <div class="rounded-2xl border border-slate-800/80 bg-surface-dark p-10">
+          <a class="inline-flex items-center gap-2 rounded-full border border-slate-700/70 bg-slate-900/60 px-3 py-1 text-xs font-semibold text-slate-300" href="/">
+            &larr; Back
+          </a>
+          <h1 class="mt-4 text-3xl font-bold tracking-tight text-white md:text-4xl">Privacy Policy</h1>
         </div>
       </section>
-      <section class="section">
-        <div class="card prose">{html}</div>
+      <section class="pt-8">
+        <div class="rounded-xl border border-slate-800/80 bg-surface-dark p-8 prose prose-invert max-w-none">{html}</div>
       </section>
     """
     from offside_bot.web_templates import render, safe_html
@@ -1734,14 +1738,16 @@ async def product_copy_page(request: web.Request) -> web.Response:
         raise web.HTTPNotFound(text="docs/public/product-copy.md not found.")
     html = _markdown_to_html(text)
     content = f"""
-      <section class="section">
-        <div class="card hero-card">
-          <a class="back-link" href="/">&larr; Back</a>
-          <h1 class="mt-6 text-hero-sm">Product</h1>
+      <section class="pt-6">
+        <div class="rounded-2xl border border-slate-800/80 bg-surface-dark p-10">
+          <a class="inline-flex items-center gap-2 rounded-full border border-slate-700/70 bg-slate-900/60 px-3 py-1 text-xs font-semibold text-slate-300" href="/">
+            &larr; Back
+          </a>
+          <h1 class="mt-4 text-3xl font-bold tracking-tight text-white md:text-4xl">Product</h1>
         </div>
       </section>
-      <section class="section">
-        <div class="card prose">{html}</div>
+      <section class="pt-8">
+        <div class="rounded-xl border border-slate-800/80 bg-surface-dark p-8 prose prose-invert max-w-none">{html}</div>
       </section>
     """
     from offside_bot.web_templates import render, safe_html
@@ -1786,63 +1792,71 @@ async def support_page(request: web.Request) -> web.Response:
     support_items: list[str] = []
     if support_discord:
         support_items.append(
-            f'<li><a href="{_escape_html(support_discord)}">Join support Discord</a></li>'
+            f'<li><a class="text-primary hover:underline" href="{_escape_html(support_discord)}">Join support Discord</a></li>'
         )
     else:
-        support_items.append("<li><span class='muted'>Support Discord (invite required)</span></li>")
+        support_items.append("<li><span class='text-slate-500'>Support Discord (invite required)</span></li>")
 
     if support_email:
         mailto = _mailto_link(support_email)
         support_items.append(
-            f'<li><a href="{_escape_html(mailto)}">{_escape_html(support_email)}</a></li>'
+            f'<li><a class="text-primary hover:underline" href="{_escape_html(mailto)}">{_escape_html(support_email)}</a></li>'
         )
     else:
-        support_items.append("<li><span class='muted'>Email support (set SUPPORT_EMAIL)</span></li>")
+        support_items.append("<li><span class='text-slate-500'>Email support (set SUPPORT_EMAIL)</span></li>")
 
     docs_items = [
-        f'<li><a href="{docs_href}">Help center</a></li>',
-        '<li><a href="/help/setup">Server setup checklist</a></li>',
-        '<li><a href="/help/billing">How billing works</a></li>',
-        '<li><a href="/help/faq">FAQ</a></li>',
-        '<li><a href="/commands">Commands reference</a></li>',
+        f'<li><a class="text-primary hover:underline" href="{docs_href}">Help center</a></li>',
+        '<li><a class="text-primary hover:underline" href="/help/setup">Server setup checklist</a></li>',
+        '<li><a class="text-primary hover:underline" href="/help/billing">How billing works</a></li>',
+        '<li><a class="text-primary hover:underline" href="/help/faq">FAQ</a></li>',
+        '<li><a class="text-primary hover:underline" href="/commands">Commands reference</a></li>',
     ]
     issue_items: list[str] = []
     if repo:
-        issue_items.append(f'<li><a href="{bug_href}">Report a bug</a></li>')
-        issue_items.append(f'<li><a href="{feature_href}">Request a feature</a></li>')
-        issue_items.append(f'<li><a href="{issues_href}">Browse issues</a></li>')
-        issue_items.append(f'<li><a href="{readme_href}">README</a></li>')
+        issue_items.append(f'<li><a class="text-primary hover:underline" href="{bug_href}">Report a bug</a></li>')
+        issue_items.append(
+            f'<li><a class="text-primary hover:underline" href="{feature_href}">Request a feature</a></li>'
+        )
+        issue_items.append(
+            f'<li><a class="text-primary hover:underline" href="{issues_href}">Browse issues</a></li>'
+        )
+        issue_items.append(f'<li><a class="text-primary hover:underline" href="{readme_href}">README</a></li>')
     else:
-        issue_items.append("<li><span class='muted'>GitHub links unavailable (set PUBLIC_REPO_URL)</span></li>")
+        issue_items.append(
+            "<li><span class='text-slate-500'>GitHub links unavailable (set PUBLIC_REPO_URL)</span></li>"
+        )
 
     content = f"""
-      <section class="section">
-        <div class="card hero-card">
-          <div class="kicker">Support</div>
-          <h1 class="mt-6 text-hero-sm">Support</h1>
-          <p class="muted mt-10">Help center, contact options, and issue reporting.</p>
+      <section class="pt-6">
+        <div class="rounded-2xl border border-slate-800/80 bg-surface-dark p-10">
+          <div class="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-4 py-1.5 text-sm font-semibold tracking-wide text-primary">
+            Support
+          </div>
+          <h1 class="mt-4 text-3xl font-bold tracking-tight text-white md:text-4xl">Support</h1>
+          <p class="mt-4 text-lg text-slate-400">Help center, contact options, and issue reporting.</p>
         </div>
       </section>
-      <section class="section">
-        <div class="card-grid">
-          <div class="card card-hover">
-            <p><strong>Get help</strong></p>
-            <p class="muted mt-6">Reach the team directly for support requests.</p>
-            <ul>
+      <section class="pt-8">
+        <div class="grid gap-6 md:grid-cols-3">
+          <div class="rounded-xl border border-slate-800/80 bg-surface-dark p-6">
+            <h2 class="text-lg font-semibold text-white">Get help</h2>
+            <p class="mt-2 text-slate-400">Reach the team directly for support requests.</p>
+            <ul class="mt-3 space-y-2 text-sm text-slate-400">
               {"".join(support_items)}
             </ul>
           </div>
-          <div class="card card-hover">
-            <p><strong>Docs</strong></p>
-            <p class="muted mt-6">Guides, checklists, and troubleshooting.</p>
-            <ul>
+          <div class="rounded-xl border border-slate-800/80 bg-surface-dark p-6">
+            <h2 class="text-lg font-semibold text-white">Docs</h2>
+            <p class="mt-2 text-slate-400">Guides, checklists, and troubleshooting.</p>
+            <ul class="mt-3 space-y-2 text-sm text-slate-400">
               {"".join(docs_items)}
             </ul>
           </div>
-          <div class="card card-hover">
-            <p><strong>Report an issue</strong></p>
-            <p class="muted mt-6">Use GitHub if you manage the repo.</p>
-            <ul>
+          <div class="rounded-xl border border-slate-800/80 bg-surface-dark p-6">
+            <h2 class="text-lg font-semibold text-white">Report an issue</h2>
+            <p class="mt-2 text-slate-400">Use GitHub if you manage the repo.</p>
+            <ul class="mt-3 space-y-2 text-sm text-slate-400">
               {"".join(issue_items)}
             </ul>
           </div>
@@ -2126,8 +2140,8 @@ async def pricing_page(request: web.Request) -> web.Response:
             "enterprise": True,
         },
         {
-            "name": "Club Manager role",
-            "description": "Expanded roster caps (22) and club manager workflow.",
+            "name": "Coach+/Club Manager/Club Manager+ roles",
+            "description": "Expanded roster caps and club manager workflow.",
             "free": False,
             "pro": entitlements_service.FEATURE_PREMIUM_COACH_TIERS in entitlements_service.PRO_FEATURE_KEYS,
             "enterprise": True,
@@ -2169,7 +2183,7 @@ async def pricing_page(request: web.Request) -> web.Response:
         title="FC 26 Discord bot pricing",
         description=(
             "Offside pricing for EA Sports FC 26 Discord servers. Start free, upgrade to Pro for "
-            "club manager roles, stats, banlist checks, and tournaments."
+            "coach+ and club manager roles, stats, banlist checks, and tournaments."
         ),
         session=session,
         billing=billing,
@@ -2608,7 +2622,7 @@ async def oauth_callback(request: web.Request) -> web.Response:
         next_path=next_path,
         installed_guild_id=installed_guild_id,
     )
-    raise resp
+    return resp
 
 
 async def logout(request: web.Request) -> web.Response:
@@ -2619,7 +2633,7 @@ async def logout(request: web.Request) -> web.Response:
         sessions.delete_one({"_id": session_id})
     resp = web.HTTPFound("/")
     resp.del_cookie(COOKIE_NAME)
-    raise resp
+    return resp
 
 
 def _require_owned_guild(
@@ -2837,7 +2851,7 @@ async def guild_settings_page(request: web.Request) -> web.Response:
 
     role_ids = {field: _parse_int(cfg.get(field)) for field, _label in GUILD_COACH_ROLE_FIELDS}
     premium_badge_class = "pro" if premium_tiers_enabled else "warn"
-    pro_role_fields = {"role_club_manager_id"}
+    pro_role_fields = {"role_coach_plus_id", "role_club_manager_id", "role_club_manager_plus_id"}
 
     coach_role_fields: list[dict[str, Any]] = []
     if roles:
@@ -3157,12 +3171,13 @@ async def guild_settings_save(request: web.Request) -> web.Response:
         cfg[field] = value
 
     if not premium_tiers_enabled:
-        attempted = str(data.get("role_club_manager_id") or "").strip()
+        attempted_fields = ("role_coach_plus_id", "role_club_manager_id", "role_club_manager_plus_id")
+        attempted = any(str(data.get(field) or "").strip() for field in attempted_fields)
         if attempted:
-            raise web.HTTPForbidden(text="Club Manager role requires Pro.")
+            raise web.HTTPForbidden(text="Coach+/Club Manager/Club Manager+ roles require Pro.")
 
     for field, _label in GUILD_COACH_ROLE_FIELDS:
-        if field == "role_club_manager_id" and not premium_tiers_enabled:
+        if field in {"role_coach_plus_id", "role_club_manager_id", "role_club_manager_plus_id"} and not premium_tiers_enabled:
             continue
         _apply_int_field(field=field, raw_value=data.get(field), valid_ids=valid_role_ids, kind="role")
 
@@ -3726,9 +3741,15 @@ async def guild_setup_wizard_page(request: web.Request) -> web.Response:
         channels_details = "Channels are configured."
 
     # Step 3: Roles
-    required_role_fields = [("role_team_coach_id", "Team Coach role")]
+    required_role_fields = [("role_team_coach_id", "Coach role")]
     if is_pro:
-        required_role_fields.append(("role_club_manager_id", "Club Manager role"))
+        required_role_fields.extend(
+            [
+                ("role_coach_plus_id", "Coach+ role"),
+                ("role_club_manager_id", "Club Manager role"),
+                ("role_club_manager_plus_id", "Club Manager+ role"),
+            ]
+        )
     roles_missing_settings: list[str] = []
     roles_missing_discord: list[str] = []
     for field, _label in required_role_fields:
@@ -3882,7 +3903,7 @@ async def guild_setup_wizard_page(request: web.Request) -> web.Response:
             {
                 "title": "Pro modules (locked)",
                 "status": _status("LOCKED", "warn"),
-                "details": "Upgrade to unlock Club Manager role and Pro coaches channel.",
+                "details": "Upgrade to unlock Coach+/Club Manager/Club Manager+ roles plus the Pro coaches channel.",
                 "action_label": "Upgrade",
                 "action_href": f"/app/upgrade?guild_id={guild_id}&from=setup-wizard&section=setup",
             }

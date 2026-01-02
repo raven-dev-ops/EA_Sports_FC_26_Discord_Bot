@@ -9,18 +9,19 @@ FC25_STATS_ENABLED_KEY = "fc25_stats_enabled"
 PREMIUM_COACHES_PIN_ENABLED_KEY = "premium_coaches_pin_enabled"
 
 GUILD_COACH_ROLE_FIELDS: list[tuple[str, str]] = [
-    ("role_team_coach_id", "Team Coach role"),
+    ("role_team_coach_id", "Coach role"),
+    ("role_coach_plus_id", "Coach+ role"),
     ("role_club_manager_id", "Club Manager role"),
+    ("role_club_manager_plus_id", "Club Manager+ role"),
     ("role_league_staff_id", "League Staff role"),
     ("role_league_owner_id", "League Owner role"),
     ("role_free_agent_id", "Free Agent role"),
     ("role_pro_player_id", "Pro Player role"),
-    ("role_retired_id", "Retired role"),
 ]
 
 GUILD_CHANNEL_FIELDS: list[tuple[str, str]] = [
     ("channel_staff_portal_id", "Staff portal channel"),
-    ("channel_manager_portal_id", "Managers portal channel"),
+    ("channel_manager_portal_id", "Club managers portal channel"),
     ("channel_coach_portal_id", "Coach portal channel"),
     ("channel_recruit_portal_id", "Recruit portal channel"),
     ("channel_staff_monitor_id", "Staff monitor channel"),

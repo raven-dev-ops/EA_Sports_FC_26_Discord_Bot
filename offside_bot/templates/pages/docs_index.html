@@ -1,23 +1,25 @@
 {% extends "layouts/public.html" %}
 
 {% block content %}
-  <section class="section">
-    <div class="card hero-card">
-      <div class="kicker">{{ heading|default("Docs") }}</div>
-      <h1 class="mt-6 text-hero-sm">{{ heading|default("Docs") }}</h1>
-      <p class="muted text-lg mt-10">
+  <section class="pt-6 pb-12">
+    <div class="rounded-2xl border border-slate-800/80 bg-surface-dark p-10">
+      <div class="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-4 py-1.5 text-sm font-semibold tracking-wide text-primary">
+        {{ heading|default("Docs") }}
+      </div>
+      <h1 class="mt-4 text-3xl font-bold tracking-tight text-white md:text-4xl">{{ heading|default("Docs") }}</h1>
+      <p class="mt-4 max-w-3xl text-lg text-slate-400">
         {{ subtitle|default("Guides and checklists to run your EA Sports FC 26 Discord server.") }}
       </p>
     </div>
   </section>
 
-  <section class="section">
-    <div class="card-grid">
+  <section class="py-6">
+    <div class="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
       {% for doc in docs %}
-        <a class="card card-link card-hover" href="{{ doc.href }}">
-          <strong>{{ doc.title }}</strong>
-          <div class="muted mt-6">{{ doc.summary }}</div>
-          <div class="mt-10 link-arrow">Read doc</div>
+        <a class="rounded-xl border border-slate-800/80 bg-surface-dark p-6 transition-all duration-300 hover:-translate-y-1 hover:border-primary/50 hover:shadow-card-hover" href="{{ doc.href }}">
+          <h3 class="text-lg font-semibold text-white">{{ doc.title }}</h3>
+          <p class="mt-2 text-sm text-slate-400">{{ doc.summary }}</p>
+          <span class="mt-4 inline-block text-sm font-semibold text-primary">Read doc</span>
         </a>
       {% endfor %}
     </div>

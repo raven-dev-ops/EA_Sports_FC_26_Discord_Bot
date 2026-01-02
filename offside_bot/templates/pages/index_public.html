@@ -1,176 +1,203 @@
 {% extends "layouts/public.html" %}
-{% from "macros/ui.html" import button, copy_field %}
 
 {% block content %}
-  <section class="section">
-    <div class="card hero-card">
-      <div class="hero">
-        <div class="hero-copy">
-          <div class="kicker">EA SPORTS FC 26 DISCORD BOT</div>
-          <h1 class="mt-6 text-hero">Run your EA Sports FC 26 league on Discord</h1>
-          <p class="muted text-lg mt-10">
-            Offside is the EA Sports FC 26 Discord bot for Pro Clubs leagues. Automate rosters, recruiting, clubs, tournaments,
-            and analytics with guided setup dashboards.
-          </p>
-          <ul class="checklist mt-12">
-            <li>Guided setup wizard plus Discord dashboards</li>
-            <li>Roster and recruiting workflows for coaches and staff</li>
-            <li>Clubs, tournaments, and analytics for league operations</li>
-          </ul>
-          <div class="flex gap-10 flex-wrap mt-16">
-            {{ button("Add to Discord", "/install", "blue") }}
-            {{ button("Open Dashboard", "/app", "secondary") }}
-          </div>
-          <div class="mt-16">
-            <div class="muted">Direct invite link</div>
-            {{ copy_field(invite_href, label="Direct invite link") }}
-          </div>
-        </div>
-        <div class="hero-media float">
-          <img
-            class="hero-banner"
-            src="{{ static_url('brand/offside_bot_banner.png') }}"
-            alt="Offside dashboard banner"
-            width="1215"
-            height="543"
-            loading="eager"
-            decoding="async"
-            fetchpriority="high"
-          />
-          <div class="hero-portrait-wrap">
-            <img
-              class="hero-portrait"
-              src="{{ static_url('brand/offside_bot_portrait.png') }}"
-              alt="Offside bot portrait"
-              width="599"
-              height="469"
-              loading="lazy"
-              decoding="async"
-            />
-          </div>
-        </div>
+  <section class="pt-6 pb-8">
+    <div class="flex justify-center">
+      <div class="relative flex max-w-3xl justify-center float-animation">
+        <img
+          class="h-auto w-full rounded-xl border border-slate-800/80 object-cover shadow-2xl shadow-primary-dark/10"
+          src="{{ static_url('brand/offside_bot_banner.png') }}"
+          alt="EA Sports FC 26 dashboard preview"
+          width="1215"
+          height="543"
+          loading="eager"
+          decoding="async"
+          fetchpriority="high"
+        />
+        <div class="absolute inset-0 rounded-xl ring-1 ring-inset ring-primary/20"></div>
       </div>
     </div>
   </section>
 
-  <section class="section">
-    <div class="card stats-strip" data-stats-strip>
-      <div class="stats-item hidden" data-stat="servers">
-        <span class="stats-label">Trusted by</span>
-        <span class="stats-value" data-stat-value="servers"></span>
-        <span class="stats-suffix muted">servers</span>
+  <section class="pt-6 pb-20 text-center">
+    <div class="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-4 py-1.5 text-sm font-semibold tracking-wide text-primary">
+      EA SPORTS FC 26 DISCORD BOT
+    </div>
+    <h1 class="mt-6 text-4xl font-bold leading-tight tracking-tight text-white sm:text-5xl md:text-7xl">
+      Your Ultimate<br class="hidden sm:block" />FC 26 Companion
+    </h1>
+    <p class="mx-auto mt-6 max-w-2xl text-lg text-slate-400">
+      Offside turns your EA Sports FC Discord into an ops dashboard: rosters, recruiting, clubs, tournaments, and analytics.
+    </p>
+    <div class="mt-10 flex flex-wrap justify-center gap-4">
+      <a
+        class="flex items-center gap-2 rounded-lg bg-primary px-8 py-3 font-semibold text-background-dark shadow-glow-primary transition-all duration-300 hover:scale-105 hover:bg-opacity-90"
+        href="/install"
+      >
+        Add to Discord
+      </a>
+      <a
+        class="rounded-lg border border-slate-700/80 bg-surface-dark px-8 py-3 font-semibold text-slate-300 transition-all duration-300 hover:scale-105 hover:border-slate-600 hover:bg-slate-800/60"
+        href="/app"
+      >
+        Open Dashboard
+      </a>
+    </div>
+    <div class="mx-auto mt-10 max-w-3xl text-left">
+      <p class="text-sm font-semibold uppercase tracking-wider text-slate-400">Direct invite URL</p>
+      <div class="mt-3 flex flex-wrap items-center gap-3 rounded-xl border border-slate-800/80 bg-surface-dark p-3">
+        <input
+          class="copy-input flex-1 rounded-lg border border-slate-700/70 bg-slate-900/70 px-3 py-2 text-sm text-slate-200"
+          type="text"
+          value="{{ invite_href }}"
+          readonly
+        />
+        <button
+          class="rounded-lg border border-slate-700/80 px-4 py-2 text-sm font-semibold text-slate-200 transition-colors hover:border-primary/50 hover:text-primary"
+          data-copy-text="{{ invite_href }}"
+          type="button"
+        >
+          Copy
+        </button>
       </div>
-      <div class="stats-item hidden" data-stat="version">
-        <span class="stats-label">Version</span>
-        <span class="stats-value" data-stat-value="version"></span>
+    </div>
+  </section>
+
+  <section class="pb-16">
+    <div class="flex flex-wrap justify-center gap-4 text-sm" data-stats-strip>
+      <div class="hidden items-center gap-2 rounded-full border border-slate-800/80 bg-surface-dark px-4 py-2 text-slate-300" data-stat="servers">
+        <span class="uppercase text-xs tracking-wider text-slate-500">Trusted by</span>
+        <span class="font-semibold" data-stat-value="servers"></span>
+        <span class="text-slate-500">servers</span>
       </div>
-      <a class="stats-item hidden" data-stat="status" data-stat-link href="#" rel="noopener" target="_blank">
-        <span class="stats-label">Status</span>
-        <span class="stats-value">Operational</span>
+      <div class="hidden items-center gap-2 rounded-full border border-slate-800/80 bg-surface-dark px-4 py-2 text-slate-300" data-stat="version">
+        <span class="uppercase text-xs tracking-wider text-slate-500">Version</span>
+        <span class="font-semibold" data-stat-value="version"></span>
+      </div>
+      <a
+        class="hidden items-center gap-2 rounded-full border border-slate-800/80 bg-surface-dark px-4 py-2 text-slate-300 transition-colors hover:border-primary/50 hover:text-primary"
+        data-stat="status"
+        data-stat-link
+        href="#"
+        rel="noopener"
+        target="_blank"
+      >
+        <span class="uppercase text-xs tracking-wider text-slate-500">Status</span>
+        <span class="font-semibold">Operational</span>
       </a>
     </div>
   </section>
 
-  <section class="section">
-    <div class="section-head">
-      <div>
-        <h2 class="section-title">How It Works</h2>
-        <p class="section-subtitle">Get up and running in three simple steps.</p>
-      </div>
+  <section class="py-16">
+    <div class="text-center">
+      <h2 class="text-3xl font-bold tracking-tight text-white md:text-4xl">How It Works</h2>
+      <p class="mt-3 text-lg text-slate-400">Get up and running in three simple steps.</p>
     </div>
-    <div class="card-grid">
-      <div class="card card-hover">
-        <strong>1) Invite</strong>
-        <div class="muted mt-6">Add the bot to your Discord server with the right permissions.</div>
+    <div class="mt-12 grid gap-8 md:grid-cols-3">
+      <div class="rounded-xl border border-slate-800/80 bg-surface-dark p-8 transition-all duration-300 hover:-translate-y-2 hover:border-primary/50 hover:shadow-card-hover">
+        <h3 class="text-xl font-semibold text-white">1. Invite</h3>
+        <p class="mt-3 text-slate-400">Add the bot to your server with the right permissions.</p>
       </div>
-      <div class="card card-hover">
-        <strong>2) Configure</strong>
-        <div class="muted mt-6">Run setup in the dashboard, confirm roles/channels, and post portals.</div>
+      <div class="rounded-xl border border-slate-800/80 bg-surface-dark p-8 transition-all duration-300 hover:-translate-y-2 hover:border-primary/50 hover:shadow-card-hover">
+        <h3 class="text-xl font-semibold text-white">2. Configure</h3>
+        <p class="mt-3 text-slate-400">Run setup, confirm roles/channels, and post dashboards.</p>
       </div>
-      <div class="card card-hover">
-        <strong>3) Run</strong>
-        <div class="muted mt-6">Manage rosters and recruiting while Offside tracks league activity.</div>
+      <div class="rounded-xl border border-slate-800/80 bg-surface-dark p-8 transition-all duration-300 hover:-translate-y-2 hover:border-primary/50 hover:shadow-card-hover">
+        <h3 class="text-xl font-semibold text-white">3. Run</h3>
+        <p class="mt-3 text-slate-400">Manage rosters and recruiting while Offside tracks your data.</p>
       </div>
     </div>
   </section>
 
-  <section class="section">
-    <div class="section-head">
-      <div>
-        <h2 class="section-title">Core Modules</h2>
-        <p class="section-subtitle">Powerful tools to manage your community.</p>
-      </div>
+  <section class="py-16">
+    <div class="text-center">
+      <h2 class="text-3xl font-bold tracking-tight text-white md:text-4xl">Core Modules</h2>
+      <p class="mt-3 text-lg text-slate-400">Powerful tools to manage your community.</p>
     </div>
-    <div class="card-grid">
-      <div class="card card-hover">
-        <strong>Rosters</strong>
-        <div class="muted mt-6">Create rosters, manage caps, and track openings.</div>
+    <div class="mt-12 grid gap-8 md:grid-cols-2 lg:grid-cols-3">
+      <div class="rounded-xl border border-slate-800/80 bg-surface-dark p-8 transition-all duration-300 hover:-translate-y-2 hover:border-primary/50 hover:shadow-card-hover">
+        <h3 class="text-xl font-semibold text-white">Rosters</h3>
+        <p class="mt-3 text-slate-400">Create rosters, manage caps, and track openings.</p>
       </div>
-      <div class="card card-hover">
-        <strong>Recruiting</strong>
-        <div class="muted mt-6">Streamline recruiting workflows, free-agent listings, and availability.</div>
+      <div class="rounded-xl border border-slate-800/80 bg-surface-dark p-8 transition-all duration-300 hover:-translate-y-2 hover:border-primary/50 hover:shadow-card-hover">
+        <h3 class="text-xl font-semibold text-white">Recruiting</h3>
+        <p class="mt-3 text-slate-400">Streamline recruiting workflows and listing channels.</p>
       </div>
-      <div class="card card-hover">
-        <strong>Clubs</strong>
-        <div class="muted mt-6">Organize clubs, managers, and staff operations across the server.</div>
+      <div class="rounded-xl border border-slate-800/80 bg-surface-dark p-8 transition-all duration-300 hover:-translate-y-2 hover:border-primary/50 hover:shadow-card-hover">
+        <h3 class="text-xl font-semibold text-white">Clubs</h3>
+        <p class="mt-3 text-slate-400">Organize clubs and staff operations across the server.</p>
       </div>
-      <div class="card card-hover">
-        <strong>Tournaments</strong>
-        <div class="muted mt-6">Automate brackets, fixtures, and results (Pro).</div>
+      <div class="rounded-xl border border-slate-800/80 bg-surface-dark p-8 transition-all duration-300 hover:-translate-y-2 hover:border-primary/50 hover:shadow-card-hover">
+        <h3 class="text-xl font-semibold text-white">Tournaments</h3>
+        <p class="mt-3 text-slate-400">Tournament automation tooling for staff (Pro).</p>
       </div>
-      <div class="card card-hover">
-        <strong>Analytics</strong>
-        <div class="muted mt-6">See activity by module, collection, and record type.</div>
+      <div class="rounded-xl border border-slate-800/80 bg-surface-dark p-8 transition-all duration-300 hover:-translate-y-2 hover:border-primary/50 hover:shadow-card-hover">
+        <h3 class="text-xl font-semibold text-white">Analytics</h3>
+        <p class="mt-3 text-slate-400">See what your server produces, by collection and record type.</p>
+      </div>
+      <div class="flex flex-col items-center justify-center rounded-xl border border-slate-800/80 bg-surface-dark p-8 text-center transition-all duration-300 hover:-translate-y-2 hover:border-primary/50 hover:shadow-card-hover">
+        <h3 class="text-xl font-semibold text-white">And more...</h3>
+        <p class="mt-3 text-slate-400">New modules and features released regularly.</p>
       </div>
     </div>
   </section>
 
-  <section class="section">
-    <div class="section-head">
-      <div>
-        <h2 class="section-title">FAQ</h2>
-        <p class="section-subtitle">Frequently asked questions.</p>
-      </div>
+  <section class="py-16">
+    <div class="text-center">
+      <h2 class="text-3xl font-bold tracking-tight text-white md:text-4xl">FAQ</h2>
+      <p class="mt-3 text-lg text-slate-400">Frequently asked questions.</p>
     </div>
-    <div class="card-grid">
-      <div class="card">
-        <p><strong>What permissions are needed?</strong></p>
-        <p class="muted">Offside needs permissions to create/manage roles and channels during setup, and to post embeds.</p>
+    <div class="mt-10 space-y-6">
+      <div class="rounded-lg border border-slate-800/80 bg-surface-dark p-6">
+        <h3 class="text-lg font-semibold text-white">What permissions are needed?</h3>
+        <p class="mt-2 text-slate-400">Offside needs permissions to create/manage roles and channels during setup, and to post embeds.</p>
       </div>
-      <div class="card">
-        <p><strong>How does pricing work?</strong></p>
-        <p class="muted">
-          Start on Free. Upgrade to Pro for club manager roles, stats, and automation. See <a href="/pricing">pricing</a>.
+      <div class="rounded-lg border border-slate-800/80 bg-surface-dark p-6">
+        <h3 class="text-lg font-semibold text-white">How does pricing work?</h3>
+        <p class="mt-2 text-slate-400">
+          Start on Free. Upgrade to Pro for premium features and advanced modules. See
+          <a class="font-medium text-primary hover:underline" href="/pricing">pricing</a>.
         </p>
       </div>
-      <div class="card">
-        <p><strong>Where is data stored?</strong></p>
-        <p class="muted">Data is stored per-server in MongoDB (configurable) and is isolated by guild.</p>
+      <div class="rounded-lg border border-slate-800/80 bg-surface-dark p-6">
+        <h3 class="text-lg font-semibold text-white">Where is data stored?</h3>
+        <p class="mt-2 text-slate-400">Data is stored per-server in MongoDB (configurable) and is isolated by guild.</p>
       </div>
-      <div class="card">
-        <p><strong>How do I get support?</strong></p>
-        <p class="muted">
-          Visit the <a href="/help">Help center</a> or <a href="/support">Support page</a> for docs and contact options.
+      <div class="rounded-lg border border-slate-800/80 bg-surface-dark p-6">
+        <h3 class="text-lg font-semibold text-white">How do I get support?</h3>
+        <p class="mt-2 text-slate-400">
+          Visit the <a class="font-medium text-primary hover:underline" href="/help">Help center</a> or
+          <a class="font-medium text-primary hover:underline" href="/support">Support page</a> for docs and contact options.
         </p>
       </div>
     </div>
   </section>
 
-  <section class="section">
-    <div class="card cta-card">
-      <div class="flex justify-between items-center gap-12 flex-wrap">
-        <div>
-          <div><strong>Ready to get started?</strong></div>
-          <div class="muted mt-6">Invite the bot, then log in to run setup and manage your league.</div>
-        </div>
-        <div class="flex gap-10 flex-wrap">
-          {{ button("Add to Discord", "/install", "blue") }}
-          {{ button("Open Dashboard", "/app", "secondary") }}
+  <section class="py-16">
+    <div class="relative overflow-hidden rounded-xl border border-slate-800/80 bg-surface-dark p-12 text-center">
+      <div class="absolute -left-1/2 -top-1/2 h-[200%] w-[200%] bg-[radial-gradient(circle_at_center,rgba(0,224,255,0.1),transparent_40%)]"></div>
+      <div class="relative z-10">
+        <h2 class="text-3xl font-bold text-white">Ready to get started?</h2>
+        <p class="mx-auto mt-4 max-w-xl text-slate-300">
+          Invite the bot, then log in to run setup and manage your server. By inviting the bot you agree to the
+          <a class="font-semibold underline hover:text-primary" href="/terms">Terms</a> and
+          <a class="font-semibold underline hover:text-primary" href="/privacy">Privacy Policy</a>.
+        </p>
+        <div class="mt-8 flex flex-wrap justify-center gap-4">
+          <a
+            class="flex items-center gap-2 rounded-lg bg-primary px-8 py-3 font-semibold text-background-dark shadow-glow-primary transition-all duration-300 hover:scale-105 hover:bg-opacity-90"
+            href="/install"
+          >
+            Add to Discord
+          </a>
+          <a
+            class="rounded-lg border border-slate-700/80 bg-slate-800/50 px-8 py-3 font-semibold text-white transition-all duration-300 hover:scale-105 hover:bg-slate-800/80"
+            href="/app"
+          >
+            Open Dashboard
+          </a>
         </div>
       </div>
-      <p class="muted mt-14">
-        By inviting the bot you agree to the <a href="/terms">Terms</a> and <a href="/privacy">Privacy Policy</a>.
-      </p>
     </div>
   </section>
 {% endblock %}

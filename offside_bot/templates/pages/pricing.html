@@ -1,135 +1,142 @@
 {% extends "layouts/public.html" %}
-{% from "macros/ui.html" import button, badge %}
 
 {% block content %}
-  <section class="section">
-    <div class="card hero-card">
-      <div class="kicker">EA SPORTS FC 26 DISCORD BOT</div>
-      <h1 class="mt-6 text-hero-sm">Pricing</h1>
-      <p class="muted text-lg mt-10">
+  <section class="pt-6 pb-12">
+    <div class="rounded-2xl border border-slate-800/80 bg-surface-dark p-10">
+      <div class="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-4 py-1.5 text-sm font-semibold tracking-wide text-primary">
+        EA SPORTS FC 26 DISCORD BOT
+      </div>
+      <h1 class="mt-4 text-3xl font-bold tracking-tight text-white md:text-4xl">Pricing</h1>
+      <p class="mt-4 max-w-3xl text-lg text-slate-400">
         Pricing is per server for the EA Sports FC 26 Discord bot. Start free and upgrade when you need premium workflows.
       </p>
-      <div class="flex justify-between items-center gap-12 flex-wrap mt-14">
+      <div class="mt-8 grid gap-6 md:grid-cols-2">
         <div>
-          <div class="muted">Billing cadence</div>
-          <div class="mt-6 font-600">Monthly <span class="muted">(yearly coming soon)</span></div>
+          <p class="text-sm uppercase tracking-wider text-slate-500">Billing cadence</p>
+          <p class="mt-2 text-lg font-semibold text-white">Monthly <span class="text-slate-500">(yearly coming soon)</span></p>
         </div>
-        <div class="btn-group" role="group" aria-label="Billing cadence">
-          <a class="btn {% if billing == 'monthly' %}blue{% else %}secondary{% endif %}" href="{{ toggle_monthly_href }}">
+        <div class="flex flex-wrap items-center gap-3">
+          <a
+            class="rounded-lg px-4 py-2 text-sm font-semibold transition-all {% if billing == 'monthly' %}bg-primary text-background-dark shadow-glow-primary{% else %}border border-slate-700/80 text-slate-300 hover:border-slate-600{% endif %}"
+            href="{{ toggle_monthly_href }}"
+          >
             Monthly
           </a>
-          <a class="btn {% if billing == 'yearly' %}blue{% else %}secondary{% endif %}" href="{{ toggle_yearly_href }}">
+          <a
+            class="rounded-lg px-4 py-2 text-sm font-semibold transition-all {% if billing == 'yearly' %}bg-primary text-background-dark shadow-glow-primary{% else %}border border-slate-700/80 text-slate-300 hover:border-slate-600{% endif %}"
+            href="{{ toggle_yearly_href }}"
+          >
             Yearly (soon)
           </a>
         </div>
       </div>
-      <div class="flex justify-between items-center gap-12 flex-wrap mt-14">
+      <div class="mt-8 grid gap-6 md:grid-cols-2">
         <div>
-          <div class="muted">Trust & billing</div>
-          <div class="mt-6 font-600">Cancel anytime <span class="muted">(free tier never asks for a card)</span></div>
+          <p class="text-sm uppercase tracking-wider text-slate-500">Trust &amp; billing</p>
+          <p class="mt-2 text-lg font-semibold text-white">
+            Cancel anytime <span class="text-slate-500">(free tier never asks for a card)</span>
+          </p>
         </div>
-        <div class="flex gap-10 flex-wrap">
-          <span class="badge ok">Stripe</span>
-          <span class="badge">Per server</span>
-          <span class="badge">No lock-in</span>
+        <div class="flex flex-wrap items-center gap-2">
+          <span class="rounded-full border border-green-500/30 bg-green-500/10 px-3 py-1 text-xs font-semibold text-green-200">Stripe</span>
+          <span class="rounded-full border border-slate-700/80 bg-slate-900/60 px-3 py-1 text-xs font-semibold text-slate-300">Per server</span>
+          <span class="rounded-full border border-slate-700/80 bg-slate-900/60 px-3 py-1 text-xs font-semibold text-slate-300">No lock-in</span>
         </div>
       </div>
     </div>
   </section>
 
-  <section class="section">
-    <div class="card-grid">
-      <div class="card card-hover">
-        <div class="flex justify-between items-center gap-10">
-          <strong>Free</strong>
-          {{ badge("FREE", "free") }}
+  <section class="py-8">
+    <div class="grid gap-6 lg:grid-cols-3">
+      <div class="rounded-xl border border-slate-800/80 bg-surface-dark p-8 transition-all duration-300 hover:-translate-y-1 hover:border-primary/50 hover:shadow-card-hover">
+        <div class="flex items-center justify-between">
+          <h3 class="text-lg font-semibold text-white">Free</h3>
+          <span class="rounded-full border border-slate-700/80 bg-slate-900/60 px-3 py-1 text-xs font-semibold text-slate-300">FREE</span>
         </div>
-        <div class="text-xl font-800 mt-8">$0</div>
-        <div class="muted">for every server</div>
-        <ul class="mt-12">
+        <p class="mt-4 text-3xl font-bold text-white">$0</p>
+        <p class="text-slate-400">for every server</p>
+        <ul class="mt-6 list-disc space-y-2 pl-5 text-slate-400">
           <li>Dashboards + setup wizard</li>
           <li>Roster + recruiting workflows</li>
           <li>Basic analytics</li>
         </ul>
-        <div class="mt-12">
-          {{ button("Add to Discord", "/install", "blue") }}
-        </div>
+        <a class="mt-6 inline-flex rounded-lg bg-primary px-5 py-2.5 text-sm font-semibold text-background-dark shadow-glow-primary transition-all hover:scale-105 hover:bg-opacity-90" href="/install">
+          Add to Discord
+        </a>
       </div>
 
-      <div class="card card-hover">
-        <div class="flex justify-between items-center gap-10">
-          <div class="flex gap-10 items-center">
-            <strong>Pro</strong>
-            {{ badge("PRO", "pro") }}
-            <span class="badge ok">MOST POPULAR</span>
-          </div>
+      <div class="rounded-xl border border-slate-800/80 bg-surface-dark p-8 transition-all duration-300 hover:-translate-y-1 hover:border-primary/50 hover:shadow-card-hover">
+        <div class="flex flex-wrap items-center gap-2">
+          <h3 class="text-lg font-semibold text-white">Pro</h3>
+          <span class="rounded-full border border-amber-500/40 bg-amber-500/15 px-3 py-1 text-xs font-semibold text-amber-200">PRO</span>
+          <span class="rounded-full border border-green-500/30 bg-green-500/10 px-3 py-1 text-xs font-semibold text-green-200">MOST POPULAR</span>
         </div>
-        <div class="text-xl font-800 mt-8">
+        <p class="mt-4 text-3xl font-bold text-white">
           {% if billing == "yearly" %}
             Coming soon
           {% else %}
             ${{ pro_monthly_price }}
           {% endif %}
-        </div>
-        <div class="muted">{% if billing == "yearly" %}Yearly billing coming soon{% else %}per server / month{% endif %}</div>
-        <ul class="mt-12">
-          <li>Club Manager role</li>
+        </p>
+        <p class="text-slate-400">
+          {% if billing == "yearly" %}Yearly billing coming soon{% else %}per server / month{% endif %}
+        </p>
+        <ul class="mt-6 list-disc space-y-2 pl-5 text-slate-400">
+          <li>Coach+/Club Manager/Club Manager+ roles</li>
           <li>Pro coaches report</li>
           <li>FC stats integration</li>
           <li>Banlist checks</li>
           <li>Tournament automation</li>
         </ul>
-        <div class="mt-12">
-          {{ button("Upgrade", pro_cta_href, "blue") }}
-        </div>
+        <a class="mt-6 inline-flex rounded-lg bg-primary px-5 py-2.5 text-sm font-semibold text-background-dark shadow-glow-primary transition-all hover:scale-105 hover:bg-opacity-90" href="{{ pro_cta_href }}">
+          Upgrade
+        </a>
       </div>
 
-      <div class="card card-hover">
-        <div class="flex justify-between items-center gap-10">
-          <strong>Enterprise</strong>
-          {{ badge("CONTACT", "ok") }}
+      <div class="rounded-xl border border-slate-800/80 bg-surface-dark p-8 transition-all duration-300 hover:-translate-y-1 hover:border-primary/50 hover:shadow-card-hover">
+        <div class="flex items-center justify-between">
+          <h3 class="text-lg font-semibold text-white">Enterprise</h3>
+          <span class="rounded-full border border-green-500/30 bg-green-500/10 px-3 py-1 text-xs font-semibold text-green-200">CONTACT</span>
         </div>
-        <div class="text-xl font-800 mt-8">Custom</div>
-        <div class="muted">for large communities</div>
-        <ul class="mt-12">
+        <p class="mt-4 text-3xl font-bold text-white">Custom</p>
+        <p class="text-slate-400">for large communities</p>
+        <ul class="mt-6 list-disc space-y-2 pl-5 text-slate-400">
           <li>Custom onboarding + support</li>
           <li>Multi-server admin workflows</li>
           <li>SLA / dedicated infra (optional)</li>
         </ul>
-        <div class="mt-12">
-          {{ button("Contact", enterprise_cta_href, "secondary") }}
-        </div>
+        <a class="mt-6 inline-flex rounded-lg border border-slate-700/80 px-5 py-2.5 text-sm font-semibold text-slate-300 transition-all hover:scale-105 hover:border-slate-600" href="{{ enterprise_cta_href }}">
+          Contact
+        </a>
       </div>
     </div>
   </section>
 
-  <section class="section">
-    <div class="section-head">
-      <div>
-        <h2 class="section-title">Compare plans</h2>
-        <p class="section-subtitle">A quick view of what each plan includes.</p>
-      </div>
+  <section class="py-12">
+    <div class="text-center">
+      <h2 class="text-3xl font-bold tracking-tight text-white">Compare plans</h2>
+      <p class="mt-3 text-lg text-slate-400">A quick view of what each plan includes.</p>
     </div>
-    <div class="card">
-      <table>
-        <thead>
+    <div class="mt-8 overflow-x-auto rounded-xl border border-slate-800/80 bg-surface-dark">
+      <table class="min-w-full text-left text-sm">
+        <thead class="border-b border-slate-800/80 text-slate-400">
           <tr>
-            <th>Feature</th>
-            <th>Free</th>
-            <th>Pro</th>
-            <th>Enterprise</th>
+            <th class="px-4 py-3 font-semibold">Feature</th>
+            <th class="px-4 py-3 font-semibold">Free</th>
+            <th class="px-4 py-3 font-semibold">Pro</th>
+            <th class="px-4 py-3 font-semibold">Enterprise</th>
           </tr>
         </thead>
         <tbody>
           {% for feat in features %}
-            <tr>
-              <td>
-                <strong>{{ feat.name }}</strong>
-                <div class="muted">{{ feat.description }}</div>
+            <tr class="border-b border-slate-900/60">
+              <td class="px-4 py-3">
+                <div class="font-semibold text-white">{{ feat.name }}</div>
+                <div class="text-xs text-slate-500">{{ feat.description }}</div>
               </td>
-              <td>{{ "✓" if feat.free else "—" }}</td>
-              <td>{{ "✓" if feat.pro else "—" }}</td>
-              <td>{{ "✓" if feat.enterprise else "—" }}</td>
+              <td class="px-4 py-3 text-slate-300">{{ "Yes" if feat.free else "No" }}</td>
+              <td class="px-4 py-3 text-slate-300">{{ "Yes" if feat.pro else "No" }}</td>
+              <td class="px-4 py-3 text-slate-300">{{ "Yes" if feat.enterprise else "No" }}</td>
             </tr>
           {% endfor %}
         </tbody>
@@ -137,40 +144,38 @@
     </div>
   </section>
 
-  <section class="section">
-    <div class="section-head">
-      <div>
-        <h2 class="section-title">FAQ</h2>
-        <p class="section-subtitle">Answers to common billing questions.</p>
-      </div>
+  <section class="py-12">
+    <div class="text-center">
+      <h2 class="text-3xl font-bold tracking-tight text-white">FAQ</h2>
+      <p class="mt-3 text-lg text-slate-400">Answers to common billing questions.</p>
     </div>
-    <div class="card-grid">
-      <div class="card">
-        <p><strong>Is pricing per server?</strong></p>
-        <p class="muted">Yes. Each Discord server can stay Free or upgrade to Pro independently.</p>
+    <div class="mt-8 grid gap-6 md:grid-cols-3">
+      <div class="rounded-xl border border-slate-800/80 bg-surface-dark p-6">
+        <h3 class="text-lg font-semibold text-white">Is pricing per server?</h3>
+        <p class="mt-2 text-slate-400">Yes. Each Discord server can stay Free or upgrade to Pro independently.</p>
       </div>
-      <div class="card">
-        <p><strong>Can I cancel anytime?</strong></p>
-        <p class="muted">Yes. Manage upgrades and cancellations in the billing portal.</p>
+      <div class="rounded-xl border border-slate-800/80 bg-surface-dark p-6">
+        <h3 class="text-lg font-semibold text-white">Can I cancel anytime?</h3>
+        <p class="mt-2 text-slate-400">Yes. Manage upgrades and cancellations in the billing portal.</p>
       </div>
-      <div class="card">
-        <p><strong>Do you offer invoices or PO?</strong></p>
-        <p class="muted">Enterprise plans support invoicing, PO billing, and custom onboarding.</p>
+      <div class="rounded-xl border border-slate-800/80 bg-surface-dark p-6">
+        <h3 class="text-lg font-semibold text-white">Do you offer invoices or PO?</h3>
+        <p class="mt-2 text-slate-400">Enterprise plans support invoicing, PO billing, and custom onboarding.</p>
       </div>
     </div>
   </section>
 
-  <section class="section">
-    <div class="card cta-card">
-      <div class="flex justify-between items-center gap-12 flex-wrap">
-        <div>
-          <div><strong>Ready to upgrade?</strong></div>
-          <div class="muted mt-6">Pro upgrades are managed in the dashboard billing page.</div>
-        </div>
-        <div class="flex gap-10 flex-wrap">
-          {{ button("Billing", pro_cta_href, "secondary") }}
-          {{ button("Login", "/login", "") }}
-        </div>
+  <section class="py-12">
+    <div class="rounded-2xl border border-slate-800/80 bg-surface-dark p-10 text-center">
+      <h2 class="text-2xl font-semibold text-white">Ready to upgrade?</h2>
+      <p class="mt-3 text-slate-400">Pro upgrades are managed in the dashboard billing page.</p>
+      <div class="mt-6 flex flex-wrap justify-center gap-4">
+        <a class="rounded-lg border border-slate-700/80 px-6 py-2.5 text-sm font-semibold text-slate-300 transition-all hover:scale-105 hover:border-slate-600" href="{{ pro_cta_href }}">
+          Billing
+        </a>
+        <a class="rounded-lg border border-slate-700/80 px-6 py-2.5 text-sm font-semibold text-slate-300 transition-all hover:scale-105 hover:border-primary/40" href="/login">
+          Login
+        </a>
       </div>
     </div>
   </section>

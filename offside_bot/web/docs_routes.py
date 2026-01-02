@@ -166,15 +166,21 @@ def _render_doc_page(
         description = f"{summary} Offside help for EA Sports FC 26 Discord servers."
     else:
         description = "Offside help for EA Sports FC 26 Discord servers."
+    summary_html = f'<p class="mt-3 text-slate-400">{escape_html(summary)}</p>' if summary else ""
     content = f"""
-      <section class="section">
-        <div class="card hero-card">
-          <a class="back-link" href="{escape_html(back_href)}">&larr; {escape_html(back_label)}</a>
-          <h1 class="mt-6 text-hero-sm">{escape_html(doc["title"])}</h1>
+      <section class="pt-6">
+        <div class="rounded-2xl border border-slate-800/80 bg-surface-dark p-10">
+          <a class="inline-flex items-center gap-2 rounded-full border border-slate-700/70 bg-slate-900/60 px-3 py-1 text-xs font-semibold text-slate-300" href="{escape_html(back_href)}">
+            &larr; {escape_html(back_label)}
+          </a>
+          <h1 class="mt-4 text-3xl font-bold tracking-tight text-white md:text-4xl">{escape_html(doc["title"])}</h1>
+          {summary_html}
         </div>
       </section>
-      <section class="section">
-        <div class="card prose">{html}</div>
+      <section class="pt-8">
+        <div class="rounded-xl border border-slate-800/80 bg-surface-dark p-8 prose prose-invert max-w-none">
+          {html}
+        </div>
       </section>
     """
     page_html = render(
@@ -183,7 +189,7 @@ def _render_doc_page(
         description=description,
         session=session,
         content=safe_html(content),
-        active_nav="support",
+        active_nav="docs",
     )
     return web.Response(text=page_html, content_type="text/html")
 
@@ -199,7 +205,7 @@ async def docs_index_page(request: web.Request) -> web.Response:
         ),
         session=request.get("session"),
         docs=docs,
-        active_nav="support",
+        active_nav="docs",
     )
     return web.Response(text=page_html, content_type="text/html")
 
@@ -232,7 +238,7 @@ async def commands_page(request: web.Request) -> web.Response:
         ),
         session=request.get("session"),
         categories=categories,
-        active_nav="support",
+        active_nav="docs",
     )
     return web.Response(text=page, content_type="text/html")
 
@@ -250,7 +256,7 @@ async def help_index_page(request: web.Request) -> web.Response:
         heading="Help center",
         subtitle="Setup guides, billing info, and answers for Offside.",
         docs=docs,
-        active_nav="support",
+        active_nav="docs",
     )
     return web.Response(text=page_html, content_type="text/html")
 

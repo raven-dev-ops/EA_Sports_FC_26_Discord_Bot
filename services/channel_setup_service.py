@@ -491,7 +491,9 @@ def _resolve_staff_roles(
     if not settings.staff_role_ids:
         for key in (
             "role_league_owner_id",
+            "role_club_manager_plus_id",
             "role_club_manager_id",
+            "role_coach_plus_id",
             "role_league_staff_id",
             "role_team_coach_id",
             "role_owner_id",
@@ -1055,10 +1057,13 @@ def _resolve_coach_roles(guild: discord.Guild, config: dict[str, Any]) -> list[d
 
     for key in (
         "role_team_coach_id",
+        "role_coach_plus_id",
         "role_club_manager_id",
+        "role_club_manager_plus_id",
         "role_coach_id",
         "role_coach_premium_id",
         "role_coach_premium_plus_id",
+        "role_manager_id",
     ):
         role_id = _parse_int(config.get(key))
         if not role_id:
@@ -1070,7 +1075,17 @@ def _resolve_coach_roles(guild: discord.Guild, config: dict[str, Any]) -> list[d
     if resolved:
         return list(resolved.values())
 
-    for name in ("Team Coach", "Club Manager", "Coach", "Coach Premium", "Coach Premium+"):
+    for name in (
+        "Coach",
+        "Coach+",
+        "Club Manager",
+        "Club Manager+",
+        "Team Coach",
+        "Coach Premium",
+        "Coach Premium+",
+        "Coach Premium Plus",
+        "Manager",
+    ):
         role = discord.utils.get(guild.roles, name=name)
         if role is not None and not role.is_default():
             resolved[role.id] = role

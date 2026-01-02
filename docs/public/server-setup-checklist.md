@@ -46,7 +46,7 @@ Categories:
 
 Dashboard channels:
 - `staff-portal`
-- `managers-portal`
+- `managers-portal` (club managers portal)
 - `coach-portal`
 - `recruit-portal`
 
@@ -56,20 +56,21 @@ Report channels:
 - `pro-coaches`
 
 Roles:
-- `Team Coach`
+- `Coach`
+- `Coach+` (Pro)
 - `Club Manager` (Pro)
+- `Club Manager+` (Pro)
 - `League Staff`
 - `League Owner`
 - `Free Agent`
 - `Pro Player`
-- `Retired`
 
 ## 6) Permissions intent (recommended)
 
 This is the default intent for auto-created channels:
 
 - `staff-portal`: staff-only (staff can post)
-- `managers-portal`: staff-only (staff can post)
+- `managers-portal`: staff-only (staff can post; club managers controls live here)
 - `coach-portal`: coaches-only (read-only; use buttons)
 - `recruit-portal`: public read-only (use buttons)
 - `recruitment-boards`, `club-listing`, `pro-coaches`: public read-only (bot-managed listings)

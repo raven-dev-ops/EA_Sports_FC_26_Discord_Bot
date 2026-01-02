@@ -80,7 +80,7 @@ def build_admin_portal_embed() -> discord.Embed:
         name="Guardrails",
         value=(
             "- Approve/reject with clear feedback.\n"
-            "- Unlock rosters only after rejection (Managers portal).\n"
+            "- Unlock rosters only after rejection (Club Managers portal).\n"
             "- Approved rosters are final once posted to listings."
         ),
         inline=False,
@@ -248,9 +248,9 @@ class AdminPortalView(SafeView):
                 description="Bracket + match flow tools",
             ),
             discord.SelectOption(
-                label="Managers Portal",
+                label="Club Managers Portal",
                 value="managers",
-                description="Open the managers portal channel",
+                description="Open the club managers portal channel",
             ),
             discord.SelectOption(
                 label="Players",
@@ -273,11 +273,11 @@ class AdminPortalView(SafeView):
                 description="Clean up and repost this portal",
             ),
         ]
-        self.action_select = discord.ui.Select(
+        self.action_select: discord.ui.Select = discord.ui.Select(
             placeholder="Select a staff action...",
             options=options,
         )
-        self.action_select.callback = self.on_action_select
+        setattr(self.action_select, "callback", self.on_action_select)
         self.add_item(self.action_select)
 
     async def on_action_select(self, interaction: discord.Interaction) -> None:
@@ -345,13 +345,13 @@ class AdminPortalView(SafeView):
             test_mode=test_mode,
         )
         if not target_channel_id:
-                await interaction.response.send_message(
-                    "Managers portal is not configured yet. Ensure the bot has `Manage Channels` and MongoDB is configured, then restart the bot.",
-                    ephemeral=True,
-                )
-                return
+            await interaction.response.send_message(
+                "Club managers portal is not configured yet. Ensure the bot has `Manage Channels` and MongoDB is configured, then restart the bot.",
+                ephemeral=True,
+            )
+            return
         await interaction.response.send_message(
-            f"Open the Managers portal here: <#{target_channel_id}>",
+            f"Open the Club Managers portal here: <#{target_channel_id}>",
             ephemeral=True,
         )
 

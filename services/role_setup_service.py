@@ -7,18 +7,20 @@ import discord
 from config import Settings
 from services import entitlements_service
 
-TEAM_COACH_ROLE_NAME = "Team Coach"
+COACH_ROLE_NAME = "Coach"
+COACH_PLUS_ROLE_NAME = "Coach+"
 CLUB_MANAGER_ROLE_NAME = "Club Manager"
+CLUB_MANAGER_PLUS_ROLE_NAME = "Club Manager+"
 LEAGUE_STAFF_ROLE_NAME = "League Staff"
 LEAGUE_OWNER_ROLE_NAME = "League Owner"
 FREE_AGENT_ROLE_NAME = "Free Agent"
 PRO_PLAYER_ROLE_NAME = "Pro Player"
-RETIRED_ROLE_NAME = "Retired"
 
 STAFF_ROLE_IDS_KEY = "staff_role_ids"
 
-LEGACY_TEAM_COACH_ROLE_NAMES = ("Coach", "Super League Coach")
-LEGACY_CLUB_MANAGER_ROLE_NAMES = ("Manager", "Coach Premium", "Coach Premium+", "Coach Premium Plus")
+LEGACY_COACH_ROLE_NAMES = ("Team Coach", "Super League Coach")
+LEGACY_COACH_PLUS_ROLE_NAMES = ("Coach Premium", "Coach Premium+", "Coach Premium Plus")
+LEGACY_CLUB_MANAGER_ROLE_NAMES = ("Manager",)
 LEGACY_FREE_AGENT_ROLE_NAMES = ("Recruit", "Free Player")
 LEGACY_PRO_PLAYER_ROLE_NAMES = ("Premium Player",)
 
@@ -50,28 +52,54 @@ async def ensure_offside_roles(
         actions.append("Role setup skipped (missing Manage Roles permission).")
         return config
 
-    team_coach_role = await _ensure_role(
+    coach_role = await _ensure_role(
         guild,
-        name=TEAM_COACH_ROLE_NAME,
-        aliases=LEGACY_TEAM_COACH_ROLE_NAMES,
+        name=COACH_ROLE_NAME,
+        aliases=LEGACY_COACH_ROLE_NAMES,
         existing_role_id=_parse_int(config.get("role_team_coach_id"))
         or _parse_int(config.get("role_coach_id")),
         actions=actions,
     )
+    coach_plus_role: discord.Role | None = None
     club_manager_role: discord.Role | None = None
+    club_manager_plus_role: discord.Role | None = None
     if is_pro:
+        coach_plus_role = await _ensure_role(
+            guild,
+            name=COACH_PLUS_ROLE_NAME,
+            aliases=LEGACY_COACH_PLUS_ROLE_NAMES,
+            existing_role_id=_parse_int(config.get("role_coach_plus_id"))
+            or _parse_int(config.get("role_coach_premium_id"))
+            or _parse_int(config.get("role_coach_premium_plus_id")),
+            actions=actions,
+        )
+        club_manager_role_id = _parse_int(config.get("role_club_manager_id")) or _parse_int(
+            config.get("role_manager_id")
+        )
+        if coach_plus_role is not None and club_manager_role_id == coach_plus_role.id:
+            club_manager_role_id = None
+        if club_manager_role_id:
+            candidate = guild.get_role(club_manager_role_id)
+            legacy_names = {name.casefold() for name in LEGACY_COACH_PLUS_ROLE_NAMES}
+            legacy_names.add(COACH_PLUS_ROLE_NAME.casefold())
+            if candidate is not None and candidate.name.casefold() in legacy_names:
+                club_manager_role_id = None
         club_manager_role = await _ensure_role(
             guild,
             name=CLUB_MANAGER_ROLE_NAME,
             aliases=LEGACY_CLUB_MANAGER_ROLE_NAMES,
-            existing_role_id=_parse_int(config.get("role_club_manager_id"))
-            or _parse_int(config.get("role_manager_id"))
-            or _parse_int(config.get("role_coach_premium_plus_id"))
-            or _parse_int(config.get("role_coach_premium_id")),
+            existing_role_id=club_manager_role_id,
+            actions=actions,
+        )
+        club_manager_plus_role = await _ensure_role(
+            guild,
+            name=CLUB_MANAGER_PLUS_ROLE_NAME,
+            aliases=(),
+            existing_role_id=_parse_int(config.get("role_club_manager_plus_id")),
             actions=actions,
         )
     else:
-        actions.append("Skipped Club Manager role (requires Pro).")
+        actions.append("Skipped Coach+/Club Manager roles (requires Pro).")
     league_staff_role = await _ensure_role(
         guild,
         name=LEAGUE_STAFF_ROLE_NAME,
@@ -104,32 +132,32 @@ async def ensure_offside_roles(
         or _parse_int(config.get("role_premium_player_id")),
         actions=actions,
     )
-    retired_role = await _ensure_role(
-        guild,
-        name=RETIRED_ROLE_NAME,
-        aliases=(),
-        existing_role_id=_parse_int(config.get("role_retired_id")),
-        actions=actions,
-    )
 
-    config["role_team_coach_id"] = team_coach_role.id
+    config["role_team_coach_id"] = coach_role.id
+    if coach_plus_role is not None:
+        config["role_coach_plus_id"] = coach_plus_role.id
     if club_manager_role is not None:
         config["role_club_manager_id"] = club_manager_role.id
+    if club_manager_plus_role is not None:
+        config["role_club_manager_plus_id"] = club_manager_plus_role.id
     config["role_league_staff_id"] = league_staff_role.id
     config["role_league_owner_id"] = league_owner_role.id
     config["role_free_agent_id"] = free_agent_role.id
     config["role_pro_player_id"] = pro_player_role.id
-    config["role_retired_id"] = retired_role.id
 
     staff_role_ids = _parse_int_set(config.get(STAFF_ROLE_IDS_KEY))
     updated_staff_role_ids = set(staff_role_ids)
-    base_staff_roles = {team_coach_role.id, league_staff_role.id, league_owner_role.id}
+    base_staff_roles = {coach_role.id, league_staff_role.id, league_owner_role.id}
+    if coach_plus_role is not None:
+        base_staff_roles.add(coach_plus_role.id)
     if club_manager_role is not None:
         base_staff_roles.add(club_manager_role.id)
+    if club_manager_plus_role is not None:
+        base_staff_roles.add(club_manager_plus_role.id)
     updated_staff_role_ids.update(base_staff_roles)
     if updated_staff_role_ids != staff_role_ids:
         config[STAFF_ROLE_IDS_KEY] = sorted(updated_staff_role_ids)
-        actions.append("Updated staff role IDs to include Owner/Manager roles.")
+        actions.append("Updated staff role IDs to include coach/manager roles.")
 
     await _maybe_assign_league_owner_role(
         guild, owner_role=league_owner_role, actions=actions

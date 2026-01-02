@@ -1,43 +1,165 @@
 {% extends "base.html" %}
-{% from "macros/ui.html" import button %}
-{% set body_class = "public-page" %}
+{% set include_app_css = False %}
+{% set include_footer = False %}
+{% set body_class = "font-display bg-background-light dark:bg-background-dark text-slate-300 antialiased" %}
+
+{% block head_extra %}
+  <link
+    href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200"
+    rel="stylesheet"
+  />
+  <script>
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            primary: {
+              DEFAULT: "#00E0FF",
+              dark: "#00A2FF",
+            },
+            background: {
+              light: "#F0F2F5",
+              dark: "#0D1117",
+            },
+            surface: {
+              dark: "#161B22",
+            },
+          },
+          fontFamily: {
+            display: ["Poppins", "sans-serif"],
+          },
+          borderRadius: {
+            DEFAULT: "0.75rem",
+            lg: "1rem",
+            xl: "1.25rem",
+          },
+          boxShadow: {
+            "glow-primary": "0 0 20px rgba(0, 224, 255, 0.2), 0 0 30px rgba(0, 162, 255, 0.15)",
+            "card-hover": "0 0 15px rgba(0, 224, 255, 0.15)",
+          },
+        },
+      },
+    };
+  </script>
+  <script src="https://cdn.tailwindcss.com?plugins=forms,typography"></script>
+  <style type="text/tailwindcss">
+    @layer utilities {
+      @keyframes float {
+        0%, 100% { transform: translateY(0); }
+        50% { transform: translateY(-20px); }
+      }
+      .float-animation {
+        animation: float 6s ease-in-out infinite;
+      }
+    }
+    .btn-filter {
+      @apply rounded-lg border border-slate-700/80 px-3 py-1.5 text-sm font-semibold text-slate-300 transition-all;
+    }
+    .btn-filter.secondary {
+      @apply bg-slate-900/60;
+    }
+    .btn-filter.blue {
+      @apply bg-primary text-background-dark border-transparent shadow-glow-primary;
+    }
+    .skip-link {
+      position: absolute;
+      left: 16px;
+      top: -40px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: #00e0ff;
+      color: #0d1117;
+      font-weight: 600;
+      z-index: 50;
+    }
+    .skip-link:focus {
+      top: 16px;
+    }
+  </style>
+{% endblock %}
 
 {% block body %}
-  <div class="page-shell">
-    <header class="topbar max-w-1100">
-      <div class="flex gap-14 items-center flex-wrap">
-        <a class="brand" href="/">
-          <img
-            class="brand-logo"
-            src="{{ static_url('brand/logo.svg') }}"
-            alt="{{ brand|default('Offside') }}"
-            width="24"
-            height="24"
-          />
-          <span>{{ brand|default("Offside") }}</span>
-        </a>
-        <nav class="topbar-links" aria-label="Primary">
-          <a href="/features" {% if active_nav == "features" %}aria-current="page"{% endif %}>{{ t("nav.features") }}</a>
-          <a href="/pricing" {% if active_nav == "pricing" %}aria-current="page"{% endif %}>{{ t("nav.pricing") }}</a>
-          <a href="/support" {% if active_nav == "support" %}aria-current="page"{% endif %}>{{ t("nav.support") }}</a>
+  <div class="relative overflow-hidden min-h-screen">
+    <div class="absolute inset-0 z-0">
+      <div class="absolute inset-0 bg-background-dark"></div>
+      <div class="absolute inset-0 bg-[radial-gradient(ellipse_50%_50%_at_50%_-20%,rgba(0,162,255,0.25),rgba(255,255,255,0))]"></div>
+      <div class="absolute bottom-0 left-0 right-0 h-[300px] bg-gradient-to-t from-background-dark to-transparent"></div>
+    </div>
+    <div class="relative z-10">
+      <header class="container mx-auto px-6 py-6">
+        <nav class="flex flex-wrap items-center justify-between gap-4">
+          <div class="flex items-center gap-4">
+            <div class="rounded-full border border-primary/20 bg-primary/10 p-2.5">
+              <span class="material-symbols-outlined text-primary" style="font-size: 28px;">sports_soccer</span>
+            </div>
+            <a href="/" class="text-2xl font-bold text-white tracking-wider">OFFSIDE</a>
+          </div>
+          <div class="hidden items-center gap-8 text-sm font-medium text-slate-400 md:flex">
+            <a
+              class="transition-colors duration-300 hover:text-primary {% if active_nav == 'features' %}text-primary{% endif %}"
+              href="/features"
+              {% if active_nav == "features" %}aria-current="page"{% endif %}
+            >
+              {{ t("nav.features") }}
+            </a>
+            <a
+              class="transition-colors duration-300 hover:text-primary {% if active_nav == 'pricing' %}text-primary{% endif %}"
+              href="/pricing"
+              {% if active_nav == "pricing" %}aria-current="page"{% endif %}
+            >
+              {{ t("nav.pricing") }}
+            </a>
+            <a
+              class="transition-colors duration-300 hover:text-primary {% if active_nav == 'docs' %}text-primary{% endif %}"
+              href="/docs"
+              {% if active_nav == "docs" %}aria-current="page"{% endif %}
+            >
+              Docs
+            </a>
+            <a
+              class="transition-colors duration-300 hover:text-primary {% if active_nav == 'support' %}text-primary{% endif %}"
+              href="/support"
+              {% if active_nav == "support" %}aria-current="page"{% endif %}
+            >
+              {{ t("nav.support") }}
+            </a>
+          </div>
+          <div class="flex flex-wrap items-center gap-3">
+            {% if right_cta %}
+              {{ right_cta|safe }}
+            {% else %}
+              <a
+                class="rounded-lg bg-primary px-5 py-2.5 text-sm font-semibold text-background-dark shadow-glow-primary transition-all duration-300 hover:scale-105 hover:bg-opacity-90"
+                href="/install"
+              >
+                Add to Discord
+              </a>
+              <a
+                class="rounded-lg border border-slate-700/80 bg-surface-dark px-5 py-2.5 text-sm font-semibold text-slate-300 transition-all duration-300 hover:scale-105 hover:border-slate-600 hover:bg-slate-800/60"
+                href="/app"
+              >
+                Open Dashboard
+              </a>
+            {% endif %}
+          </div>
         </nav>
-      </div>
-      <div class="flex gap-10 items-center topbar-cta">
-        {% if right_cta %}
-          {{ right_cta|safe }}
-        {% else %}
-          {{ button("Add to Discord", "/install", "blue") }}
-          {% if session %}
-            {{ button("Open Dashboard", "/app", "secondary") }}
-          {% else %}
-            {{ button("Login", "/login", "secondary") }}
-          {% endif %}
-        {% endif %}
-      </div>
-    </header>
+      </header>
 
-    <main class="content max-w-1100" id="main-content" tabindex="-1">
-      {% block content %}{% endblock %}
-    </main>
+      <main class="container mx-auto px-6 pb-24" id="main-content" tabindex="-1">
+        {% block content %}{% endblock %}
+      </main>
+
+      <footer class="container mx-auto px-6 pb-12">
+        <div class="flex flex-col items-center justify-between gap-4 border-t border-slate-800/80 pt-8 text-sm text-slate-400 sm:flex-row">
+          <p>(c) 2026 Offside. Not affiliated with or endorsed by EA or EA Sports.</p>
+          <div class="flex flex-wrap gap-6">
+            <a class="transition-colors hover:text-primary" href="/terms">Terms</a>
+            <a class="transition-colors hover:text-primary" href="/privacy">Privacy</a>
+            <a class="transition-colors hover:text-primary" href="/support">Support</a>
+          </div>
+        </div>
+      </footer>
+    </div>
   </div>
 {% endblock %}

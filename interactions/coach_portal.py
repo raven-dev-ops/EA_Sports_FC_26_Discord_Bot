@@ -56,7 +56,7 @@ def build_coach_portal_embed() -> discord.Embed:
         description=(
             "**Build and submit your roster for the current cycle.**\n"
             "- Minimum 8 players to submit.\n"
-            "- Caps: Team Coach=16, Club Manager=22.\n"
+            "- Caps: Coach=16, Coach+=22, Club Manager=22, Club Manager+=25.\n"
             "- After submit, your roster locks until staff approves/rejects.\n"
             "- Pro coaches: set Practice Times to appear in the Pro coaches report.\n\n"
             "Use the action menu below. Responses are ephemeral."
@@ -87,11 +87,11 @@ class CoachPortalView(SafeView):
                 description="Staff-only portal cleanup",
             ),
         ]
-        self.action_select = discord.ui.Select(
+        self.action_select: discord.ui.Select = discord.ui.Select(
             placeholder="Select a coach action...",
             options=options,
         )
-        self.action_select.callback = self.on_action_select
+        setattr(self.action_select, "callback", self.on_action_select)
         self.add_item(self.action_select)
 
     async def on_action_select(self, interaction: discord.Interaction) -> None:

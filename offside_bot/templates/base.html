@@ -28,12 +28,19 @@
       rel="stylesheet"
     />
     <link rel="icon" href="{{ static_url('brand/favicon.svg') }}" type="image/svg+xml" />
-    <link rel="stylesheet" href="{{ static_url('app.css') }}" />
-    <script src="{{ static_url('app.js') }}" defer></script>
+    {% if include_app_css|default(true) %}
+      <link rel="stylesheet" href="{{ static_url('app.css') }}" />
+    {% endif %}
+    {% if include_app_js|default(true) %}
+      <script src="{{ static_url('app.js') }}" defer></script>
+    {% endif %}
+    {% block head_extra %}{% endblock %}
   </head>
   <body class="{{ body_class|default('') }}">
     <a class="skip-link" href="#main-content">Skip to content</a>
     {% block body %}{{ body|default("")|safe }}{% endblock %}
-    {% include "partials/footer.html" %}
+    {% if include_footer|default(true) %}
+      {% include "partials/footer.html" %}
+    {% endif %}
   </body>
 </html>
