@@ -117,6 +117,7 @@ async def test_login_redirects_when_authenticated(monkeypatch) -> None:
     monkeypatch.setattr(database, "_CLIENT", None)
 
     app = dashboard.create_app(settings=_settings())
+    config = app[dashboard.DASHBOARD_CONFIG_KEY]
     sessions = app[dashboard.SESSION_COLLECTION_KEY]
     now = time.time()
     sessions.insert_one(
@@ -125,7 +126,7 @@ async def test_login_redirects_when_authenticated(monkeypatch) -> None:
             "created_at": now - 10,
             "last_seen_at": now - 5,
             "guilds_fetched_at": now - 5,
-            "expires_at": datetime.now(timezone.utc) + timedelta(seconds=dashboard.SESSION_TTL_SECONDS),
+            "expires_at": datetime.now(timezone.utc) + timedelta(seconds=config.session_ttl_seconds),
             "user": {"id": "1", "username": "alice", "discriminator": "0001"},
             "owner_guilds": [{"id": "123", "name": "Managed"}],
             "all_guilds": [{"id": "123", "name": "Managed"}],
@@ -149,45 +150,36 @@ async def test_login_redirects_when_authenticated(monkeypatch) -> None:
 
 @pytest.mark.asyncio
 async def test_admin_console_allows_allowlisted_user(monkeypatch) -> None:
-    from urllib.parse import parse_qs, urlparse
-
     from aiohttp.test_utils import TestClient, TestServer
 
     monkeypatch.setattr(database, "MongoClient", mongomock.MongoClient)
     monkeypatch.setattr(database, "_CLIENT", None)
-    monkeypatch.setenv("DISCORD_CLIENT_SECRET", "secret")
-    monkeypatch.setenv("DASHBOARD_REDIRECT_URI", "http://localhost:8080/oauth/callback")
     monkeypatch.setenv("ADMIN_DISCORD_IDS", "1")
 
-    async def fake_exchange_code(*_args, **_kwargs):
-        return {"access_token": "access_token"}
-
-    async def fake_discord_get_json(*_args, url: str, **_kwargs):
-        if url == dashboard.ME_URL:
-            return {"id": "1", "username": "alice", "discriminator": "0001"}
-        if url == dashboard.MY_GUILDS_URL:
-            return [{"id": "123", "name": "Managed", "owner": False, "permissions": str(1 << 5)}]
-        raise AssertionError(f"Unexpected Discord URL: {url}")
-
-    monkeypatch.setattr(dashboard, "_exchange_code", fake_exchange_code)
-    monkeypatch.setattr(dashboard, "_discord_get_json", fake_discord_get_json)
-
     app = dashboard.create_app(settings=_settings())
+    config = app[dashboard.DASHBOARD_CONFIG_KEY]
+    sessions = app[dashboard.SESSION_COLLECTION_KEY]
+    now = time.time()
+    sessions.insert_one(
+        {
+            "_id": "sess_admin",
+            "created_at": now,
+            "last_seen_at": now,
+            "guilds_fetched_at": now,
+            "expires_at": datetime.now(timezone.utc) + timedelta(seconds=config.session_ttl_seconds),
+            "user": {"id": "1", "username": "alice", "discriminator": "0001"},
+            "owner_guilds": [],
+            "all_guilds": [],
+            "csrf_token": "csrf_good",
+        }
+    )
     client = TestClient(TestServer(app))
     await client.start_server()
     try:
-        resp = await client.get("/login?next=/admin", allow_redirects=False)
-        location = resp.headers.get("Location")
-        assert location is not None
-        state = parse_qs(urlparse(location).query).get("state", [""])[0]
-        assert state
-
-        resp = await client.get(f"/oauth/callback?code=abc&state={state}", allow_redirects=False)
-        cookie = resp.cookies.get(dashboard.COOKIE_NAME)
-        assert cookie is not None
-        cookie_header = f"{dashboard.COOKIE_NAME}={cookie.value}"
-
-        admin_page = await client.get("/admin", headers={"Cookie": cookie_header})
+        admin_page = await client.get(
+            "/admin",
+            headers={"Cookie": f"{dashboard.COOKIE_NAME}=sess_admin"},
+        )
         assert admin_page.status == 200
     finally:
         await client.close()
@@ -195,45 +187,36 @@ async def test_admin_console_allows_allowlisted_user(monkeypatch) -> None:
 
 @pytest.mark.asyncio
 async def test_admin_console_denies_non_admin(monkeypatch) -> None:
-    from urllib.parse import parse_qs, urlparse
-
     from aiohttp.test_utils import TestClient, TestServer
 
     monkeypatch.setattr(database, "MongoClient", mongomock.MongoClient)
     monkeypatch.setattr(database, "_CLIENT", None)
-    monkeypatch.setenv("DISCORD_CLIENT_SECRET", "secret")
-    monkeypatch.setenv("DASHBOARD_REDIRECT_URI", "http://localhost:8080/oauth/callback")
     monkeypatch.setenv("ADMIN_DISCORD_IDS", "999")
 
-    async def fake_exchange_code(*_args, **_kwargs):
-        return {"access_token": "access_token"}
-
-    async def fake_discord_get_json(*_args, url: str, **_kwargs):
-        if url == dashboard.ME_URL:
-            return {"id": "1", "username": "alice", "discriminator": "0001"}
-        if url == dashboard.MY_GUILDS_URL:
-            return [{"id": "123", "name": "Managed", "owner": False, "permissions": str(1 << 5)}]
-        raise AssertionError(f"Unexpected Discord URL: {url}")
-
-    monkeypatch.setattr(dashboard, "_exchange_code", fake_exchange_code)
-    monkeypatch.setattr(dashboard, "_discord_get_json", fake_discord_get_json)
-
     app = dashboard.create_app(settings=_settings())
+    config = app[dashboard.DASHBOARD_CONFIG_KEY]
+    sessions = app[dashboard.SESSION_COLLECTION_KEY]
+    now = time.time()
+    sessions.insert_one(
+        {
+            "_id": "sess_admin",
+            "created_at": now,
+            "last_seen_at": now,
+            "guilds_fetched_at": now,
+            "expires_at": datetime.now(timezone.utc) + timedelta(seconds=config.session_ttl_seconds),
+            "user": {"id": "1", "username": "alice", "discriminator": "0001"},
+            "owner_guilds": [],
+            "all_guilds": [],
+            "csrf_token": "csrf_good",
+        }
+    )
     client = TestClient(TestServer(app))
     await client.start_server()
     try:
-        resp = await client.get("/login?next=/admin", allow_redirects=False)
-        location = resp.headers.get("Location")
-        assert location is not None
-        state = parse_qs(urlparse(location).query).get("state", [""])[0]
-        assert state
-
-        resp = await client.get(f"/oauth/callback?code=abc&state={state}", allow_redirects=False)
-        cookie = resp.cookies.get(dashboard.COOKIE_NAME)
-        assert cookie is not None
-        cookie_header = f"{dashboard.COOKIE_NAME}={cookie.value}"
-
-        admin_page = await client.get("/admin", headers={"Cookie": cookie_header})
+        admin_page = await client.get(
+            "/admin",
+            headers={"Cookie": f"{dashboard.COOKIE_NAME}=sess_admin"},
+        )
         assert admin_page.status == 403
     finally:
         await client.close()
@@ -342,11 +325,12 @@ async def test_oauth_callback_with_expired_state_is_rejected(monkeypatch) -> Non
     monkeypatch.setenv("DASHBOARD_REDIRECT_URI", "http://localhost:8080/oauth/callback")
 
     app = dashboard.create_app(settings=_settings())
+    config = app[dashboard.DASHBOARD_CONFIG_KEY]
     states = app[dashboard.STATE_COLLECTION_KEY]
     states.insert_one(
         {
             "_id": "state_expired",
-            "issued_at": time.time() - (dashboard.STATE_TTL_SECONDS + 5),
+            "issued_at": time.time() - (config.state_ttl_seconds + 5),
             "next": "/app",
             "expires_at": datetime.now(timezone.utc) + timedelta(seconds=600),
         }
@@ -371,17 +355,18 @@ async def test_session_idle_timeout_forces_relogin(monkeypatch) -> None:
 
     monkeypatch.setattr(database, "MongoClient", mongomock.MongoClient)
     monkeypatch.setattr(database, "_CLIENT", None)
-    monkeypatch.setattr(dashboard, "SESSION_IDLE_TIMEOUT_SECONDS", 10)
+    monkeypatch.setenv("DASHBOARD_SESSION_IDLE_TIMEOUT_SECONDS", "10")
 
     app = dashboard.create_app(settings=_settings())
+    config = app[dashboard.DASHBOARD_CONFIG_KEY]
     sessions = app[dashboard.SESSION_COLLECTION_KEY]
     now = time.time()
     sessions.insert_one(
         {
             "_id": "sess_idle",
             "created_at": now - 120,
-            "last_seen_at": now - (dashboard.SESSION_IDLE_TIMEOUT_SECONDS + 5),
-            "expires_at": datetime.now(timezone.utc) + timedelta(seconds=dashboard.SESSION_TTL_SECONDS),
+            "last_seen_at": now - (config.session_idle_timeout_seconds + 5),
+            "expires_at": datetime.now(timezone.utc) + timedelta(seconds=config.session_ttl_seconds),
             "user": {"id": "1", "username": "alice", "discriminator": "0001"},
             "owner_guilds": [{"id": "123", "name": "Guild"}],
             "all_guilds": [{"id": "123", "name": "Guild"}],
@@ -432,16 +417,17 @@ async def test_guild_list_cache_ttl_does_not_force_relogin(monkeypatch) -> None:
     monkeypatch.setattr(database, "_CLIENT", None)
 
     app = dashboard.create_app(settings=_settings())
+    config = app[dashboard.DASHBOARD_CONFIG_KEY]
     sessions = app[dashboard.SESSION_COLLECTION_KEY]
     now = time.time()
-    stale = now - (dashboard.GUILD_METADATA_TTL_SECONDS + 5)
+    stale = now - (config.guild_metadata_ttl_seconds + 5)
     sessions.insert_one(
         {
             "_id": "sess_stale_guilds",
             "created_at": now - 120,
             "last_seen_at": now,
             "guilds_fetched_at": stale,
-            "expires_at": datetime.now(timezone.utc) + timedelta(seconds=dashboard.SESSION_TTL_SECONDS),
+            "expires_at": datetime.now(timezone.utc) + timedelta(seconds=config.session_ttl_seconds),
             "user": {"id": "1", "username": "alice", "discriminator": "0001"},
             "owner_guilds": [{"id": "123", "name": "Guild"}],
             "all_guilds": [{"id": "123", "name": "Guild"}],
@@ -611,6 +597,7 @@ async def test_guild_access_denied_is_logged(monkeypatch) -> None:
     entitlements_service.invalidate_all()
 
     app = dashboard.create_app(settings=_settings())
+    config = app[dashboard.DASHBOARD_CONFIG_KEY]
     sessions = app[dashboard.SESSION_COLLECTION_KEY]
     now = time.time()
     sessions.insert_one(
@@ -619,7 +606,7 @@ async def test_guild_access_denied_is_logged(monkeypatch) -> None:
             "created_at": now,
             "last_seen_at": now,
             "guilds_fetched_at": now,
-            "expires_at": datetime.now(timezone.utc) + timedelta(seconds=dashboard.SESSION_TTL_SECONDS),
+            "expires_at": datetime.now(timezone.utc) + timedelta(seconds=config.session_ttl_seconds),
             "user": {"id": "1", "username": "alice", "discriminator": "0001"},
             "owner_guilds": [{"id": "123", "name": "Guild"}],
             "all_guilds": [{"id": "123", "name": "Guild"}],

@@ -61,12 +61,18 @@ async def test_dashboard_smoke_critical_path(monkeypatch) -> None:
 
     monkeypatch.setenv("DISCORD_CLIENT_SECRET", "secret")
     monkeypatch.setenv("DASHBOARD_REDIRECT_URI", "http://localhost:8080/oauth/callback")
+    monkeypatch.setenv("GOOGLE_CLIENT_ID", "google-client")
+    monkeypatch.setenv("GOOGLE_CLIENT_SECRET", "google-secret")
+    monkeypatch.setenv("GOOGLE_REDIRECT_URI", "http://localhost:8080/oauth/google/callback")
     monkeypatch.setenv("STRIPE_MODE", "test")
     monkeypatch.setenv("STRIPE_SECRET_KEY", "sk_test_123")
     monkeypatch.setenv("STRIPE_PRICE_PRO_ID", "price_test_123")
 
-    async def fake_exchange_code(*_args, **_kwargs):
-        return {"access_token": "access_token"}
+    async def fake_google_exchange_code(*_args, **_kwargs):
+        return {"access_token": "google_access"}
+
+    async def fake_google_userinfo(*_args, **_kwargs):
+        return {"sub": "google_sub_1", "email": "user@example.com", "email_verified": True, "name": "User"}
 
     async def fake_discord_get_json(*_args, url: str, **_kwargs):
         if url == dashboard.ME_URL:
@@ -88,11 +94,23 @@ async def test_dashboard_smoke_critical_path(monkeypatch) -> None:
     )
     monkeypatch.setitem(sys.modules, "stripe", fake_stripe)
 
-    monkeypatch.setattr(dashboard, "_exchange_code", fake_exchange_code)
+    monkeypatch.setattr(dashboard, "_google_exchange_code", fake_google_exchange_code)
+    monkeypatch.setattr(dashboard, "_google_get_userinfo", fake_google_userinfo)
     monkeypatch.setattr(dashboard, "_discord_get_json", fake_discord_get_json)
     monkeypatch.setattr(dashboard, "_detect_bot_installed", fake_detect_installed)
 
     app = dashboard.create_app(settings=_settings())
+    users = app[dashboard.USER_COLLECTION_KEY]
+    users.insert_one(
+        {
+            "google_sub": "google_sub_1",
+            "email": "user@example.com",
+            "discord_user_id": "1",
+            "discord_access_token": "access_token",
+            "discord_token_expires_at": datetime.now(timezone.utc) + timedelta(hours=1),
+            "updated_at": datetime.now(timezone.utc),
+        }
+    )
     client = TestClient(TestServer(app))
     await client.start_server()
     try:
@@ -122,7 +140,7 @@ async def test_dashboard_smoke_critical_path(monkeypatch) -> None:
         state = parse_qs(urlparse(auth_location).query).get("state", [""])[0]
         assert state
 
-        resp = await client.get(f"/oauth/callback?code=abc&state={state}", allow_redirects=False)
+        resp = await client.get(f"/oauth/google/callback?code=abc&state={state}", allow_redirects=False)
         assert resp.status == 302
         assert resp.headers.get("Location") == "/app/billing?guild_id=123"
 
@@ -162,37 +180,27 @@ async def test_dashboard_smoke_login_state_expires(monkeypatch) -> None:
 
     monkeypatch.setattr(database, "MongoClient", mongomock.MongoClient)
     monkeypatch.setattr(database, "_CLIENT", None)
-    monkeypatch.setenv("DISCORD_CLIENT_SECRET", "secret")
-    monkeypatch.setenv("DASHBOARD_REDIRECT_URI", "http://localhost:8080/oauth/callback")
-
-    async def fake_exchange_code(*_args, **_kwargs):
-        return {"access_token": "access_token"}
-
-    async def fake_discord_get_json(*_args, url: str, **_kwargs):
-        if url == dashboard.ME_URL:
-            return {"id": "1", "username": "alice", "discriminator": "0001"}
-        if url == dashboard.MY_GUILDS_URL:
-            return [{"id": "123", "name": "Managed", "owner": False, "permissions": str(1 << 5)}]
-        raise AssertionError(f"Unexpected Discord URL: {url}")
-
-    monkeypatch.setattr(dashboard, "_exchange_code", fake_exchange_code)
-    monkeypatch.setattr(dashboard, "_discord_get_json", fake_discord_get_json)
+    monkeypatch.setenv("GOOGLE_CLIENT_ID", "google-client")
+    monkeypatch.setenv("GOOGLE_CLIENT_SECRET", "google-secret")
+    monkeypatch.setenv("GOOGLE_REDIRECT_URI", "http://localhost:8080/oauth/google/callback")
 
     app = dashboard.create_app(settings=_settings())
+    config = app[dashboard.DASHBOARD_CONFIG_KEY]
     states = app[dashboard.STATE_COLLECTION_KEY]
     states.insert_one(
         {
             "_id": "state1",
-            "issued_at": time.time() - (dashboard.STATE_TTL_SECONDS + 60),
+            "issued_at": time.time() - (config.state_ttl_seconds + 60),
             "next": "/",
             "expires_at": datetime.now(timezone.utc) + timedelta(seconds=600),
+            "flow": "google_login",
         }
     )
 
     client = TestClient(TestServer(app))
     await client.start_server()
     try:
-        resp = await client.get("/oauth/callback?code=abc&state=state1", allow_redirects=False)
+        resp = await client.get("/oauth/google/callback?code=abc&state=state1", allow_redirects=False)
         assert resp.status == 400
         html = await resp.text()
         assert "Login expired" in html

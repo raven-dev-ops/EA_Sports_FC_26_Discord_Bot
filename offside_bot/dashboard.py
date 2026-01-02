@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import csv
 import hashlib
 import hmac
@@ -90,6 +91,9 @@ AUTHORIZE_URL = "https://discord.com/oauth2/authorize"
 TOKEN_URL = f"{DISCORD_API_BASE}/oauth2/token"
 ME_URL = f"{DISCORD_API_BASE}/users/@me"
 MY_GUILDS_URL = f"{DISCORD_API_BASE}/users/@me/guilds"
+GOOGLE_AUTHORIZE_URL = "https://accounts.google.com/o/oauth2/v2/auth"
+GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
+GOOGLE_USERINFO_URL = "https://openidconnect.googleapis.com/v1/userinfo"
 
 COOKIE_NAME = "offside_dashboard_session"
 REQUEST_ID_HEADER = "X-Request-Id"
@@ -153,6 +157,52 @@ def _session_signing_keys() -> list[bytes]:
     return [key.encode("utf-8") for key in keys]
 
 
+def _token_encryption_key() -> bytes:
+    raw = os.environ.get("DASHBOARD_TOKEN_ENCRYPTION_KEY", "").strip()
+    if not raw:
+        raw = os.environ.get("DASHBOARD_SESSION_SIGNING_KEYS", "").strip()
+    if not raw:
+        raw = os.environ.get("DISCORD_CLIENT_SECRET", "").strip()
+    if not raw:
+        raise RuntimeError("DASHBOARD_TOKEN_ENCRYPTION_KEY is required to store Discord refresh tokens.")
+
+    raw_bytes = raw.encode("utf-8")
+    try:
+        decoded = base64.urlsafe_b64decode(raw_bytes)
+        if len(decoded) == 32:
+            return raw_bytes
+    except Exception:
+        pass
+
+    digest = hashlib.sha256(raw_bytes).digest()
+    return base64.urlsafe_b64encode(digest)
+
+
+def _token_cipher():
+    try:
+        from cryptography.fernet import Fernet  # type: ignore[import-not-found]
+    except Exception as exc:
+        raise RuntimeError("cryptography is required to encrypt Discord refresh tokens.") from exc
+    return Fernet(_token_encryption_key())
+
+
+def _encrypt_token(token: str) -> str:
+    if not token:
+        return ""
+    cipher = _token_cipher()
+    return cipher.encrypt(token.encode("utf-8")).decode("utf-8")
+
+
+def _decrypt_token(token: str) -> str:
+    if not token:
+        return ""
+    cipher = _token_cipher()
+    try:
+        return cipher.decrypt(token.encode("utf-8")).decode("utf-8")
+    except Exception as exc:
+        raise RuntimeError("Failed to decrypt Discord token.") from exc
+
+
 def _sign_session_id(session_id: str, key: bytes) -> str:
     return hmac.new(key, session_id.encode("utf-8"), hashlib.sha256).hexdigest()
 
@@ -202,6 +252,8 @@ def _ensure_dashboard_collections(settings: Settings) -> tuple[Collection, Colle
     sessions.create_index("expires_at", expireAfterSeconds=0, name="ttl_expires_at")
     states.create_index("expires_at", expireAfterSeconds=0, name="ttl_expires_at")
     users.create_index("discord_user_id", unique=True, name="uniq_discord_user_id")
+    users.create_index("google_sub", unique=True, sparse=True, name="uniq_google_sub")
+    users.create_index("email", name="idx_google_email")
     users.create_index("updated_at", name="idx_updated_at")
     return sessions, states, users
 
@@ -223,7 +275,14 @@ def _insert_unique(col: Collection, doc_factory) -> str:
     raise RuntimeError("Failed to insert a unique document after multiple attempts.")
 
 
-def _insert_oauth_state(*, states: Collection, next_path: str, expires_at: datetime) -> str:
+def _insert_oauth_state(
+    *,
+    states: Collection,
+    next_path: str,
+    expires_at: datetime,
+    flow: str,
+    data: dict[str, Any] | None = None,
+) -> str:
     for _ in range(5):
         state = secrets.token_urlsafe(24)
         doc = {
@@ -231,7 +290,10 @@ def _insert_oauth_state(*, states: Collection, next_path: str, expires_at: datet
             "issued_at": time.time(),
             "next": next_path,
             "expires_at": expires_at,
+            "flow": flow,
         }
+        if data:
+            doc["data"] = data
         try:
             states.insert_one(doc)
             return state
@@ -273,6 +335,109 @@ def _upsert_user_record(settings: Settings, user: dict[str, Any]) -> None:
         )
     except Exception:
         logging.exception("event=upsert_user_record_failed")
+
+
+def _upsert_google_user_record(settings: Settings, profile: dict[str, Any]) -> dict[str, Any]:
+    google_sub = str(profile.get("sub") or "").strip()
+    if not google_sub:
+        raise RuntimeError("Google profile is missing sub.")
+
+    now = datetime.now(timezone.utc)
+    users = get_global_collection(settings, name=DASHBOARD_USERS_COLLECTION)
+    users.update_one(
+        {"google_sub": google_sub},
+        {
+            "$set": {
+                "google_sub": google_sub,
+                "email": profile.get("email"),
+                "email_verified": profile.get("email_verified"),
+                "google_name": profile.get("name"),
+                "google_given_name": profile.get("given_name"),
+                "google_family_name": profile.get("family_name"),
+                "google_picture": profile.get("picture"),
+                "updated_at": now,
+            },
+            "$setOnInsert": {"created_at": now},
+        },
+        upsert=True,
+    )
+    return users.find_one({"google_sub": google_sub}) or {}
+
+
+def _find_user_by_google_sub(settings: Settings, google_sub: str) -> dict[str, Any] | None:
+    if not google_sub:
+        return None
+    users = get_global_collection(settings, name=DASHBOARD_USERS_COLLECTION)
+    doc = users.find_one({"google_sub": google_sub})
+    return doc if isinstance(doc, dict) else None
+
+
+def _find_user_by_discord_id(settings: Settings, discord_user_id: str) -> dict[str, Any] | None:
+    if not discord_user_id:
+        return None
+    users = get_global_collection(settings, name=DASHBOARD_USERS_COLLECTION)
+    doc = users.find_one({"discord_user_id": discord_user_id})
+    return doc if isinstance(doc, dict) else None
+
+
+def _token_expires_at(expires_in: Any) -> datetime | None:
+    if expires_in is None:
+        return None
+    try:
+        expires = int(expires_in)
+    except (TypeError, ValueError):
+        return None
+    return datetime.now(timezone.utc) + timedelta(seconds=max(0, expires))
+
+
+def _link_discord_identity(
+    settings: Settings,
+    *,
+    google_sub: str,
+    discord_user: dict[str, Any],
+    token: dict[str, Any],
+) -> None:
+    discord_user_id = str(discord_user.get("id") or "").strip()
+    if not discord_user_id:
+        raise RuntimeError("Discord profile is missing id.")
+
+    now = datetime.now(timezone.utc)
+    update: dict[str, Any] = {
+        "google_sub": google_sub,
+        "discord_user_id": discord_user_id,
+        "discord_username": discord_user.get("username"),
+        "discord_discriminator": discord_user.get("discriminator"),
+        "discord_global_name": discord_user.get("global_name"),
+        "discord_avatar": discord_user.get("avatar"),
+        "discord_linked_at": now,
+        "updated_at": now,
+    }
+    access_token = str(token.get("access_token") or "").strip()
+    refresh_token = str(token.get("refresh_token") or "").strip()
+    if access_token:
+        update["discord_access_token"] = access_token
+    if refresh_token:
+        update["discord_refresh_token"] = _encrypt_token(refresh_token)
+    expires_at = _token_expires_at(token.get("expires_in"))
+    if expires_at is not None:
+        update["discord_token_expires_at"] = expires_at
+
+    users = get_global_collection(settings, name=DASHBOARD_USERS_COLLECTION)
+    existing = users.find_one({"discord_user_id": discord_user_id})
+    if isinstance(existing, dict):
+        existing_sub = str(existing.get("google_sub") or "").strip()
+        if existing_sub in {"", google_sub}:
+            users.update_one(
+                {"_id": existing.get("_id")},
+                {"$set": update, "$setOnInsert": {"created_at": now}},
+                upsert=True,
+            )
+            return
+    users.update_one(
+        {"google_sub": google_sub},
+        {"$set": update, "$setOnInsert": {"created_at": now}},
+        upsert=True,
+    )
 
 
 def _guild_icon_url(guild: dict[str, Any]) -> str | None:
@@ -637,6 +802,13 @@ def _oauth_config(settings: Settings) -> tuple[str, str, str]:
     return client_id, client_secret, redirect_uri
 
 
+def _google_oauth_config() -> tuple[str, str, str]:
+    client_id = _require_env("GOOGLE_CLIENT_ID")
+    client_secret = _require_env("GOOGLE_CLIENT_SECRET")
+    redirect_uri = _require_env("GOOGLE_REDIRECT_URI")
+    return client_id, client_secret, redirect_uri
+
+
 def _build_authorize_url(
     *,
     client_id: str,
@@ -658,6 +830,28 @@ def _build_authorize_url(
     if extra_params:
         query = f"{query}&{urllib.parse.urlencode(extra_params)}"
     return f"{AUTHORIZE_URL}?{query}"
+
+
+def _build_google_authorize_url(
+    *,
+    client_id: str,
+    redirect_uri: str,
+    state: str,
+    scope: str,
+    extra_params: dict[str, str] | None = None,
+) -> str:
+    query = urllib.parse.urlencode(
+        {
+            "client_id": client_id,
+            "redirect_uri": redirect_uri,
+            "response_type": "code",
+            "scope": scope,
+            "state": state,
+        }
+    )
+    if extra_params:
+        query = f"{query}&{urllib.parse.urlencode(extra_params)}"
+    return f"{GOOGLE_AUTHORIZE_URL}?{query}"
 
 
 async def _discord_get_json_with_auth(http: ClientSession, *, url: str, authorization: str) -> Any:
@@ -717,6 +911,59 @@ async def _exchange_code(
         data = await resp.json()
         if resp.status >= 400:
             raise web.HTTPBadRequest(text=f"OAuth token exchange failed ({resp.status}): {data}")
+        return data
+
+
+async def _google_exchange_code(
+    http: ClientSession,
+    *,
+    client_id: str,
+    client_secret: str,
+    redirect_uri: str,
+    code: str,
+) -> dict[str, Any]:
+    form = {
+        "client_id": client_id,
+        "client_secret": client_secret,
+        "grant_type": "authorization_code",
+        "code": code,
+        "redirect_uri": redirect_uri,
+    }
+    async with http.post(GOOGLE_TOKEN_URL, data=form) as resp:
+        data = await resp.json()
+        if resp.status >= 400:
+            raise web.HTTPBadRequest(text=f"Google token exchange failed ({resp.status}): {data}")
+        return data
+
+
+async def _refresh_discord_token(
+    http: ClientSession,
+    *,
+    client_id: str,
+    client_secret: str,
+    refresh_token: str,
+) -> dict[str, Any]:
+    form = {
+        "client_id": client_id,
+        "client_secret": client_secret,
+        "grant_type": "refresh_token",
+        "refresh_token": refresh_token,
+    }
+    async with http.post(TOKEN_URL, data=form) as resp:
+        data = await resp.json()
+        if resp.status >= 400:
+            raise web.HTTPBadRequest(text=f"Discord token refresh failed ({resp.status}): {data}")
+        return data
+
+
+async def _google_get_userinfo(http: ClientSession, *, access_token: str) -> dict[str, Any]:
+    headers = {"Authorization": f"Bearer {access_token}"}
+    async with http.get(GOOGLE_USERINFO_URL, headers=headers) as resp:
+        data = await resp.json()
+        if resp.status >= 400:
+            raise web.HTTPBadRequest(text=f"Google userinfo failed ({resp.status}): {data}")
+        if not isinstance(data, dict):
+            raise web.HTTPBadRequest(text="Google userinfo returned invalid payload.")
         return data
 
 
@@ -1713,6 +1960,7 @@ async def features_page(request: web.Request) -> web.Response:
 
 
 async def support_page(request: web.Request) -> web.Response:
+    session = request.get("session")
     support_discord = os.environ.get("SUPPORT_DISCORD_INVITE_URL", "").strip()
     support_email = os.environ.get("SUPPORT_EMAIL", "").strip()
     config = _dashboard_config(request)
@@ -1755,6 +2003,19 @@ async def support_page(request: web.Request) -> web.Response:
     else:
         issue_items.append("<li><span class='muted'>GitHub links unavailable (set PUBLIC_REPO_URL)</span></li>")
 
+    account_card = ""
+    if isinstance(session, SessionData):
+        account_card = f"""
+          <div class="card card-hover">
+            <p><strong>Account</strong></p>
+            <p class="muted mt-6">Manage your linked Discord identity.</p>
+            <form method="post" action="/disconnect/discord" class="mt-10">
+              <input type="hidden" name="csrf" value="{_escape_html(session.csrf_token)}" />
+              <button class="btn secondary" type="submit">Disconnect Discord</button>
+            </form>
+          </div>
+        """
+
     content = f"""
       <section class="section">
         <div class="card hero-card">
@@ -1786,6 +2047,7 @@ async def support_page(request: web.Request) -> web.Response:
               {"".join(issue_items)}
             </ul>
           </div>
+          {account_card}
         </div>
       </section>
     """
@@ -2173,7 +2435,6 @@ async def stats_api(request: web.Request) -> web.Response:
 
 
 async def login(request: web.Request) -> web.Response:
-    settings: Settings = request.app[SETTINGS_KEY]
     config = _dashboard_config(request)
     session = request.get("session")
     next_path = _sanitize_next_path(str(request.query.get("next") or "/app"))
@@ -2183,25 +2444,339 @@ async def login(request: web.Request) -> web.Response:
     if reason == "expired":
         return _session_expired_response(next_path=next_path)
 
-    client_id, _client_secret, redirect_uri = _oauth_config(settings)
+    client_id, _client_secret, redirect_uri = _google_oauth_config()
     states: Collection = request.app[STATE_COLLECTION_KEY]
     expires_at = _utc_now() + timedelta(seconds=config.state_ttl_seconds)
-    state = _insert_oauth_state(states=states, next_path=next_path, expires_at=expires_at)
+    state = _insert_oauth_state(
+        states=states,
+        next_path=next_path,
+        expires_at=expires_at,
+        flow="google_login",
+    )
+    authorize_url = _build_google_authorize_url(
+        client_id=client_id,
+        redirect_uri=redirect_uri,
+        state=state,
+        scope="openid email profile",
+    )
+    parsed = urllib.parse.urlparse(authorize_url)
+    if (
+        parsed.scheme != "https"
+        or parsed.netloc not in {"accounts.google.com"}
+        or parsed.path != "/o/oauth2/v2/auth"
+    ):
+        logging.error("event=oauth_authorize_url_invalid", extra=_log_extra(request))
+        raise web.HTTPInternalServerError(text="OAuth is misconfigured.")
+    raise web.HTTPFound(authorize_url)
+
+
+async def connect_discord_page(request: web.Request) -> web.Response:
+    settings: Settings = request.app[SETTINGS_KEY]
+    config = _dashboard_config(request)
+    state = str(request.query.get("state") or "").strip()
+    if not state:
+        raise web.HTTPBadRequest(text="Missing state.")
+
+    states: Collection = request.app[STATE_COLLECTION_KEY]
+    pending_state = states.find_one({"_id": state})
+    if not isinstance(pending_state, dict) or pending_state.get("flow") != "discord_connect":
+        return _oauth_error_response(
+            title="Login failed",
+            message="Discord connect state is invalid. Please log in again.",
+            next_path="/login",
+            status=400,
+        )
+
+    issued_at_value = pending_state.get("issued_at")
+    try:
+        issued_at = float(issued_at_value) if issued_at_value is not None else None
+    except (TypeError, ValueError):
+        issued_at = None
+    if issued_at is None or time.time() - issued_at > config.state_ttl_seconds:
+        return _oauth_error_response(
+            title="Login expired",
+            message="Your login attempt expired. Please log in again.",
+            next_path="/login",
+            status=400,
+        )
+
+    raw_data = pending_state.get("data")
+    email = ""
+    if isinstance(raw_data, dict):
+        email = str(raw_data.get("email") or "").strip()
+
+    client_id, _client_secret, redirect_uri = _oauth_config(settings)
     authorize_url = _build_authorize_url(
         client_id=client_id,
         redirect_uri=redirect_uri,
         state=state,
         scope="identify guilds",
+        extra_params={"prompt": "consent"},
     )
-    parsed = urllib.parse.urlparse(authorize_url)
-    if (
-        parsed.scheme != "https"
-        or parsed.netloc not in {"discord.com", "canary.discord.com", "ptb.discord.com"}
-        or parsed.path != "/oauth2/authorize"
-    ):
-        logging.error("event=oauth_authorize_url_invalid", extra=_log_extra(request))
-        raise web.HTTPInternalServerError(text="OAuth is misconfigured.")
-    raise web.HTTPFound(authorize_url)
+
+    content = f"""
+      <section class="section">
+        <div class="card hero-card">
+          <a class="back-link" href="/">&larr; Back</a>
+          <h1 class="mt-6 text-hero-sm">Connect Discord</h1>
+          <p class="muted mt-10">
+            Link your Discord account to manage servers in Offside.
+          </p>
+        </div>
+      </section>
+      <section class="section">
+        <div class="card">
+          <p class="muted">Signed in with Google{f': {_escape_html(email)}' if email else ''}.</p>
+          <div class="btn-group mt-12">
+            <a class="btn blue" href="{_escape_html(authorize_url)}">Connect Discord</a>
+            <a class="btn secondary" href="/logout">Sign out</a>
+          </div>
+        </div>
+      </section>
+    """
+    from offside_bot.web_templates import render, safe_html
+
+    page = render(
+        "pages/markdown_page.html",
+        title="Connect Discord",
+        description="Link your Discord account to manage servers.",
+        session=request.get("session"),
+        content=safe_html(content),
+    )
+    return web.Response(text=page, content_type="text/html")
+
+
+async def google_oauth_callback(request: web.Request) -> web.Response:
+    settings: Settings = request.app[SETTINGS_KEY]
+    config = _dashboard_config(request)
+    http: ClientSession = request.app[HTTP_SESSION_KEY]
+    request_id = _request_id(request)
+
+    code = str(request.query.get("code") or "").strip()
+    state = str(request.query.get("state") or "").strip()
+    error = str(request.query.get("error") or "").strip()
+    error_description = str(request.query.get("error_description") or "").strip()
+
+    next_path = "/"
+    issued_at: float | None = None
+    pending_state: dict[str, Any] | None = None
+    if state:
+        states: Collection = request.app[STATE_COLLECTION_KEY]
+        raw_state = states.find_one_and_delete({"_id": state})
+        pending_state = raw_state if isinstance(raw_state, dict) else None
+        issued_at_value = pending_state.get("issued_at") if pending_state else None
+        try:
+            issued_at = float(issued_at_value) if issued_at_value is not None else None
+        except (TypeError, ValueError):
+            issued_at = None
+        next_path = str(pending_state.get("next") or "/") if pending_state else "/"
+        next_path = _sanitize_next_path(next_path)
+
+    if error:
+        detail = f" ({error_description})" if error_description else ""
+        return _oauth_error_response(
+            title="Login failed",
+            message=f"Google returned an OAuth error: {error}{detail}",
+            next_path=next_path,
+            status=400,
+        )
+
+    if not state or not code:
+        return _oauth_error_response(
+            title="Login failed",
+            message="Missing code/state. Please try logging in again.",
+            next_path=next_path,
+            status=400,
+        )
+
+    if issued_at is None or time.time() - issued_at > config.state_ttl_seconds:
+        return _oauth_error_response(
+            title="Login expired",
+            message="Your login attempt expired. Please try logging in again.",
+            next_path=next_path,
+            status=400,
+        )
+
+    flow = str(pending_state.get("flow") or "") if pending_state else ""
+    if flow and flow != "google_login":
+        return _oauth_error_response(
+            title="Login failed",
+            message="Unexpected login flow. Please try again.",
+            next_path=next_path,
+            status=400,
+        )
+
+    try:
+        client_id, client_secret, redirect_uri = _google_oauth_config()
+        token = await _google_exchange_code(
+            http,
+            client_id=client_id,
+            client_secret=client_secret,
+            redirect_uri=redirect_uri,
+            code=code,
+        )
+    except web.HTTPException as exc:
+        detail = redact_text(str(exc.text))
+        logging.warning(
+            "event=google_oauth_exchange_failed request_id=%s status=%s detail=%s",
+            request_id,
+            exc.status,
+            detail,
+            extra=_log_extra(request, status=exc.status),
+        )
+        return _oauth_error_response(
+            title="Login failed",
+            message="Google token exchange failed. Please try again.",
+            next_path=next_path,
+            status=502,
+        )
+    except Exception:
+        logging.exception(
+            "event=google_oauth_exchange_failed_unhandled request_id=%s",
+            request_id,
+            extra=_log_extra(request),
+        )
+        return _oauth_error_response(
+            title="Login failed",
+            message="Google token exchange failed. Please try again.",
+            next_path=next_path,
+            status=502,
+        )
+
+    access_token = str(token.get("access_token") or "").strip()
+    if not access_token:
+        return _oauth_error_response(
+            title="Login failed",
+            message="Google did not return an access token. Please try again.",
+            next_path=next_path,
+            status=502,
+        )
+
+    try:
+        profile = await _google_get_userinfo(http, access_token=access_token)
+    except web.HTTPException as exc:
+        detail = redact_text(str(exc.text))
+        logging.warning(
+            "event=google_userinfo_failed request_id=%s status=%s detail=%s",
+            request_id,
+            exc.status,
+            detail,
+            extra=_log_extra(request, status=exc.status),
+        )
+        return _oauth_error_response(
+            title="Login failed",
+            message="Google profile lookup failed. Please try again.",
+            next_path=next_path,
+            status=502,
+        )
+
+    try:
+        user_doc = _upsert_google_user_record(settings, profile)
+    except Exception:
+        logging.exception("event=google_user_upsert_failed request_id=%s", request_id)
+        return _oauth_error_response(
+            title="Login failed",
+            message="Unable to save Google account. Please try again.",
+            next_path=next_path,
+            status=500,
+        )
+
+    google_sub = str(profile.get("sub") or "").strip()
+    if not google_sub:
+        return _oauth_error_response(
+            title="Login failed",
+            message="Google profile did not include a user id. Please try again.",
+            next_path=next_path,
+            status=500,
+        )
+
+    discord_user_id = str(user_doc.get("discord_user_id") or "").strip()
+    encrypted_refresh = str(user_doc.get("discord_refresh_token") or "").strip()
+    discord_access_token = str(user_doc.get("discord_access_token") or "").strip()
+    discord_token_expires_at = user_doc.get("discord_token_expires_at")
+    if isinstance(discord_token_expires_at, datetime) and discord_token_expires_at.tzinfo is None:
+        discord_token_expires_at = discord_token_expires_at.replace(tzinfo=timezone.utc)
+
+    refresh_token = ""
+    if encrypted_refresh:
+        try:
+            refresh_token = _decrypt_token(encrypted_refresh)
+        except Exception:
+            refresh_token = ""
+
+    now = datetime.now(timezone.utc)
+    token_valid = bool(discord_access_token)
+    if token_valid and isinstance(discord_token_expires_at, datetime):
+        token_valid = discord_token_expires_at > now + timedelta(seconds=30)
+
+    token_payload: dict[str, Any] | None = None
+    if refresh_token and not token_valid:
+        try:
+            discord_client_id, discord_client_secret, _redirect_uri = _oauth_config(settings)
+            token_payload = await _refresh_discord_token(
+                http,
+                client_id=discord_client_id,
+                client_secret=discord_client_secret,
+                refresh_token=refresh_token,
+            )
+            discord_access_token = str(token_payload.get("access_token") or "").strip()
+            token_valid = bool(discord_access_token)
+        except web.HTTPException as exc:
+            logging.warning(
+                "event=discord_refresh_failed request_id=%s status=%s detail=%s",
+                request_id,
+                exc.status,
+                redact_text(str(exc.text)),
+                extra=_log_extra(request, status=exc.status),
+            )
+            token_valid = False
+        except Exception:
+            logging.exception("event=discord_refresh_failed_unhandled request_id=%s", request_id)
+            token_valid = False
+
+    if not discord_user_id or not token_valid:
+        connect_state = _insert_oauth_state(
+            states=request.app[STATE_COLLECTION_KEY],
+            next_path=next_path,
+            expires_at=_utc_now() + timedelta(seconds=config.state_ttl_seconds),
+            flow="discord_connect",
+            data={"google_sub": google_sub, "email": profile.get("email")},
+        )
+        raise web.HTTPFound(f"/connect/discord?state={connect_state}")
+
+    try:
+        discord_user = await _discord_get_json(http, url=ME_URL, access_token=discord_access_token)
+        guilds = await _discord_get_json(http, url=MY_GUILDS_URL, access_token=discord_access_token)
+    except web.HTTPException as exc:
+        logging.warning(
+            "event=discord_api_failed request_id=%s status=%s detail=%s",
+            request_id,
+            exc.status,
+            redact_text(str(exc.text)),
+            extra=_log_extra(request, status=exc.status),
+        )
+        connect_state = _insert_oauth_state(
+            states=request.app[STATE_COLLECTION_KEY],
+            next_path=next_path,
+            expires_at=_utc_now() + timedelta(seconds=config.state_ttl_seconds),
+            flow="discord_connect",
+            data={"google_sub": google_sub, "email": profile.get("email")},
+        )
+        raise web.HTTPFound(f"/connect/discord?state={connect_state}")
+
+    if token_payload is not None:
+        try:
+            _link_discord_identity(settings, google_sub=google_sub, discord_user=discord_user, token=token_payload)
+        except Exception:
+            logging.exception("event=discord_link_update_failed request_id=%s", request_id)
+
+    resp = _create_session_from_discord(
+        request,
+        user=discord_user,
+        guilds=[g for g in guilds if isinstance(g, dict)],
+        next_path=next_path,
+    )
+    raise resp
 
 
 async def install(request: web.Request) -> web.Response:
@@ -2223,7 +2798,12 @@ async def install(request: web.Request) -> web.Response:
 
     states: Collection = request.app[STATE_COLLECTION_KEY]
     expires_at = _utc_now() + timedelta(seconds=config.state_ttl_seconds)
-    state = _insert_oauth_state(states=states, next_path=next_path, expires_at=expires_at)
+    state = _insert_oauth_state(
+        states=states,
+        next_path=next_path,
+        expires_at=expires_at,
+        flow="discord_install",
+    )
     authorize_url = _build_authorize_url(
         client_id=client_id,
         redirect_uri=redirect_uri,
@@ -2290,6 +2870,79 @@ def _oauth_error_response(
     return web.Response(text=page, status=status, content_type="text/html")
 
 
+def _create_session_from_discord(
+    request: web.Request,
+    *,
+    user: dict[str, Any],
+    guilds: list[dict[str, Any]],
+    next_path: str,
+    installed_guild_id: str = "",
+) -> web.StreamResponse:
+    settings: Settings = request.app[SETTINGS_KEY]
+    config = _dashboard_config(request)
+
+    all_guilds = [g for g in guilds if isinstance(g, dict)]
+    owner_guilds = [g for g in all_guilds if _guild_is_eligible(g)]
+
+    try:
+        _upsert_user_record(settings, user)
+    except Exception:
+        logging.exception(
+            "event=upsert_user_record_failed request_id=%s",
+            _request_id(request),
+            extra=_log_extra(request),
+        )
+
+    last_guild_id = int(installed_guild_id) if installed_guild_id.isdigit() else None
+    if installed_guild_id.isdigit():
+        for g in owner_guilds:
+            if str(g.get("id")) == installed_guild_id:
+                next_path = f"/guild/{installed_guild_id}"
+                break
+
+    sessions: Collection = request.app[SESSION_COLLECTION_KEY]
+    expires_at = _utc_now() + timedelta(seconds=config.session_ttl_seconds)
+    csrf_token = secrets.token_urlsafe(24)
+    now_ts = time.time()
+    session_id = _insert_unique(
+        sessions,
+        lambda: {
+            "_id": secrets.token_urlsafe(32),
+            "created_at": now_ts,
+            "last_seen_at": now_ts,
+            "guilds_fetched_at": now_ts,
+            "expires_at": expires_at,
+            "user": user,
+            "owner_guilds": owner_guilds,
+            "all_guilds": all_guilds,
+            "csrf_token": csrf_token,
+            "last_guild_id": last_guild_id,
+        },
+    )
+    user_id = str(user.get("id") or "").strip()
+    distinct_id = f"discord:{user_id}" if user_id else None
+    login_props = {
+        "guild_count": len(all_guilds),
+        "owner_guild_count": len(owner_guilds),
+    }
+    if installed_guild_id.isdigit():
+        login_props["installed_guild_id"] = int(installed_guild_id)
+    _track_event(request, event="login_success", distinct_id=distinct_id, properties=login_props)
+    _track_event(
+        request,
+        event="connect_discord_success",
+        distinct_id=distinct_id,
+        properties={"flow": "discord"},
+    )
+
+    redirect_path = _sanitize_next_path(next_path)
+    if redirect_path == "/":
+        redirect_path = "/app"
+    resp = web.HTTPFound(redirect_path)
+    _set_session_cookie(resp, request=request, session_id=session_id)
+    return resp
+
+
 async def oauth_callback(request: web.Request) -> web.Response:
     settings: Settings = request.app[SETTINGS_KEY]
     config = _dashboard_config(request)
@@ -2305,6 +2958,8 @@ async def oauth_callback(request: web.Request) -> web.Response:
     next_path = "/"
     issued_at: float | None = None
     pending_state: dict[str, Any] | None = None
+    flow = "discord_login"
+    state_data: dict[str, Any] = {}
     if state:
         states: Collection = request.app[STATE_COLLECTION_KEY]
         raw_state = states.find_one_and_delete({"_id": state})
@@ -2316,6 +2971,10 @@ async def oauth_callback(request: web.Request) -> web.Response:
             issued_at = None
         next_path = str(pending_state.get("next") or "/") if pending_state else "/"
         next_path = _sanitize_next_path(next_path)
+        flow = str(pending_state.get("flow") or "discord_login")
+        raw_data = pending_state.get("data")
+        if isinstance(raw_data, dict):
+            state_data = raw_data
 
     if error:
         if error == "access_denied":
@@ -2426,66 +3085,34 @@ async def oauth_callback(request: web.Request) -> web.Response:
             next_path=next_path,
             status=502,
         )
-    all_guilds = [g for g in guilds if isinstance(g, dict)]
-    owner_guilds = [g for g in all_guilds if _guild_is_eligible(g)]
-
-    try:
-        _upsert_user_record(settings, user)
-    except Exception:
-        logging.exception(
-            "event=upsert_user_record_failed request_id=%s",
-            request_id,
-            extra=_log_extra(request),
-        )
+    if flow == "discord_connect":
+        google_sub = str(state_data.get("google_sub") or "").strip()
+        if not google_sub:
+            return _oauth_error_response(
+                title="Login failed",
+                message="Discord connect is missing the Google account state. Please log in again.",
+                next_path=next_path,
+                status=400,
+            )
+        discord_user_id = str(user.get("id") or "").strip()
+        existing = _find_user_by_discord_id(settings, discord_user_id)
+        if existing and str(existing.get("google_sub") or "").strip() not in {"", google_sub}:
+            return _oauth_error_response(
+                title="Discord already linked",
+                message="This Discord account is already linked to another Google login.",
+                next_path=next_path,
+                status=400,
+            )
+        _link_discord_identity(settings, google_sub=google_sub, discord_user=user, token=token)
 
     installed_guild_id = request.query.get("guild_id", "").strip()
-    last_guild_id = int(installed_guild_id) if installed_guild_id.isdigit() else None
-    if installed_guild_id.isdigit():
-        for g in owner_guilds:
-            if str(g.get("id")) == installed_guild_id:
-                next_path = f"/guild/{installed_guild_id}"
-                break
-
-    sessions: Collection = request.app[SESSION_COLLECTION_KEY]
-    expires_at = _utc_now() + timedelta(seconds=config.session_ttl_seconds)
-    csrf_token = secrets.token_urlsafe(24)
-    now_ts = time.time()
-    session_id = _insert_unique(
-        sessions,
-        lambda: {
-            "_id": secrets.token_urlsafe(32),
-            "created_at": now_ts,
-            "last_seen_at": now_ts,
-            "guilds_fetched_at": now_ts,
-            "expires_at": expires_at,
-            "user": user,
-            "owner_guilds": owner_guilds,
-            "all_guilds": all_guilds,
-            "csrf_token": csrf_token,
-            "last_guild_id": last_guild_id,
-        },
-    )
-    user_id = str(user.get("id") or "").strip()
-    distinct_id = f"discord:{user_id}" if user_id else None
-    login_props = {
-        "guild_count": len(all_guilds),
-        "owner_guild_count": len(owner_guilds),
-    }
-    if installed_guild_id.isdigit():
-        login_props["installed_guild_id"] = int(installed_guild_id)
-    _track_event(request, event="login_success", distinct_id=distinct_id, properties=login_props)
-    _track_event(
+    resp = _create_session_from_discord(
         request,
-        event="connect_discord_success",
-        distinct_id=distinct_id,
-        properties={"flow": "discord"},
+        user=user,
+        guilds=[g for g in guilds if isinstance(g, dict)],
+        next_path=next_path,
+        installed_guild_id=installed_guild_id,
     )
-
-    redirect_path = _sanitize_next_path(next_path)
-    if redirect_path == "/":
-        redirect_path = "/app"
-    resp = web.HTTPFound(redirect_path)
-    _set_session_cookie(resp, request=request, session_id=session_id)
     raise resp
 
 
@@ -2496,6 +3123,46 @@ async def logout(request: web.Request) -> web.Response:
         sessions: Collection = request.app[SESSION_COLLECTION_KEY]
         sessions.delete_one({"_id": session_id})
     resp = web.HTTPFound("/")
+    resp.del_cookie(COOKIE_NAME)
+    raise resp
+
+
+async def disconnect_discord(request: web.Request) -> web.Response:
+    session = _require_session(request)
+    settings: Settings = request.app[SETTINGS_KEY]
+    data = await request.post()
+    if str(data.get("csrf", "")) != session.csrf_token:
+        raise web.HTTPBadRequest(text="Invalid CSRF token.")
+
+    discord_user_id = str(session.user.get("id") or "").strip()
+    if not discord_user_id:
+        raise web.HTTPBadRequest(text="Missing Discord user.")
+
+    users = get_global_collection(settings, name=DASHBOARD_USERS_COLLECTION)
+    users.update_one(
+        {"discord_user_id": discord_user_id},
+        {
+            "$unset": {
+                "discord_user_id": "",
+                "discord_username": "",
+                "discord_discriminator": "",
+                "discord_global_name": "",
+                "discord_avatar": "",
+                "discord_access_token": "",
+                "discord_refresh_token": "",
+                "discord_token_expires_at": "",
+                "discord_linked_at": "",
+            },
+            "$set": {"updated_at": datetime.now(timezone.utc)},
+        },
+    )
+
+    raw_cookie = request.cookies.get(COOKIE_NAME)
+    session_id, _cookie_needs_refresh = _decode_session_cookie(raw_cookie)
+    if session_id:
+        sessions: Collection = request.app[SESSION_COLLECTION_KEY]
+        sessions.delete_one({"_id": session_id})
+    resp = web.HTTPFound("/login")
     resp.del_cookie(COOKIE_NAME)
     raise resp
 
@@ -5058,9 +5725,12 @@ def create_app(*, settings: Settings | None = None) -> web.Application:
     app.router.add_get("/help/{slug}", help_page)
     app.router.add_get("/commands", commands_page)
     app.router.add_get("/login", login)
+    app.router.add_get("/connect/discord", connect_discord_page)
     app.router.add_get("/install", install)
+    app.router.add_get("/oauth/google/callback", google_oauth_callback)
     app.router.add_get("/oauth/callback", oauth_callback)
     app.router.add_get("/logout", logout)
+    app.router.add_post("/disconnect/discord", disconnect_discord)
     app.router.add_get("/app/upgrade", upgrade_redirect)
     app.router.add_get("/app/billing", billing_page)
     app.router.add_post("/app/billing/portal", billing_portal)
