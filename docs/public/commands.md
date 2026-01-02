@@ -32,7 +32,7 @@
 
 ### /player_pool_index
 
-- Description: Post/update a pinned Player Pool index in the recruitment boards channel.
+- Description: Post/update a pinned Player Pool index in the recruit listing channel.
 - Permissions: Staff
 
 
