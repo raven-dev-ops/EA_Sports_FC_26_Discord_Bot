@@ -303,6 +303,7 @@ class OffsideBot(commands.AutoShardedBot):
             try:
                 updated = await ensure_offside_roles(
                     guild,
+                    settings=settings,
                     existing_config=updated,
                     actions=actions,
                 )

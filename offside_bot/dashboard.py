@@ -3312,7 +3312,14 @@ async def guild_settings_save(request: web.Request) -> web.Response:
             continue
         _apply_int_field(field=field, raw_value=data.get(field), valid_ids=valid_role_ids, kind="role")
 
+    if not premium_report_enabled:
+        attempted_channel = str(data.get("channel_premium_coaches_id") or "").strip()
+        if attempted_channel:
+            raise web.HTTPForbidden(text="Pro coaches channel requires Pro.")
+
     for field, _label in GUILD_CHANNEL_FIELDS:
+        if field == "channel_premium_coaches_id" and not premium_report_enabled:
+            continue
         _apply_int_field(
             field=field,
             raw_value=data.get(field),
@@ -3999,21 +4006,35 @@ async def guild_setup_wizard_page(request: web.Request) -> web.Response:
             "action_label": "Review",
             "action_href": f"/guild/{guild_id}/settings",
         },
-        {
-            "title": "Step 4: Post portals",
-            "status": portals_status,
-            "details": portals_details,
-            "action_label": "Ops",
-            "action_href": f"/guild/{guild_id}/ops",
-        },
-        {
-            "title": "Step 5: Verify",
-            "status": _status("OK", "ok") if ready else _status("PENDING", "warn"),
-            "details": "Setup wizard complete." if ready else "Run setup and repost portals, then refresh.",
-            "action_label": "Overview",
-            "action_href": f"/guild/{guild_id}/overview",
-        },
     ]
+    if not is_pro:
+        steps.append(
+            {
+                "title": "Pro modules (locked)",
+                "status": _status("LOCKED", "warn"),
+                "details": "Upgrade to unlock Club Manager role and Pro coaches channel.",
+                "action_label": "Upgrade",
+                "action_href": f"/app/upgrade?guild_id={guild_id}&from=setup-wizard&section=setup",
+            }
+        )
+    steps.extend(
+        [
+            {
+                "title": "Step 4: Post portals",
+                "status": portals_status,
+                "details": portals_details,
+                "action_label": "Ops",
+                "action_href": f"/guild/{guild_id}/ops",
+            },
+            {
+                "title": "Step 5: Verify",
+                "status": _status("OK", "ok") if ready else _status("PENDING", "warn"),
+                "details": "Setup wizard complete." if ready else "Run setup and repost portals, then refresh.",
+                "action_label": "Overview",
+                "action_href": f"/guild/{guild_id}/overview",
+            },
+        ]
+    )
 
     queued = bool(request.query.get("queued", "").strip())
 

@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 
 import discord
 
+from services import entitlements_service
 from utils.channel_routing import resolve_channel_id
 from utils.discord_wrappers import edit_message, fetch_channel, send_message
 from utils.embeds import DEFAULT_COLOR, make_embed
@@ -142,6 +143,11 @@ async def post_listing_channel_instructions(
             field="channel_manager_portal_id",
             test_mode=False,
         )
+        premium_report_enabled = entitlements_service.is_feature_enabled(
+            settings,
+            guild_id=guild.id,
+            feature_key=entitlements_service.FEATURE_PREMIUM_COACHES_REPORT,
+        )
 
         listing_specs = [
             (
@@ -152,6 +158,7 @@ async def post_listing_channel_instructions(
                     description="Free agent profiles are posted here automatically when a player registers/updates.",
                     portal_ref=_format_channel_ref(recruit_portal_id, fallback_name="recruit-portal"),
                 ),
+                True,
             ),
             (
                 "channel_club_listing_id",
@@ -164,6 +171,7 @@ async def post_listing_channel_instructions(
                         "Clubs: Contact staff to submit a club ad."
                     ),
                 ),
+                True,
             ),
             (
                 "channel_premium_coaches_id",
@@ -173,10 +181,13 @@ async def post_listing_channel_instructions(
                     description="Pro coach listings are managed by the bot (openings/practice times).",
                     portal_ref=_format_channel_ref(manager_portal_id, fallback_name="managers-portal"),
                 ),
+                premium_report_enabled,
             ),
         ]
 
-        for field, fallback_name, embed in listing_specs:
+        for field, fallback_name, embed, enabled in listing_specs:
+            if not enabled:
+                continue
             channel_id = resolve_channel_id(
                 settings,
                 guild_id=guild.id,

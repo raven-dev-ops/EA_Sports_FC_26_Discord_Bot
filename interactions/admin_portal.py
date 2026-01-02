@@ -443,7 +443,12 @@ class AdminPortalView(SafeView):
         updated: dict[str, Any] = dict(existing)
         if me.guild_permissions.manage_roles:
             try:
-                updated = await ensure_offside_roles(guild, existing_config=updated, actions=actions)
+                updated = await ensure_offside_roles(
+                    guild,
+                    settings=settings,
+                    existing_config=updated,
+                    actions=actions,
+                )
             except discord.DiscordException as exc:
                 logging.warning("Verify Setup: role setup failed (guild=%s): %s", guild.id, exc)
                 actions.append("Role setup failed (missing permissions).")

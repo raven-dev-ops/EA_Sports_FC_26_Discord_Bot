@@ -4,6 +4,8 @@ from typing import Any
 
 import discord
 
+from config import Settings
+from services import entitlements_service
 TEAM_COACH_ROLE_NAME = "Team Coach"
 CLUB_MANAGER_ROLE_NAME = "Club Manager"
 LEAGUE_STAFF_ROLE_NAME = "League Staff"
@@ -23,6 +25,7 @@ LEGACY_PRO_PLAYER_ROLE_NAMES = ("Premium Player",)
 async def ensure_offside_roles(
     guild: discord.Guild,
     *,
+    settings: Settings | None,
     existing_config: dict[str, Any] | None,
     actions: list[str],
 ) -> dict[str, Any]:
@@ -30,6 +33,13 @@ async def ensure_offside_roles(
     Ensure Offside roles exist and return an updated guild config payload.
     """
     config: dict[str, Any] = dict(existing_config or {})
+    is_pro = False
+    if settings is not None:
+        try:
+            plan = entitlements_service.get_guild_plan(settings, guild_id=guild.id)
+            is_pro = plan == entitlements_service.PLAN_PRO
+        except Exception:
+            is_pro = False
 
     me = guild.me
     if me is None:
@@ -47,16 +57,20 @@ async def ensure_offside_roles(
         or _parse_int(config.get("role_coach_id")),
         actions=actions,
     )
-    club_manager_role = await _ensure_role(
-        guild,
-        name=CLUB_MANAGER_ROLE_NAME,
-        aliases=LEGACY_CLUB_MANAGER_ROLE_NAMES,
-        existing_role_id=_parse_int(config.get("role_club_manager_id"))
-        or _parse_int(config.get("role_manager_id"))
-        or _parse_int(config.get("role_coach_premium_plus_id"))
-        or _parse_int(config.get("role_coach_premium_id")),
-        actions=actions,
-    )
+    club_manager_role: discord.Role | None = None
+    if is_pro:
+        club_manager_role = await _ensure_role(
+            guild,
+            name=CLUB_MANAGER_ROLE_NAME,
+            aliases=LEGACY_CLUB_MANAGER_ROLE_NAMES,
+            existing_role_id=_parse_int(config.get("role_club_manager_id"))
+            or _parse_int(config.get("role_manager_id"))
+            or _parse_int(config.get("role_coach_premium_plus_id"))
+            or _parse_int(config.get("role_coach_premium_id")),
+            actions=actions,
+        )
+    else:
+        actions.append("Skipped Club Manager role (requires Pro).")
     league_staff_role = await _ensure_role(
         guild,
         name=LEAGUE_STAFF_ROLE_NAME,
@@ -98,7 +112,8 @@ async def ensure_offside_roles(
     )
 
     config["role_team_coach_id"] = team_coach_role.id
-    config["role_club_manager_id"] = club_manager_role.id
+    if club_manager_role is not None:
+        config["role_club_manager_id"] = club_manager_role.id
     config["role_league_staff_id"] = league_staff_role.id
     config["role_league_owner_id"] = league_owner_role.id
     config["role_free_agent_id"] = free_agent_role.id
@@ -107,14 +122,10 @@ async def ensure_offside_roles(
 
     staff_role_ids = _parse_int_set(config.get(STAFF_ROLE_IDS_KEY))
     updated_staff_role_ids = set(staff_role_ids)
-    updated_staff_role_ids.update(
-        {
-            team_coach_role.id,
-            club_manager_role.id,
-            league_staff_role.id,
-            league_owner_role.id,
-        }
-    )
+    base_staff_roles = {team_coach_role.id, league_staff_role.id, league_owner_role.id}
+    if club_manager_role is not None:
+        base_staff_roles.add(club_manager_role.id)
+    updated_staff_role_ids.update(base_staff_roles)
     if updated_staff_role_ids != staff_role_ids:
         config[STAFF_ROLE_IDS_KEY] = sorted(updated_staff_role_ids)
         actions.append("Updated staff role IDs to include Owner/Manager roles.")

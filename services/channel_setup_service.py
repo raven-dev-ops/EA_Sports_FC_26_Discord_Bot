@@ -6,6 +6,7 @@ from typing import Any
 import discord
 
 from config import Settings
+from services import entitlements_service
 
 DASHBOARD_CATEGORY_NAME = "--OFFSIDE DASHBOARD--"
 REPORTS_CATEGORY_NAME = "--OFFSIDE REPORTS--"
@@ -42,6 +43,8 @@ async def ensure_offside_channels(
     """
     config: dict[str, Any] = dict(existing_config or {})
     actions: list[str] = []
+    plan = entitlements_service.get_guild_plan(settings, guild_id=guild.id)
+    is_pro = plan == entitlements_service.PLAN_PRO
 
     bot_member = guild.me
     staff_roles = _resolve_staff_roles(
@@ -79,12 +82,15 @@ async def ensure_offside_channels(
         dashboard_category=dashboard_category,
         actions=actions,
     )
-    await _migrate_pro_coaches_channel(
-        guild,
-        config=config,
-        reports_category=reports_category,
-        actions=actions,
-    )
+    if is_pro:
+        await _migrate_pro_coaches_channel(
+            guild,
+            config=config,
+            reports_category=reports_category,
+            actions=actions,
+        )
+    else:
+        actions.append("Skipped pro coaches channel migration (requires Pro).")
     await _migrate_recruitment_boards_channel(
         guild,
         config=config,
@@ -188,8 +194,11 @@ async def ensure_offside_channels(
     reports_specs: list[tuple[str, str]] = [
         (RECRUITMENT_BOARDS_CHANNEL_NAME, "channel_recruit_listing_id"),
         (CLUB_LISTING_CHANNEL_NAME, "channel_club_listing_id"),
-        (PRO_COACHES_CHANNEL_NAME, "channel_premium_coaches_id"),
     ]
+    if is_pro:
+        reports_specs.append((PRO_COACHES_CHANNEL_NAME, "channel_premium_coaches_id"))
+    else:
+        actions.append("Skipped pro coaches channel creation (requires Pro).")
     reports_overwrites = _public_readonly_overwrites(guild, staff_roles, bot_member)
     for name, key in reports_specs:
         try:
