@@ -307,6 +307,15 @@ def _guild_section_url(guild_id: str, *, section: str) -> str:
     return f"/guild/{gid}"
 
 
+def _plan_badge(plan: str | None) -> tuple[str, str]:
+    normalized = str(plan or "").strip().lower()
+    if normalized == entitlements_service.PLAN_ENTERPRISE:
+        return "ENTERPRISE", "pro"
+    if normalized == entitlements_service.PLAN_PRO:
+        return "PRO", "pro"
+    return "FREE", "free"
+
+
 def _app_shell(
     *,
     settings: Settings,
@@ -343,11 +352,12 @@ def _app_shell(
     plan_notice: dict[str, Any] | None = None
     if selected_guild_id is not None:
         guild_plan = entitlements_service.get_guild_plan(settings, guild_id=selected_guild_id)
-        plan_badge = {"label": str(guild_plan).upper(), "kind": str(guild_plan)}
-        if settings.mongodb_uri and guild_plan != entitlements_service.PLAN_PRO:
+        plan_label, plan_kind = _plan_badge(guild_plan)
+        plan_badge = {"label": plan_label, "kind": plan_kind}
+        if settings.mongodb_uri and not entitlements_service.is_paid_plan(guild_plan):
             subscription = get_guild_subscription(settings, guild_id=selected_guild_id) or {}
             if isinstance(subscription, dict) and (
-                str(subscription.get("plan") or "").strip().lower() == entitlements_service.PLAN_PRO
+                entitlements_service.is_paid_plan(subscription.get("plan"))
                 or subscription.get("customer_id")
                 or subscription.get("subscription_id")
             ):
@@ -394,7 +404,7 @@ def _app_shell(
             invite_cta = {"label": "Invite bot", "href": invite_href, "variant": "blue"}
 
     nav_guild = str(selected_guild_id or "")
-    is_pro = guild_plan == entitlements_service.PLAN_PRO
+    is_pro = entitlements_service.is_paid_plan(guild_plan)
     is_owner = bool(selected_guild_id and _guild_is_owner(session, selected_guild_id))
     nav_items: list[dict[str, Any]] = []
     nav_groups: list[dict[str, Any]] = []
@@ -587,7 +597,7 @@ def _owner_locked_page(
 
 def _require_pro_plan_for_ops(settings: Settings, guild_id: int) -> None:
     plan = entitlements_service.get_guild_plan(settings, guild_id=guild_id)
-    if plan != entitlements_service.PLAN_PRO:
+    if not entitlements_service.is_paid_plan(plan):
         raise web.HTTPForbidden(text="Ops tasks are available on the Pro plan.")
 
 
@@ -1483,10 +1493,11 @@ async def app_index(request: web.Request) -> web.Response:
         plan = None
         plan_label = ""
         plan_class = ""
+        plan_segment = "free"
         if eligible and gid_str.isdigit():
             plan = entitlements_service.get_guild_plan(settings, guild_id=int(gid_str))
-            plan_label = str(plan).upper()
-            plan_class = str(plan)
+            plan_label, plan_class = _plan_badge(plan)
+            plan_segment = "pro" if entitlements_service.is_paid_plan(plan) else "free"
         install_label = ""
         install_class = ""
         install_status: bool | None = None
@@ -1507,7 +1518,7 @@ async def app_index(request: web.Request) -> web.Response:
                 install_class = "warn"
         icon_url = _guild_icon_url(g)
         fallback = (name[:2] or "").upper()
-        show_upgrade = bool(eligible and plan and plan != entitlements_service.PLAN_PRO)
+        show_upgrade = bool(eligible and plan and not entitlements_service.is_paid_plan(plan))
         show_invite = bool(eligible and install_status is not True)
         invite_class = "blue" if install_status is False else "secondary"
         cards.append(
@@ -1517,6 +1528,7 @@ async def app_index(request: web.Request) -> web.Response:
                 "icon_url": icon_url or "",
                 "fallback": fallback,
                 "eligible": eligible,
+                "open_href": f"/app/guild/{gid_str}/{plan_segment}",
                 "plan_label": plan_label,
                 "plan_class": plan_class,
                 "install_label": install_label,
@@ -1975,7 +1987,9 @@ async def admin_stripe_resync(request: web.Request) -> web.Response:
         if target_guild_id is None:
             raise RuntimeError("Unable to resolve guild_id for subscription.")
 
-        plan = str(metadata.get("plan") or (sub_doc.get("plan") if sub_doc else "") or entitlements_service.PLAN_PRO)
+        plan = entitlements_service.normalize_plan(
+            metadata.get("plan") or (sub_doc.get("plan") if sub_doc else "") or entitlements_service.PLAN_PRO
+        )
         status = str(sub.get("status") if hasattr(sub, "get") else getattr(sub, "status", "unknown") or "unknown")
         period_end_raw = sub.get("current_period_end") if hasattr(sub, "get") else getattr(sub, "current_period_end", None)
         period_end = None
@@ -1986,7 +2000,7 @@ async def admin_stripe_resync(request: web.Request) -> web.Response:
         upsert_guild_subscription(
             settings,
             guild_id=target_guild_id,
-            plan=str(plan).strip().lower(),
+            plan=plan,
             status=str(status).strip().lower(),
             period_end=period_end,
             customer_id=str(customer_id) if customer_id else None,
@@ -2698,7 +2712,7 @@ async def guild_settings_page(request: web.Request) -> web.Response:
         cfg = {}
 
     guild_plan = entitlements_service.get_guild_plan(settings, guild_id=guild_id)
-    is_pro = guild_plan == entitlements_service.PLAN_PRO
+    is_pro = entitlements_service.is_paid_plan(guild_plan)
     premium_tiers_enabled = is_pro
     premium_report_enabled = is_pro
     fc25_stats_enabled = is_pro
@@ -2998,7 +3012,7 @@ async def guild_settings_save(request: web.Request) -> web.Response:
         raise web.HTTPBadRequest(text="Invalid CSRF token.")
 
     plan = entitlements_service.get_guild_plan(settings, guild_id=guild_id)
-    is_pro = plan == entitlements_service.PLAN_PRO
+    is_pro = entitlements_service.is_paid_plan(plan)
     premium_tiers_enabled = is_pro
     premium_report_enabled = is_pro
     fc25_stats_enabled = is_pro
@@ -3152,6 +3166,7 @@ async def guild_page(request: web.Request) -> web.Response:
     installed, _install_error = await _detect_bot_installed(request, guild_id=guild_id)
     analytics = get_guild_analytics(settings, guild_id=guild_id)
     plan = entitlements_service.get_guild_plan(settings, guild_id=guild_id)
+    plan_label, plan_class = _plan_badge(plan)
 
     record_counts = [
         {"record_type": rt, "count": count}
@@ -3165,8 +3180,8 @@ async def guild_page(request: web.Request) -> web.Response:
     content = render(
         "pages/dashboard/guild_analytics.html",
         guild_id=guild_id,
-        plan_label=str(plan).upper(),
-        plan_class=str(plan),
+        plan_label=plan_label,
+        plan_class=plan_class,
         db_name=analytics.db_name,
         generated_at=analytics.generated_at.isoformat(),
         analytics_json_href=f"/api/guild/{guild_id}/analytics.json",
@@ -3190,6 +3205,20 @@ async def guild_page(request: web.Request) -> web.Response:
         ),
         content_type="text/html",
     )
+
+
+async def guild_plan_page(request: web.Request) -> web.Response:
+    session = _require_session(request)
+    settings: Settings = request.app[SETTINGS_KEY]
+
+    guild_id_str = request.match_info["guild_id"]
+    guild_id = _require_owned_guild(session, settings=settings, path=request.path_qs, guild_id=guild_id_str)
+    plan_segment = str(request.match_info.get("plan") or "").strip().lower()
+    actual_plan = entitlements_service.get_guild_plan(settings, guild_id=guild_id)
+    expected_segment = "pro" if entitlements_service.is_paid_plan(actual_plan) else "free"
+    if plan_segment != expected_segment:
+        raise web.HTTPFound(f"/app/guild/{guild_id}/{expected_segment}")
+    return await guild_overview_page(request)
 
 
 async def _channel_has_recent_bot_message(
@@ -3493,7 +3522,8 @@ async def guild_setup_wizard_page(request: web.Request) -> web.Response:
     guild_id = _require_owned_guild(session, settings=settings, path=request.path_qs, guild_id=guild_id_str)
 
     plan = entitlements_service.get_guild_plan(settings, guild_id=guild_id)
-    is_pro = plan == entitlements_service.PLAN_PRO
+    is_pro = entitlements_service.is_paid_plan(plan)
+    plan_label, plan_class = _plan_badge(plan)
 
     installed, install_error = await _detect_bot_installed(request, guild_id=guild_id)
 
@@ -3807,8 +3837,8 @@ async def guild_setup_wizard_page(request: web.Request) -> web.Response:
     content = render(
         "pages/dashboard/guild_setup_wizard.html",
         guild_id=guild_id,
-        plan_label=str(plan).upper(),
-        plan_class=str(plan),
+        plan_label=plan_label,
+        plan_class=plan_class,
         ready_status=ready_status,
         ready_details=ready_details,
         actions_disabled=actions_disabled,
@@ -3932,9 +3962,8 @@ async def guild_permissions_page(request: web.Request) -> web.Response:
             cfg = get_guild_config(guild_id)
         except Exception:
             cfg = {}
-        is_pro = (
+        is_pro = entitlements_service.is_paid_plan(
             entitlements_service.get_guild_plan(settings, guild_id=guild_id)
-            == entitlements_service.PLAN_PRO
         )
 
         def _best_role_id_by_name(name: str) -> int | None:
@@ -4085,7 +4114,7 @@ async def guild_audit_page(request: web.Request) -> web.Response:
 
     installed, _install_error = await _detect_bot_installed(request, guild_id=guild_id)
     plan = entitlements_service.get_guild_plan(settings, guild_id=guild_id)
-    if plan != entitlements_service.PLAN_PRO:
+    if not entitlements_service.is_paid_plan(plan):
         return _pro_locked_page(
             settings=settings,
             session=session,
@@ -4179,7 +4208,7 @@ async def guild_audit_csv(request: web.Request) -> web.Response:
     guild_id_str = request.match_info["guild_id"]
     guild_id = _require_owned_guild(session, settings=settings, path=request.path_qs, guild_id=guild_id_str)
     plan = entitlements_service.get_guild_plan(settings, guild_id=guild_id)
-    if plan != entitlements_service.PLAN_PRO:
+    if not entitlements_service.is_paid_plan(plan):
         return _pro_locked_page(
             settings=settings,
             session=session,
@@ -4197,7 +4226,7 @@ async def guild_audit_csv(request: web.Request) -> web.Response:
         )
 
     plan = entitlements_service.get_guild_plan(settings, guild_id=guild_id)
-    if plan != entitlements_service.PLAN_PRO:
+    if not entitlements_service.is_paid_plan(plan):
         raise web.HTTPForbidden(text="Audit Log export is available on the Pro plan.")
 
     limit = _parse_int(request.query.get("limit")) or 500
@@ -4266,7 +4295,7 @@ async def guild_ops_page(request: web.Request) -> web.Response:
     guild_id_str = request.match_info["guild_id"]
     guild_id = _require_owned_guild(session, settings=settings, path=request.path_qs, guild_id=guild_id_str)
     plan = entitlements_service.get_guild_plan(settings, guild_id=guild_id)
-    if plan != entitlements_service.PLAN_PRO:
+    if not entitlements_service.is_paid_plan(plan):
         return _pro_locked_page(
             settings=settings,
             session=session,
@@ -4747,6 +4776,7 @@ async def billing_page(request: web.Request) -> web.Response:
 
     installed, _install_error = await _detect_bot_installed(request, guild_id=guild_id)
     current_plan = entitlements_service.get_guild_plan(settings, guild_id=guild_id)
+    current_plan_label, current_plan_class = _plan_badge(current_plan)
     subscription = get_guild_subscription(settings, guild_id=guild_id) if settings.mongodb_uri else None
     customer_id = str(subscription.get("customer_id") or "") if subscription else ""
     guild_options = [
@@ -4764,23 +4794,28 @@ async def billing_page(request: web.Request) -> web.Response:
     if status == "cancelled":
         status_message = "Checkout cancelled. No charges were made."
     elif status == "success":
-        if current_plan == entitlements_service.PLAN_PRO:
-            status_message = "Checkout complete. Pro is enabled. Stripe emailed your receipt."
+        if entitlements_service.is_paid_plan(current_plan):
+            plan_label, _plan_class = _plan_badge(current_plan)
+            status_message = f"Checkout complete. {plan_label.title()} is enabled. Stripe emailed your receipt."
         else:
             status_message = "Checkout complete. Activation may take a few seconds. Stripe will email your receipt."
     elif status == "pending":
         status_message = "Checkout complete. Activation is pending. Stripe will email your receipt."
 
-    upgrade_disabled = current_plan == entitlements_service.PLAN_PRO
-    upgrade_text = "Already Pro" if upgrade_disabled else "Upgrade to Pro"
+    upgrade_disabled = entitlements_service.is_paid_plan(current_plan)
+    if upgrade_disabled:
+        plan_label, _plan_class = _plan_badge(current_plan)
+        upgrade_text = f"{plan_label.title()} active"
+    else:
+        upgrade_text = "Upgrade to Pro"
 
     content = render(
         "pages/dashboard/billing.html",
         has_guild=True,
         guild_id=guild_id,
         status_message=status_message,
-        current_plan_label=str(current_plan).upper(),
-        current_plan_class=str(current_plan),
+        current_plan_label=current_plan_label,
+        current_plan_class=current_plan_class,
         manage_portal=bool(customer_id),
         guild_options=guild_options,
         upgrade_disabled=upgrade_disabled,
@@ -4938,7 +4973,7 @@ async def billing_success(request: web.Request) -> web.Response:
                     raise RuntimeError("Checkout session does not match selected guild.")
 
                 plan_raw = str(meta.get("plan") or entitlements_service.PLAN_PRO).strip().lower()
-                plan = entitlements_service.PLAN_PRO if plan_raw != entitlements_service.PLAN_PRO else plan_raw
+                plan = entitlements_service.normalize_plan(plan_raw)
 
                 customer_id = getattr(checkout, "customer", None)
                 if customer_id is None and isinstance(checkout, dict):
@@ -5004,8 +5039,8 @@ async def billing_success(request: web.Request) -> web.Response:
             sync_error,
             extra=_log_extra(request, guild_id=guild_id),
         )
-    status = "success" if plan == entitlements_service.PLAN_PRO else "pending"
-    if plan == entitlements_service.PLAN_PRO:
+    status = "success" if entitlements_service.is_paid_plan(plan) else "pending"
+    if entitlements_service.is_paid_plan(plan):
         _track_event(request, event="upgrade_success", properties={"guild_id": guild_id})
     raise web.HTTPFound(f"/app/billing?guild_id={guild_id}&status={status}")
 
@@ -5077,6 +5112,7 @@ def create_app(*, settings: Settings | None = None) -> web.Application:
     app.router.add_get("/ready", ready)
     app.router.add_get("/", index)
     app.router.add_get("/app", app_index)
+    app.router.add_get("/app/guild/{guild_id}/{plan}", guild_plan_page)
     app.router.add_get("/features", features_page)
     app.router.add_get("/pricing", pricing_page)
     app.router.add_get("/enterprise", enterprise_page)

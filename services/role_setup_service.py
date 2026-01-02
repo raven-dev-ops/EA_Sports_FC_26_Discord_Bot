@@ -6,6 +6,7 @@ import discord
 
 from config import Settings
 from services import entitlements_service
+
 TEAM_COACH_ROLE_NAME = "Team Coach"
 CLUB_MANAGER_ROLE_NAME = "Club Manager"
 LEAGUE_STAFF_ROLE_NAME = "League Staff"
@@ -37,7 +38,7 @@ async def ensure_offside_roles(
     if settings is not None:
         try:
             plan = entitlements_service.get_guild_plan(settings, guild_id=guild.id)
-            is_pro = plan == entitlements_service.PLAN_PRO
+            is_pro = entitlements_service.is_paid_plan(plan)
         except Exception:
             is_pro = False
 

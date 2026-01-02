@@ -199,7 +199,7 @@ def handle_stripe_webhook(
         if event_type == "checkout.session.completed":
             meta = _metadata_dict(obj)
             guild_id = _parse_guild_id(meta.get("guild_id"))
-            plan = str(meta.get("plan") or entitlements_service.PLAN_PRO).strip().lower()
+            plan = entitlements_service.normalize_plan(meta.get("plan") or entitlements_service.PLAN_PRO)
             customer_id = obj.get("customer")
             subscription_id = obj.get("subscription")
             if guild_id is None:
@@ -227,7 +227,7 @@ def handle_stripe_webhook(
         elif event_type.startswith("customer.subscription."):
             meta = _metadata_dict(obj)
             guild_id = _parse_guild_id(meta.get("guild_id"))
-            plan = str(meta.get("plan") or entitlements_service.PLAN_PRO).strip().lower()
+            plan = entitlements_service.normalize_plan(meta.get("plan") or entitlements_service.PLAN_PRO)
             status = str(obj.get("status") or "").strip().lower() or "unknown"
             customer_id = obj.get("customer")
             subscription_id = obj.get("id")
@@ -323,7 +323,7 @@ def handle_stripe_webhook(
                     upsert_guild_subscription(
                         settings,
                         guild_id=guild_id,
-                        plan=str(sub.get("plan") or entitlements_service.PLAN_PRO),
+                        plan=entitlements_service.normalize_plan(sub.get("plan") or entitlements_service.PLAN_PRO),
                         status="active",
                         period_end=sub.get("period_end") if isinstance(sub.get("period_end"), datetime) else None,
                         customer_id=str(sub.get("customer_id") or obj.get("customer") or "") or None,

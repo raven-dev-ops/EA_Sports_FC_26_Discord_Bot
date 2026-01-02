@@ -44,7 +44,7 @@ async def ensure_offside_channels(
     config: dict[str, Any] = dict(existing_config or {})
     actions: list[str] = []
     plan = entitlements_service.get_guild_plan(settings, guild_id=guild.id)
-    is_pro = plan == entitlements_service.PLAN_PRO
+    is_pro = entitlements_service.is_paid_plan(plan)
 
     bot_member = guild.me
     staff_roles = _resolve_staff_roles(

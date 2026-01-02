@@ -76,6 +76,28 @@ def test_pro_subscription_is_pro(monkeypatch) -> None:
     assert entitlements_service.get_guild_plan(settings, guild_id=123) == entitlements_service.PLAN_PRO
 
 
+def test_enterprise_subscription_is_paid(monkeypatch) -> None:
+    monkeypatch.setattr(database, "MongoClient", mongomock.MongoClient)
+    monkeypatch.setattr(database, "_CLIENT", None)
+    entitlements_service.invalidate_all()
+
+    settings = _settings()
+    subscription_service.ensure_subscription_indexes(settings)
+    subscription_service.upsert_guild_subscription(
+        settings,
+        guild_id=124,
+        plan="enterprise",
+        status="active",
+        period_end=datetime(2030, 1, 1, tzinfo=timezone.utc),
+        customer_id="cus_124",
+        subscription_id="sub_124",
+    )
+
+    plan = entitlements_service.get_guild_plan(settings, guild_id=124)
+    assert plan == entitlements_service.PLAN_ENTERPRISE
+    assert entitlements_service.is_paid_plan(plan)
+
+
 def test_canceled_subscription_is_free(monkeypatch) -> None:
     monkeypatch.setattr(database, "MongoClient", mongomock.MongoClient)
     monkeypatch.setattr(database, "_CLIENT", None)

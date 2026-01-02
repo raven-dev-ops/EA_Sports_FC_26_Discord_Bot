@@ -13,6 +13,9 @@ from services.subscription_service import get_guild_subscription
 
 PLAN_FREE: Final[str] = "free"
 PLAN_PRO: Final[str] = "pro"
+PLAN_ENTERPRISE: Final[str] = "enterprise"
+
+PAID_PLANS: Final[set[str]] = {PLAN_PRO, PLAN_ENTERPRISE}
 
 FEATURE_PREMIUM_COACH_TIERS: Final[str] = "premium_coach_tiers"
 FEATURE_PREMIUM_COACHES_REPORT: Final[str] = "premium_coaches_report"
@@ -113,6 +116,19 @@ def _forced_pro_guild_ids() -> set[int]:
     return out
 
 
+def normalize_plan(plan: str | None) -> str:
+    raw = str(plan or "").strip().lower()
+    if raw == PLAN_ENTERPRISE:
+        return PLAN_ENTERPRISE
+    if raw == PLAN_PRO:
+        return PLAN_PRO
+    return PLAN_FREE
+
+
+def is_paid_plan(plan: str | None) -> bool:
+    return normalize_plan(plan) in PAID_PLANS
+
+
 def _plan_from_subscription_doc(doc: dict) -> str:
     status = str(doc.get("status") or "").strip().lower()
     if status not in {"active", "trialing"}:
@@ -124,9 +140,9 @@ def _plan_from_subscription_doc(doc: dict) -> str:
     if isinstance(period_end, datetime) and period_end < _utc_now():
         return PLAN_FREE
 
-    plan = str(doc.get("plan") or "").strip().lower()
-    if plan == PLAN_PRO:
-        return PLAN_PRO
+    plan = normalize_plan(doc.get("plan"))
+    if plan in PAID_PLANS:
+        return plan
     return PLAN_FREE
 
 
@@ -158,7 +174,7 @@ def get_guild_plan(settings: Settings | None, *, guild_id: int) -> str:
 def is_feature_enabled(settings: Settings | None, *, guild_id: int, feature_key: str) -> bool:
     key = feature_key.strip().lower()
     if key in {k.lower() for k in PRO_FEATURE_KEYS}:
-        return get_guild_plan(settings, guild_id=guild_id) == PLAN_PRO
+        return is_paid_plan(get_guild_plan(settings, guild_id=guild_id))
     return True
 
 

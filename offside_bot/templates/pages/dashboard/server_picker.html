@@ -40,7 +40,7 @@
       </div>
       {% if card.eligible %}
         <div class="btn-group mt-10">
-          <a class="btn" href="/guild/{{ card.id }}/overview">Open</a>
+          <a class="btn" href="{{ card.open_href }}">Open</a>
           <a class="btn secondary" href="/app/billing?guild_id={{ card.id }}">Billing</a>
           {% if card.show_upgrade %}
             <a class="btn blue" href="/app/upgrade?guild_id={{ card.id }}&from=server-card&section=overview">Upgrade</a>
