@@ -2258,9 +2258,9 @@ async def pricing_page(request: web.Request) -> web.Response:
         billing = "monthly"
 
     pro_monthly_price = os.environ.get("PRICING_PRO_MONTHLY_USD", "9").strip() or "9"
-    pro_cta_href = "/app/billing"
+    pro_cta_href = "/app"
     if session is None:
-        pro_cta_href = "/login?next=/app/billing"
+        pro_cta_href = "/login?next=/app"
     enterprise_cta_href = "/enterprise"
 
     features = [
@@ -4898,12 +4898,14 @@ async def billing_page(request: web.Request) -> web.Response:
     status = request.query.get("status", "").strip()
     status_message = ""
     if status == "cancelled":
-        status_message = "Checkout cancelled."
+        status_message = "Checkout cancelled. No charges were made."
     elif status == "success":
         if current_plan == entitlements_service.PLAN_PRO:
-            status_message = "Checkout complete. Pro is enabled."
+            status_message = "Checkout complete. Pro is enabled. Stripe emailed your receipt."
         else:
-            status_message = "Checkout complete. Activation may take a few seconds."
+            status_message = "Checkout complete. Activation may take a few seconds. Stripe will email your receipt."
+    elif status == "pending":
+        status_message = "Checkout complete. Activation is pending. Stripe will email your receipt."
 
     upgrade_disabled = current_plan == entitlements_service.PLAN_PRO
     upgrade_text = "Already Pro" if upgrade_disabled else "Upgrade to Pro"
@@ -5037,7 +5039,6 @@ async def billing_checkout(request: web.Request) -> web.Response:
 async def billing_success(request: web.Request) -> web.Response:
     session = _require_session(request)
     settings: Settings = request.app[SETTINGS_KEY]
-    from offside_bot.web_templates import render
 
     gid = request.query.get("guild_id", "").strip()
     checkout_session_id = request.query.get("session_id", "").strip()
@@ -5045,7 +5046,6 @@ async def billing_success(request: web.Request) -> web.Response:
     if not guild_id:
         raise web.HTTPBadRequest(text="Missing guild_id.")
 
-    synced = False
     sync_error: str | None = None
     if settings.mongodb_uri and checkout_session_id:
         try:
@@ -5124,31 +5124,19 @@ async def billing_success(request: web.Request) -> web.Response:
                     subscription_id=subscription_id,
                 )
                 entitlements_service.invalidate_guild_plan(guild_id)
-                synced = True
             except Exception as exc:
                 sync_error = str(exc)
 
     plan = entitlements_service.get_guild_plan(settings, guild_id=guild_id)
-    message = (
-        "Pro enabled for this server."
-        if plan == entitlements_service.PLAN_PRO
-        else "Checkout complete. Activation may take a few seconds. Refresh in a moment."
-    )
-    if synced and plan != entitlements_service.PLAN_PRO:
-        message = "Checkout confirmed. Waiting for activation. Refresh in a moment."
-    if sync_error and plan != entitlements_service.PLAN_PRO:
-        message = f"Checkout complete. Activation pending ({sync_error})."
-    content = render(
-        "pages/dashboard/billing_success.html",
-        guild_id=guild_id,
-        message=message,
-        plan_label=str(plan).upper(),
-        plan_class=str(plan),
-        billing_href=f"/app/billing?guild_id={guild_id}",
-        analytics_href=f"/guild/{guild_id}",
-        settings_href=f"/guild/{guild_id}/settings",
-    )
-    return web.Response(text=_html_page(title="Checkout Success", body=content), content_type="text/html")
+    if sync_error:
+        logging.warning(
+            "event=billing_sync_failed guild_id=%s error=%s",
+            guild_id,
+            sync_error,
+            extra=_log_extra(request, guild_id=guild_id),
+        )
+    status = "success" if plan == entitlements_service.PLAN_PRO else "pending"
+    raise web.HTTPFound(f"/app/billing?guild_id={guild_id}&status={status}")
 
 
 async def billing_cancel(request: web.Request) -> web.Response:

@@ -734,10 +734,8 @@ async def test_billing_success_syncs_subscription(monkeypatch) -> None:
             headers={"Cookie": f"{dashboard.COOKIE_NAME}=sess1"},
             allow_redirects=False,
         )
-        assert resp.status == 200
-        html = await resp.text()
-        assert "Pro enabled for this server." in html
-        assert "badge pro" in html
+        assert resp.status == 302
+        assert resp.headers.get("Location") == "/app/billing?guild_id=123&status=success"
 
         doc = subscription_service.get_guild_subscription(_settings(), guild_id=123)
         assert isinstance(doc, dict)
