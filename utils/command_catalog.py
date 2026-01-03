@@ -44,7 +44,7 @@ COMMANDS: List[CommandInfo] = [
     CommandInfo(
         name="/player_pool_index",
         category="Staff",
-        description="Post/update a pinned Player Pool index in the recruit listing channel.",
+        description="Player pool listings now live in the web dashboard.",
         permissions="Staff",
     ),
     CommandInfo(

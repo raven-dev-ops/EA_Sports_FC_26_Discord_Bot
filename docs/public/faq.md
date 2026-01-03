@@ -1,7 +1,7 @@
 # FAQ
 
 ## What permissions are needed?
-Offside needs permissions to create/manage roles and channels during setup, and to post embeds.
+Offside needs permissions to create/manage roles. Manage Channels is only needed to clean up legacy Offside categories.
 
 ## How does pricing work?
 Start on Free. Upgrade to Pro for club manager roles, stats, and automation. See the Pricing page for details.

@@ -53,14 +53,11 @@ from services.guild_install_service import (
 )
 from services.guild_settings_schema import (
     FC25_STATS_ENABLED_KEY,
-    GUILD_CHANNEL_FIELDS,
     GUILD_COACH_ROLE_FIELDS,
-    PREMIUM_COACHES_PIN_ENABLED_KEY,
 )
 from services.heartbeat_service import get_worker_heartbeat
 from services.ops_tasks_service import (
     OPS_TASK_ACTION_DELETE_GUILD_DATA,
-    OPS_TASK_ACTION_REPOST_PORTALS,
     OPS_TASK_ACTION_RUN_SETUP,
     OPS_TASKS_COLLECTION,
     cancel_ops_task,
@@ -95,8 +92,9 @@ MY_GUILDS_URL = f"{DISCORD_API_BASE}/users/@me/guilds"
 COOKIE_NAME = "offside_dashboard_session"
 REQUEST_ID_HEADER = "X-Request-Id"
 
-# Minimal permissions needed for auto-setup and dashboard posting:
-# - Manage Channels, Manage Roles, View Channel, Send Messages, Embed Links, Read Message History
+# Minimal permissions needed for auto-setup and core bot workflows:
+# - Manage Roles, View Channel, Send Messages, Embed Links, Read Message History
+# - Manage Channels is only needed to clean up legacy Offside categories.
 DEFAULT_BOT_PERMISSIONS = 268520464
 
 DASHBOARD_SESSIONS_COLLECTION = "dashboard_sessions"
@@ -553,7 +551,6 @@ def _pro_locked_page(
     if benefits is None:
         benefits = [
             ("Coach+/Club Manager/Club Manager+ roles", "Expanded roster caps and club manager workflow."),
-            ("Pro coaches report", "Public listing embed of Pro coaches and openings."),
             ("FC stats integration", "FC25/FC26 stats lookup, caching, and richer player profiles."),
             ("Banlist integration", "Google Sheets-driven banlist checks and moderation tooling."),
             ("Tournament automation", "Automated brackets, fixtures, and match reporting workflows."),
@@ -1494,7 +1491,7 @@ async def index(request: web.Request) -> web.Response:
         title="Offside",
         description=(
             "Offside is the EA Sports FC 26 Discord bot for Pro Clubs leagues. "
-            "Automate rosters, recruiting, clubs, tournaments, and analytics with guided setup dashboards."
+            "Automate rosters, recruiting, clubs, tournaments, and analytics with guided setup in the web dashboard."
         ),
         session=request.get("session"),
         invite_href=invite_href,
@@ -2120,14 +2117,14 @@ async def pricing_page(request: web.Request) -> web.Response:
     features = [
         {
             "name": "Dashboards + setup wizard",
-            "description": "Auto-setup, portal dashboards, listing channels, and guided setup checks.",
+            "description": "Web dashboard, setup wizard, and guided health checks.",
             "free": True,
             "pro": True,
             "enterprise": True,
         },
         {
             "name": "Roster + recruiting workflows",
-            "description": "Rosters, recruiting, clubs, and staff workflows inside Discord.",
+            "description": "Rosters, recruiting, clubs, and staff workflows in the web app.",
             "free": True,
             "pro": True,
             "enterprise": True,
@@ -2144,13 +2141,6 @@ async def pricing_page(request: web.Request) -> web.Response:
             "description": "Expanded roster caps and club manager workflow.",
             "free": False,
             "pro": entitlements_service.FEATURE_PREMIUM_COACH_TIERS in entitlements_service.PRO_FEATURE_KEYS,
-            "enterprise": True,
-        },
-        {
-            "name": "Pro coaches report",
-            "description": "Pro coaches listing embed and related controls.",
-            "free": False,
-            "pro": entitlements_service.FEATURE_PREMIUM_COACHES_REPORT in entitlements_service.PRO_FEATURE_KEYS,
             "enterprise": True,
         },
         {
@@ -2802,7 +2792,6 @@ async def guild_settings_page(request: web.Request) -> web.Response:
     guild_plan = entitlements_service.get_guild_plan(settings, guild_id=guild_id)
     is_pro = entitlements_service.is_paid_plan(guild_plan)
     premium_tiers_enabled = is_pro
-    premium_report_enabled = is_pro
     fc25_stats_enabled = is_pro
     upgrade_href = f"/app/upgrade?guild_id={guild_id}&from=settings&section=settings"
 
@@ -2813,10 +2802,9 @@ async def guild_settings_page(request: web.Request) -> web.Response:
     staff_role_ids_value = ", ".join(str(x) for x in sorted(staff_role_ids))
 
     roles: list[dict[str, Any]] = []
-    channels: list[dict[str, Any]] = []
     metadata_error: str | None = None
     try:
-        roles, channels = await _get_guild_discord_metadata(request, guild_id=guild_id)
+        roles, _channels = await _get_guild_discord_metadata(request, guild_id=guild_id)
     except web.HTTPException as exc:
         metadata_error = exc.text or str(exc)
     except Exception as exc:
@@ -2922,92 +2910,6 @@ async def guild_settings_page(request: web.Request) -> web.Response:
                 }
             )
 
-    selected_channels: dict[str, int | None] = {
-        field: _parse_int(cfg.get(field)) for field, _label in GUILD_CHANNEL_FIELDS
-    }
-
-    channel_fields: list[dict[str, Any]] = []
-    if channels:
-        categories: dict[int, str] = {}
-        channel_labels: dict[int, str] = {}
-        valid_channel_ids: set[int] = set()
-        for ch in channels:
-            if _parse_int(ch.get("type")) == 4:
-                cid = _parse_int(ch.get("id"))
-                if cid is not None:
-                    categories[cid] = str(ch.get("name") or cid)
-
-        for ch in channels:
-            cid = _parse_int(ch.get("id"))
-            ctype = _parse_int(ch.get("type"))
-            if cid is None or ctype is None:
-                continue
-            if ctype not in {0, 5, 15}:
-                continue
-            name = str(ch.get("name") or cid)
-            parent_id = _parse_int(ch.get("parent_id"))
-            prefix = categories.get(parent_id) if parent_id else None
-            display = f"{prefix} / #{name}" if prefix else f"#{name}"
-            valid_channel_ids.add(cid)
-            channel_labels[cid] = display
-
-        def _channel_options(selected_id: int | None) -> list[dict[str, Any]]:
-            default_selected = selected_id is None
-            option_lines = [
-                {
-                    "value": "",
-                    "label": "(Use default)",
-                    "selected": default_selected,
-                    "disabled": False,
-                }
-            ]
-            if selected_id is not None and selected_id not in valid_channel_ids:
-                option_lines.append(
-                    {
-                        "value": selected_id,
-                        "label": f"(missing id: {selected_id})",
-                        "selected": True,
-                        "disabled": False,
-                    }
-                )
-            for cid, label in sorted(channel_labels.items(), key=lambda kv: kv[1].lower()):
-                option_lines.append(
-                    {
-                        "value": cid,
-                        "label": label,
-                        "selected": cid == selected_id,
-                        "disabled": False,
-                    }
-                )
-            return option_lines
-
-        for field, label in GUILD_CHANNEL_FIELDS:
-            selected_id = selected_channels.get(field)
-            channel_fields.append(
-                {
-                    "label": label,
-                    "name": field,
-                    "options": _channel_options(selected_id),
-                    "value": str(selected_id or ""),
-                }
-            )
-    else:
-        for field, label in GUILD_CHANNEL_FIELDS:
-            selected_id = selected_channels.get(field)
-            channel_fields.append(
-                {
-                    "label": label,
-                    "name": field,
-                    "options": [],
-                    "value": str(selected_id or ""),
-                }
-            )
-
-    channels_available = bool(channels)
-
-    premium_pin_enabled = _parse_bool(cfg.get(PREMIUM_COACHES_PIN_ENABLED_KEY))
-    premium_report_badge_class = "pro" if premium_report_enabled else "warn"
-
     fc25_value = cfg.get(FC25_STATS_ENABLED_KEY)
     if fc25_value is True:
         fc25_selected = "true"
@@ -3037,18 +2939,11 @@ async def guild_settings_page(request: web.Request) -> web.Response:
         csrf_token=session.csrf_token,
         metadata_error=metadata_error,
         roles_available=roles_available,
-        channels_available=channels_available,
         staff_role_options=staff_role_options,
         staff_role_ids_csv=staff_role_ids_value,
         coach_role_fields=coach_role_fields,
-        channel_fields=channel_fields,
         premium_tiers_enabled=premium_tiers_enabled,
         premium_badge_class=premium_badge_class,
-        premium_report_enabled=premium_report_enabled,
-        premium_report_badge_class=premium_report_badge_class,
-        premium_pin_enabled=premium_pin_enabled,
-        premium_pin_disabled=not premium_report_enabled,
-        premium_pin_key=PREMIUM_COACHES_PIN_ENABLED_KEY,
         fc25_options=fc25_options,
         fc25_disabled=not fc25_stats_enabled,
         fc25_badge_class=fc25_badge_class,
@@ -3102,7 +2997,6 @@ async def guild_settings_save(request: web.Request) -> web.Response:
     plan = entitlements_service.get_guild_plan(settings, guild_id=guild_id)
     is_pro = entitlements_service.is_paid_plan(plan)
     premium_tiers_enabled = is_pro
-    premium_report_enabled = is_pro
     fc25_stats_enabled = is_pro
 
     cfg: dict[str, Any] = {}
@@ -3135,27 +3029,18 @@ async def guild_settings_save(request: web.Request) -> web.Response:
             cfg.pop("staff_role_ids", None)
 
     valid_role_ids: set[int] = set()
-    valid_channel_ids: set[int] = set()
     try:
-        roles, channels = await _get_guild_discord_metadata(request, guild_id=guild_id)
+        roles, _channels = await _get_guild_discord_metadata(request, guild_id=guild_id)
     except Exception:
-        roles, channels = [], []
+        roles, _channels = [], []
 
     for role in roles:
         rid = _parse_int(role.get("id"))
         if rid is not None:
             valid_role_ids.add(rid)
 
-    for channel in channels:
-        cid = _parse_int(channel.get("id"))
-        ctype = _parse_int(channel.get("type"))
-        if cid is None or ctype is None:
-            continue
-        if ctype in {0, 5, 15}:
-            valid_channel_ids.add(cid)
-
     existing_int_fields: dict[str, int | None] = {
-        field: _parse_int(cfg.get(field)) for field, _label in (GUILD_COACH_ROLE_FIELDS + GUILD_CHANNEL_FIELDS)
+        field: _parse_int(cfg.get(field)) for field, _label in GUILD_COACH_ROLE_FIELDS
     }
 
     def _apply_int_field(*, field: str, raw_value: Any, valid_ids: set[int], kind: str) -> None:
@@ -3180,31 +3065,6 @@ async def guild_settings_save(request: web.Request) -> web.Response:
         if field in {"role_coach_plus_id", "role_club_manager_id", "role_club_manager_plus_id"} and not premium_tiers_enabled:
             continue
         _apply_int_field(field=field, raw_value=data.get(field), valid_ids=valid_role_ids, kind="role")
-
-    if not premium_report_enabled:
-        attempted_channel = str(data.get("channel_premium_coaches_id") or "").strip()
-        if attempted_channel:
-            raise web.HTTPForbidden(text="Pro coaches channel requires Pro.")
-
-    for field, _label in GUILD_CHANNEL_FIELDS:
-        if field == "channel_premium_coaches_id" and not premium_report_enabled:
-            continue
-        _apply_int_field(
-            field=field,
-            raw_value=data.get(field),
-            valid_ids=valid_channel_ids,
-            kind="channel",
-        )
-
-    if premium_report_enabled:
-        pin_enabled = data.get(PREMIUM_COACHES_PIN_ENABLED_KEY) is not None
-        if pin_enabled:
-            cfg[PREMIUM_COACHES_PIN_ENABLED_KEY] = True
-        else:
-            cfg.pop(PREMIUM_COACHES_PIN_ENABLED_KEY, None)
-    else:
-        if data.get(PREMIUM_COACHES_PIN_ENABLED_KEY) is not None:
-            raise web.HTTPForbidden(text="Pro coaches report controls require Pro.")
 
     if fc25_stats_enabled:
         fc25_raw = str(data.get(FC25_STATS_ENABLED_KEY, "default")).strip().lower()
@@ -3366,11 +3226,10 @@ async def guild_overview_page(request: web.Request) -> web.Response:
         config_error = "MongoDB is not configured."
 
     roles: list[dict[str, Any]] = []
-    channels: list[dict[str, Any]] = []
     metadata_error: str | None = None
     if installed is True:
         try:
-            roles, channels = await _get_guild_discord_metadata(request, guild_id=guild_id)
+            roles, _channels = await _get_guild_discord_metadata(request, guild_id=guild_id)
         except web.HTTPException as exc:
             metadata_error = exc.text or str(exc)
         except Exception as exc:
@@ -3381,12 +3240,6 @@ async def guild_overview_page(request: web.Request) -> web.Response:
         rid = _parse_int(role_doc.get("id"))
         if rid is not None:
             roles_by_id[rid] = role_doc
-
-    channel_ids: set[int] = set()
-    for channel_doc in channels:
-        cid = _parse_int(channel_doc.get("id"))
-        if cid is not None:
-            channel_ids.add(cid)
 
     def _status(label: str, kind: str) -> dict[str, str]:
         return {"label": label, "kind": kind}
@@ -3431,98 +3284,6 @@ async def guild_overview_page(request: web.Request) -> web.Response:
             parts.append(f"Not found in Discord: {', '.join(missing_roles_in_discord)}")
         roles_details = " / ".join(parts) or "Roles are not fully configured."
 
-    required_channel_fields = [
-        (field, label)
-        for field, label in GUILD_CHANNEL_FIELDS
-        if field != "channel_staff_monitor_id" or settings.test_mode
-    ]
-    missing_channel_fields: list[str] = []
-    missing_channels_in_discord: list[str] = []
-    for field, _label in required_channel_fields:
-        value = _parse_int(cfg.get(field))
-        if value is None:
-            missing_channel_fields.append(field)
-        elif channels and value not in channel_ids:
-            missing_channels_in_discord.append(field)
-
-    channels_status = _status("OK", "ok")
-    channels_details = "All required channels are configured."
-    if config_error:
-        channels_status = _status("UNKNOWN", "warn")
-        channels_details = f"Settings unavailable: {config_error}"
-    elif installed is not True:
-        channels_status = _status("WARN", "warn")
-        channels_details = "Install the bot to validate channels."
-    elif metadata_error:
-        channels_status = _status("UNKNOWN", "warn")
-        channels_details = f"Unable to load Discord channels: {metadata_error}"
-    elif missing_channel_fields or missing_channels_in_discord:
-        channels_status = _status("WARN", "warn")
-        parts = []
-        if missing_channel_fields:
-            parts.append(f"Missing in settings: {', '.join(missing_channel_fields)}")
-        if missing_channels_in_discord:
-            parts.append(f"Not found in Discord: {', '.join(missing_channels_in_discord)}")
-        channels_details = " / ".join(parts) or "Channels are not fully configured."
-
-    posts_status = _status("OK", "ok")
-    posts_details = "Dashboard and listing embeds detected."
-    if config_error:
-        posts_status = _status("UNKNOWN", "warn")
-        posts_details = f"Settings unavailable: {config_error}"
-    elif installed is not True:
-        posts_status = _status("WARN", "warn")
-        posts_details = "Install the bot to validate posted embeds."
-    else:
-        http = request.app.get(HTTP_SESSION_KEY)
-        if not isinstance(http, ClientSession):
-            posts_status = _status("UNKNOWN", "warn")
-            posts_details = "Dashboard HTTP client is not ready yet."
-        else:
-            bot_user_id = int(settings.discord_application_id)
-            post_fields = [
-                "channel_staff_portal_id",
-                "channel_manager_portal_id",
-                "channel_coach_portal_id",
-                "channel_recruit_portal_id",
-                "channel_recruit_listing_id",
-                "channel_club_listing_id",
-                "channel_premium_coaches_id",
-            ]
-            missing_posts: list[str] = []
-            unknown_posts: list[str] = []
-            missing_config: list[str] = []
-            for field in post_fields:
-                channel_id = _parse_int(cfg.get(field))
-                if channel_id is None:
-                    missing_config.append(field)
-                    continue
-                ok, err = await _channel_has_recent_bot_message(
-                    http,
-                    bot_token=settings.discord_token,
-                    channel_id=channel_id,
-                    bot_user_id=bot_user_id,
-                    limit=10,
-                )
-                if ok is True:
-                    continue
-                if ok is False:
-                    missing_posts.append(field)
-                else:
-                    unknown_posts.append(field)
-                    if err:
-                        posts_details = f"Unable to read messages in some channels: {err}"
-
-            if missing_config:
-                posts_status = _status("WARN", "warn")
-                posts_details = f"Missing channel settings: {', '.join(missing_config)}"
-            elif unknown_posts:
-                posts_status = _status("UNKNOWN", "warn")
-                posts_details = "Unable to verify some channels (missing Read Message History?)."
-            elif missing_posts:
-                posts_status = _status("WARN", "warn")
-                posts_details = f"Missing embeds in: {', '.join(missing_posts)}"
-
     checks = [
         {
             "name": "Bot installed",
@@ -3535,18 +3296,6 @@ async def guild_overview_page(request: web.Request) -> web.Response:
             "status": roles_status,
             "details": roles_details,
             "fix_href": f"/guild/{guild_id}/settings",
-        },
-        {
-            "name": "Channels",
-            "status": channels_status,
-            "details": channels_details,
-            "fix_href": f"/guild/{guild_id}/settings",
-        },
-        {
-            "name": "Portals posted",
-            "status": posts_status,
-            "details": posts_details,
-            "fix_href": f"/guild/{guild_id}/ops",
         },
     ]
 
@@ -3628,11 +3377,10 @@ async def guild_setup_wizard_page(request: web.Request) -> web.Response:
         config_error = "MongoDB is not configured."
 
     roles: list[dict[str, Any]] = []
-    channels: list[dict[str, Any]] = []
     metadata_error: str | None = None
     if installed is True:
         try:
-            roles, channels = await _get_guild_discord_metadata(request, guild_id=guild_id)
+            roles, _channels = await _get_guild_discord_metadata(request, guild_id=guild_id)
         except web.HTTPException as exc:
             metadata_error = exc.text or str(exc)
         except Exception as exc:
@@ -3643,12 +3391,6 @@ async def guild_setup_wizard_page(request: web.Request) -> web.Response:
         rid = _parse_int(role_doc.get("id"))
         if rid is not None:
             roles_by_id[rid] = role_doc
-
-    channel_ids: set[int] = set()
-    for channel_doc in channels:
-        cid = _parse_int(channel_doc.get("id"))
-        if cid is not None:
-            channel_ids.add(cid)
 
     def _status(label: str, kind: str) -> dict[str, str]:
         return {"label": label, "kind": kind}
@@ -3685,9 +3427,9 @@ async def guild_setup_wizard_page(request: web.Request) -> web.Response:
 
                 base_perms = _compute_base_permissions(roles_by_id=roles_by_id, role_ids=member_role_ids)
                 is_admin = bool(base_perms & PERM_ADMINISTRATOR)
-                required = [("Manage Channels", PERM_MANAGE_CHANNELS), ("Manage Roles", PERM_MANAGE_ROLES)]
+                required = [("Manage Roles", PERM_MANAGE_ROLES)]
                 missing_required = [name for name, bit in required if not (base_perms & bit)]
-                missing_optional = ["Manage Messages"] if not (base_perms & PERM_MANAGE_MESSAGES) else []
+                missing_optional = ["Manage Channels"] if not (base_perms & PERM_MANAGE_CHANNELS) else []
 
                 if is_admin or not missing_required:
                     perms_ok = True
@@ -3701,46 +3443,7 @@ async def guild_setup_wizard_page(request: web.Request) -> web.Response:
                     perms_status = _status("WARN", "warn")
                     perms_details = f"Missing: {', '.join(missing_required)}"
 
-    # Step 2: Channels + categories
-    required_channel_fields = [
-        (field, label)
-        for field, label in GUILD_CHANNEL_FIELDS
-        if field != "channel_staff_monitor_id" or settings.test_mode
-        if field != "channel_premium_coaches_id" or is_pro
-    ]
-    channels_missing_settings: list[str] = []
-    channels_missing_discord: list[str] = []
-    for field, _label in required_channel_fields:
-        value = _parse_int(cfg.get(field))
-        if value is None:
-            channels_missing_settings.append(field)
-        elif channels and value not in channel_ids:
-            channels_missing_discord.append(field)
-
-    channels_ok = False
-    if config_error:
-        channels_status = _status("UNKNOWN", "warn")
-        channels_details = f"Settings unavailable: {config_error}"
-    elif installed is not True:
-        channels_status = _status("WARN", "warn")
-        channels_details = "Install the bot to validate channels."
-    elif metadata_error:
-        channels_status = _status("UNKNOWN", "warn")
-        channels_details = f"Unable to load Discord channels: {metadata_error}"
-    elif channels_missing_settings or channels_missing_discord:
-        channels_status = _status("WARN", "warn")
-        parts: list[str] = []
-        if channels_missing_settings:
-            parts.append(f"Missing in settings: {', '.join(channels_missing_settings)}")
-        if channels_missing_discord:
-            parts.append(f"Not found in Discord: {', '.join(channels_missing_discord)}")
-        channels_details = " / ".join(parts) or "Channels are not ready."
-    else:
-        channels_ok = True
-        channels_status = _status("OK", "ok")
-        channels_details = "Channels are configured."
-
-    # Step 3: Roles
+    # Step 2: Roles
     required_role_fields = [("role_team_coach_id", "Coach role")]
     if is_pro:
         required_role_fields.extend(
@@ -3782,69 +3485,7 @@ async def guild_setup_wizard_page(request: web.Request) -> web.Response:
         roles_status = _status("OK", "ok")
         roles_details = "Roles are configured."
 
-    # Step 4: Portals posted
-    portals_ok = False
-    portals_status = _status("UNKNOWN", "warn")
-    portals_details = "Unable to verify posted portals."
-    if config_error:
-        portals_details = f"Settings unavailable: {config_error}"
-    elif installed is not True:
-        portals_status = _status("WARN", "warn")
-        portals_details = "Install the bot to validate posted portals."
-    else:
-        http = request.app.get(HTTP_SESSION_KEY)
-        if not isinstance(http, ClientSession):
-            portals_details = "Dashboard HTTP client is not ready yet."
-        else:
-            bot_user_id = int(settings.discord_application_id)
-            portal_fields = [
-                "channel_staff_portal_id",
-                "channel_manager_portal_id",
-                "channel_coach_portal_id",
-                "channel_recruit_portal_id",
-                "channel_recruit_listing_id",
-                "channel_club_listing_id",
-            ]
-            if is_pro:
-                portal_fields.append("channel_premium_coaches_id")
-
-            missing_config: list[str] = []
-            missing_posts: list[str] = []
-            unknown_posts: list[str] = []
-            for field in portal_fields:
-                channel_id = _parse_int(cfg.get(field))
-                if channel_id is None:
-                    missing_config.append(field)
-                    continue
-                ok, _err = await _channel_has_recent_bot_message(
-                    http,
-                    bot_token=settings.discord_token,
-                    channel_id=channel_id,
-                    bot_user_id=bot_user_id,
-                    limit=10,
-                )
-                if ok is True:
-                    continue
-                if ok is False:
-                    missing_posts.append(field)
-                else:
-                    unknown_posts.append(field)
-
-            if missing_config:
-                portals_status = _status("WARN", "warn")
-                portals_details = f"Missing channel settings: {', '.join(missing_config)}"
-            elif unknown_posts:
-                portals_status = _status("UNKNOWN", "warn")
-                portals_details = "Unable to verify some channels (missing Read Message History?)."
-            elif missing_posts:
-                portals_status = _status("WARN", "warn")
-                portals_details = f"Missing embeds in: {', '.join(missing_posts)}"
-            else:
-                portals_ok = True
-                portals_status = _status("OK", "ok")
-                portals_details = "Portals/instructions detected."
-
-    ready = bool(installed is True and perms_ok and channels_ok and roles_ok and portals_ok)
+    ready = bool(installed is True and perms_ok and roles_ok)
     if ready:
         _track_event(
             request,
@@ -3884,14 +3525,7 @@ async def guild_setup_wizard_page(request: web.Request) -> web.Response:
             "action_href": f"/guild/{guild_id}/permissions",
         },
         {
-            "title": "Step 2: Channels",
-            "status": channels_status,
-            "details": channels_details,
-            "action_label": "Review",
-            "action_href": f"/guild/{guild_id}/settings",
-        },
-        {
-            "title": "Step 3: Roles",
+            "title": "Step 2: Roles",
             "status": roles_status,
             "details": roles_details,
             "action_label": "Review",
@@ -3903,7 +3537,7 @@ async def guild_setup_wizard_page(request: web.Request) -> web.Response:
             {
                 "title": "Pro modules (locked)",
                 "status": _status("LOCKED", "warn"),
-                "details": "Upgrade to unlock Coach+/Club Manager/Club Manager+ roles plus the Pro coaches channel.",
+                "details": "Upgrade to unlock Coach+/Club Manager/Club Manager+ roles and Pro automation.",
                 "action_label": "Upgrade",
                 "action_href": f"/app/upgrade?guild_id={guild_id}&from=setup-wizard&section=setup",
             }
@@ -3911,16 +3545,9 @@ async def guild_setup_wizard_page(request: web.Request) -> web.Response:
     steps.extend(
         [
             {
-                "title": "Step 4: Post portals",
-                "status": portals_status,
-                "details": portals_details,
-                "action_label": "Ops",
-                "action_href": f"/guild/{guild_id}/ops",
-            },
-            {
-                "title": "Step 5: Verify",
+                "title": "Step 3: Verify",
                 "status": _status("OK", "ok") if ready else _status("PENDING", "warn"),
-                "details": "Setup wizard complete." if ready else "Run setup and repost portals, then refresh.",
+                "details": "Setup wizard complete." if ready else "Run setup to sync roles, then refresh.",
                 "action_label": "Overview",
                 "action_href": f"/guild/{guild_id}/overview",
             },
@@ -4002,7 +3629,6 @@ async def guild_permissions_page(request: web.Request) -> web.Response:
 
     guild_permissions: list[dict[str, str]] = []
     role_hierarchy: list[dict[str, str]] = []
-    channel_access: list[dict[str, str]] = []
     top_role_name = ""
     top_role_pos = 0
     is_admin = False
@@ -4026,9 +3652,8 @@ async def guild_permissions_page(request: web.Request) -> web.Response:
         is_admin = bool(base_perms & PERM_ADMINISTRATOR)
 
         required_guild_perms = [
-            ("Manage Channels", PERM_MANAGE_CHANNELS, "Create/repair Offside channels and categories."),
             ("Manage Roles", PERM_MANAGE_ROLES, "Create/assign Offside roles."),
-            ("Manage Messages", PERM_MANAGE_MESSAGES, "Pin/unpin listings and clean up bot messages."),
+            ("Manage Channels", PERM_MANAGE_CHANNELS, "Optional: remove legacy Offside channels."),
         ]
         for name, bit, why in required_guild_perms:
             ok = is_admin or bool(base_perms & bit)
@@ -4125,50 +3750,6 @@ async def guild_permissions_page(request: web.Request) -> web.Response:
                 }
             )
 
-        channels_by_id: dict[int, dict[str, Any]] = {}
-        for ch in channels:
-            cid = _parse_int(ch.get("id"))
-            if cid is not None:
-                channels_by_id[cid] = ch
-
-        required_channel_bits = [
-            ("View Channel", PERM_VIEW_CHANNEL),
-            ("Send Messages", PERM_SEND_MESSAGES),
-            ("Embed Links", PERM_EMBED_LINKS),
-            ("Read History", PERM_READ_MESSAGE_HISTORY),
-        ]
-        for field, label in GUILD_CHANNEL_FIELDS:
-            channel_id = _parse_int(cfg.get(field))
-            if channel_id is None:
-                continue
-            channel = channels_by_id.get(channel_id)
-            if channel is None:
-                channel_access.append(
-                    {
-                        "channel": label,
-                        "status": "Missing channel",
-                        "details": f"Channel ID {channel_id} not found.",
-                    }
-                )
-                continue
-            perms = _compute_channel_permissions(
-                base_perms=base_perms,
-                channel=channel,
-                guild_id=guild_id,
-                member_role_ids=member_role_ids,
-                member_id=bot_user_id,
-            )
-            missing = [name for name, bit in required_channel_bits if not (is_admin or bool(perms & bit))]
-            status = "OK" if not missing else "Missing: " + ", ".join(missing)
-            channel_name = str(channel.get("name") or channel_id)
-            channel_access.append(
-                {
-                    "channel": label,
-                    "status": status,
-                    "details": f"#{channel_name} (ID {channel_id})",
-                }
-            )
-
     content = render(
         "pages/dashboard/guild_permissions.html",
         guild_id=guild_id,
@@ -4180,7 +3761,6 @@ async def guild_permissions_page(request: web.Request) -> web.Response:
         settings_href=f"/guild/{guild_id}/settings",
         guild_permissions=guild_permissions,
         role_hierarchy=role_hierarchy,
-        channel_access=channel_access,
     )
     return web.Response(
         text=_html_page(
@@ -4398,10 +3978,9 @@ async def guild_ops_page(request: web.Request) -> web.Response:
             installed=None,
             section="ops",
             title="Operations",
-            message="Ops tasks (setup runs, portal reposts, data delete scheduling) are available on the Pro plan.",
+            message="Ops tasks (setup runs and data delete scheduling) are available on the Pro plan.",
             benefits=[
                 ("Setup automation", "Re-run setup tasks reliably."),
-                ("Portal reposts", "Regenerate staff/portal messages with one click."),
                 ("Data ops", "Schedule data deletion with auditability."),
             ],
             upgrade_href=f"/app/upgrade?guild_id={guild_id}&from=ops&section=ops",
@@ -4637,7 +4216,7 @@ async def guild_ops_run_full_setup(request: web.Request) -> web.Response:
     actor_id = _parse_int(session.user.get("id"))
     actor_username = f"{session.user.get('username','')}#{session.user.get('discriminator','')}".strip("#")
 
-    actions = [OPS_TASK_ACTION_RUN_SETUP, OPS_TASK_ACTION_REPOST_PORTALS]
+    actions = [OPS_TASK_ACTION_RUN_SETUP]
     for action in actions:
         task = enqueue_ops_task(
             settings,
@@ -4672,7 +4251,7 @@ async def guild_ops_run_full_setup(request: web.Request) -> web.Response:
 
 
 async def guild_ops_repost_portals(request: web.Request) -> web.Response:
-    return await _enqueue_ops_from_dashboard(request, action=OPS_TASK_ACTION_REPOST_PORTALS)
+    raise web.HTTPGone(text="Discord portals are retired; no repost is required.")
 
 
 async def guild_ops_schedule_delete_data(request: web.Request) -> web.Response:

@@ -20,6 +20,15 @@ All notable changes to this project will be documented in this file.
 - Docs/CI: document semantic versioning and add a release metadata check (VERSION/changelog/tag consistency).
 - Dashboard logs: add request IDs and redact IPs/details for OAuth failures.
 
+## [0.2.53] - 2026-01-02
+
+### Changed
+- Discord: retire portal/report channels; auto-setup now removes legacy Offside categories/channels.
+- Dashboard: setup/ops/permissions flows updated for web-first workflows (no portal reposts or channel settings).
+- Web: landing/features/pricing copy refreshed to reflect web dashboards over Discord listings.
+- Commands: `/player_pool_index` now points users to the web dashboard.
+- Docs: setup, QA, release, and product copy updated for web-first workflows.
+
 ## [0.2.51] - 2025-12-31
 
 ### Changed

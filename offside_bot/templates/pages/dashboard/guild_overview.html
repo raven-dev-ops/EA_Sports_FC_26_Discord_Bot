@@ -11,15 +11,11 @@
   {% if mongodb_configured %}
     <div class="card">
       <div><strong>Quick actions</strong></div>
-      <div class="muted mt-8">Run setup and repost portals from the bot worker.</div>
+      <div class="muted mt-8">Run setup to sync roles and remove legacy Offside channels.</div>
       <div class="flex gap-10 flex-wrap mt-10">
         <form method="post" action="/api/guild/{{ guild_id }}/ops/run_setup">
           <input type="hidden" name="csrf" value="{{ csrf_token }}" />
           <button class="btn" type="submit" {% if actions_disabled %}disabled{% endif %}>Run setup now</button>
-        </form>
-        <form method="post" action="/api/guild/{{ guild_id }}/ops/repost_portals">
-          <input type="hidden" name="csrf" value="{{ csrf_token }}" />
-          <button class="btn secondary" type="submit" {% if actions_disabled %}disabled{% endif %}>Repost portals</button>
         </form>
         {{ button("Open settings", settings_href, "secondary") }}
       </div>

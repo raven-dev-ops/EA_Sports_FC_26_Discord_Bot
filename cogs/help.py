@@ -34,9 +34,9 @@ class HelpCog(commands.Cog):
         embed.add_field(
             name="Staff Workflow",
             value=(
-                "• Review submissions in the staff portal. Use the dashboard buttons to approve/reject.\n"
-                "• If rejecting, include a clear reason; then `/unlock_roster @Coach`.\n"
-                "• Approved rosters are posted to the roster portal automatically."
+                "- Review submissions in the web dashboard.\n"
+                "- If rejecting, include a clear reason; then `/unlock_roster @Coach`.\n"
+                "- Approved rosters are visible in the web dashboard."
             ),
             inline=False,
         )
@@ -64,7 +64,7 @@ class HelpCog(commands.Cog):
             value=(
                 "- All messages are ephemeral to reduce channel noise.\n"
                 "- Use exact team names and IDs; inputs are trimmed/sanitized.\n"
-                "- Test mode routes logs and portals to the configured test channel."
+                "- Test mode disables Discord channel routing."
             ),
             inline=False,
         )

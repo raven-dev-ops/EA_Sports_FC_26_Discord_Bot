@@ -233,6 +233,129 @@ async def ensure_offside_channels(
     return config, actions
 
 
+async def remove_offside_channels(
+    guild: discord.Guild,
+    *,
+    existing_config: dict[str, Any] | None,
+) -> tuple[dict[str, Any], list[str]]:
+    """
+    Remove Offside-managed categories/channels now that dashboards live on the web.
+    """
+    config: dict[str, Any] = dict(existing_config or {})
+    actions: list[str] = []
+
+    def _is_offside_category_name(name: str | None) -> bool:
+        if not name:
+            return False
+        normalized = name.strip().casefold()
+        return normalized.startswith(DASHBOARD_CATEGORY_NAME.casefold()) or normalized.startswith(
+            REPORTS_CATEGORY_NAME.casefold()
+        )
+
+    managed_ids: set[int] = set()
+    for key in (
+        "channel_staff_portal_id",
+        "channel_manager_portal_id",
+        "channel_club_portal_id",
+        "channel_coach_portal_id",
+        "channel_recruit_portal_id",
+        "channel_free_player_portal_id",
+        "channel_premium_player_portal_id",
+        "channel_staff_monitor_id",
+        "channel_roster_listing_id",
+        "channel_recruit_listing_id",
+        "channel_club_listing_id",
+        "channel_premium_coaches_id",
+    ):
+        channel_id = _parse_int(config.get(key))
+        if channel_id is not None:
+            managed_ids.add(channel_id)
+
+    managed_names = {
+        STAFF_PORTAL_CHANNEL_NAME,
+        MANAGER_PORTAL_CHANNEL_NAME,
+        LEGACY_MANAGER_PORTAL_CHANNEL_NAME,
+        LEGACY_CLUB_PORTAL_CHANNEL_NAME,
+        COACH_PORTAL_CHANNEL_NAME,
+        RECRUIT_PORTAL_CHANNEL_NAME,
+        LEGACY_FREE_PLAYER_PORTAL_CHANNEL_NAME,
+        LEGACY_PREMIUM_PLAYER_PORTAL_CHANNEL_NAME,
+        STAFF_MONITOR_CHANNEL_NAME,
+        ROSTER_LISTING_CHANNEL_NAME,
+        RECRUITMENT_BOARDS_CHANNEL_NAME,
+        LEGACY_RECRUIT_LISTING_CHANNEL_NAME,
+        CLUB_LISTING_CHANNEL_NAME,
+        PRO_COACHES_CHANNEL_NAME,
+        LEGACY_PREMIUM_COACHES_CHANNEL_NAME,
+    }
+
+    removed_channel_ids: set[int] = set()
+    for channel_id in sorted(managed_ids):
+        channel = guild.get_channel(channel_id)
+        if not isinstance(channel, discord.TextChannel):
+            continue
+        try:
+            await channel.delete(reason="Offside: portals moved to website")
+            removed_channel_ids.add(channel.id)
+            actions.append(f"Deleted channel <#{channel.id}>.")
+        except discord.Forbidden:
+            actions.append(f"Could not delete channel <#{channel.id}> (missing permissions).")
+        except discord.DiscordException:
+            actions.append(f"Could not delete channel <#{channel.id}> (Discord error).")
+
+    for channel in list(guild.text_channels):
+        if channel.id in removed_channel_ids:
+            continue
+        in_offside_category = channel.category is not None and _is_offside_category_name(
+            channel.category.name
+        )
+        if channel.name not in managed_names and not in_offside_category:
+            continue
+        try:
+            await channel.delete(reason="Offside: portals moved to website")
+            removed_channel_ids.add(channel.id)
+            actions.append(f"Deleted channel <#{channel.id}>.")
+        except discord.Forbidden:
+            actions.append(f"Could not delete channel <#{channel.id}> (missing permissions).")
+        except discord.DiscordException:
+            actions.append(f"Could not delete channel <#{channel.id}> (Discord error).")
+
+    for category in list(guild.categories):
+        if not _is_offside_category_name(category.name):
+            continue
+        if category.channels:
+            actions.append(
+                f"Category `{category.name}` still has channels; delete remaining channels before removing it."
+            )
+            continue
+        try:
+            await category.delete(reason="Offside: portals moved to website")
+            actions.append(f"Deleted category `{category.name}`.")
+        except discord.Forbidden:
+            actions.append(f"Could not delete category `{category.name}` (missing permissions).")
+        except discord.DiscordException:
+            actions.append(f"Could not delete category `{category.name}` (Discord error).")
+
+    for key in (
+        "channel_staff_portal_id",
+        "channel_manager_portal_id",
+        "channel_club_portal_id",
+        "channel_coach_portal_id",
+        "channel_recruit_portal_id",
+        "channel_free_player_portal_id",
+        "channel_premium_player_portal_id",
+        "channel_staff_monitor_id",
+        "channel_roster_listing_id",
+        "channel_recruit_listing_id",
+        "channel_club_listing_id",
+        "channel_premium_coaches_id",
+        STAFF_MONITOR_MANAGED_KEY,
+    ):
+        config.pop(key, None)
+
+    return config, actions
+
+
 async def cleanup_staff_monitor_channel(
     guild: discord.Guild,
     *,

@@ -13,19 +13,11 @@
   </div>
   <div class="card">
     <div><strong>One-click setup</strong></div>
-    <p class="muted mt-8">Queues <code>run_setup</code> then <code>repost_portals</code> on the bot worker.</p>
+    <p class="muted mt-8">Queues <code>run_setup</code> to sync roles and clean up retired channels.</p>
     <div class="flex gap-10 flex-wrap mt-10">
-      <form method="post" action="/api/guild/{{ guild_id }}/ops/run_full_setup">
-        <input type="hidden" name="csrf" value="{{ csrf_token }}" />
-        <button class="btn blue" type="submit" {% if actions_disabled %}disabled{% endif %}>Run full setup</button>
-      </form>
       <form method="post" action="/api/guild/{{ guild_id }}/ops/run_setup">
         <input type="hidden" name="csrf" value="{{ csrf_token }}" />
-        <button class="btn" type="submit" {% if actions_disabled %}disabled{% endif %}>Run setup</button>
-      </form>
-      <form method="post" action="/api/guild/{{ guild_id }}/ops/repost_portals">
-        <input type="hidden" name="csrf" value="{{ csrf_token }}" />
-        <button class="btn secondary" type="submit" {% if actions_disabled %}disabled{% endif %}>Repost portals</button>
+        <button class="btn blue" type="submit" {% if actions_disabled %}disabled{% endif %}>Run setup</button>
       </form>
     </div>
     <p class="muted mt-10">If tasks don't run, check worker heartbeat on the Ops page.</p>

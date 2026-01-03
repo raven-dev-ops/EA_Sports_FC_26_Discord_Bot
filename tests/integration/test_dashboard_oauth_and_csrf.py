@@ -989,7 +989,6 @@ async def test_permissions_page_renders(monkeypatch) -> None:
         html = await resp.text()
         assert "Permissions Check" in html
         assert "Guild-level permissions" in html
-        assert "staff-portal" in html
     finally:
         await client.close()
 
@@ -1083,8 +1082,6 @@ async def test_overview_page_renders(monkeypatch) -> None:
         assert "Setup checklist" in html
         assert "Quick actions" in html
         assert "/api/guild/123/ops/run_setup" in html
-        assert "/api/guild/123/ops/repost_portals" in html
-        assert "Dashboard and listing embeds detected." in html
     finally:
         await client.close()
 
@@ -1351,8 +1348,8 @@ async def test_setup_wizard_page_renders(monkeypatch) -> None:
         assert resp.status == 200
         html = await resp.text()
         assert "Setup Wizard" in html
-        assert "/api/guild/123/ops/run_full_setup" in html
-        assert "Run full setup" in html
+        assert "/api/guild/123/ops/run_setup" in html
+        assert "Run setup" in html
     finally:
         await client.close()
 
@@ -1398,7 +1395,7 @@ async def test_run_full_setup_enqueues_tasks(monkeypatch) -> None:
         ops_tasks = database.get_global_collection(_settings(), name="ops_tasks")
         actions = {doc.get("action") for doc in ops_tasks.find({"guild_id": 123})}
         assert "run_setup" in actions
-        assert "repost_portals" in actions
+        assert "repost_portals" not in actions
     finally:
         await client.close()
 
@@ -1450,7 +1447,7 @@ async def test_ops_run_setup_enqueues_task(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_ops_repost_portals_enqueues_task(monkeypatch) -> None:
+async def test_ops_repost_portals_returns_gone(monkeypatch) -> None:
     from aiohttp.test_utils import TestClient, TestServer
 
     monkeypatch.setattr(database, "MongoClient", mongomock.MongoClient)
@@ -1485,12 +1482,13 @@ async def test_ops_repost_portals_enqueues_task(monkeypatch) -> None:
             headers={"Cookie": f"{dashboard.COOKIE_NAME}=sess1"},
             allow_redirects=False,
         )
-        assert resp.status == 302
-        assert resp.headers.get("Location") == "/guild/123/overview"
+        assert resp.status == 410
+        text = await resp.text()
+        assert "Discord portals are retired" in text
 
         ops_tasks = database.get_global_collection(settings, name="ops_tasks")
         doc = ops_tasks.find_one({"guild_id": 123, "action": "repost_portals"})
-        assert doc is not None
+        assert doc is None
     finally:
         await client.close()
 

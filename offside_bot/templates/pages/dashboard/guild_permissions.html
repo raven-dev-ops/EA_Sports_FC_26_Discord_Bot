@@ -22,9 +22,9 @@
     <div class="card">
       <div><strong>Fix steps</strong></div>
       <div class="muted mt-8">
-        1) Server Settings &rarr; Roles: ensure the bot role has Manage Channels/Roles/Messages.<br/>
+        1) Server Settings &rarr; Roles: ensure the bot role has Manage Roles (and Manage Channels if you want cleanup).<br/>
         2) Drag the bot role above Coach roles (role hierarchy).<br/>
-        3) Channel settings: ensure the bot can View/Send/Embed/Read in Offside channels.
+        3) Re-run setup after updating permissions and role order.
       </div>
       <div class="mt-10">
         {{ button("Re-invite with permissions", invite_href, "blue") }}
@@ -70,23 +70,7 @@
     </table>
   </div>
   <div class="card">
-    <h2 class="mt-0">Configured channels access</h2>
-    <table>
-      <thead><tr><th>channel</th><th>status</th><th>details</th></tr></thead>
-      <tbody>
-        {% if channel_access %}
-          {% for row in channel_access %}
-            <tr>
-              <td>{{ row.channel }}</td>
-              <td><code>{{ row.status }}</code></td>
-              <td class="muted">{{ row.details }}</td>
-            </tr>
-          {% endfor %}
-        {% else %}
-          <tr><td colspan="3" class="muted">No channels configured yet.</td></tr>
-        {% endif %}
-      </tbody>
-    </table>
-    <p class="muted mt-10">Only checks channels currently saved in guild settings.</p>
+    <h2 class="mt-0">Channel cleanup</h2>
+    <p class="muted">Offside no longer manages Discord portal/report channels. Use Setup Wizard &rarr; Run setup to remove legacy categories.</p>
   </div>
 {% endif %}

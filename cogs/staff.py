@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
-
 import discord
 from discord import app_commands
 from discord.ext import commands
@@ -16,8 +14,7 @@ from services.roster_service import (
     set_roster_status,
 )
 from services.submission_service import delete_submission_by_roster
-from utils.channel_routing import resolve_channel_id
-from utils.discord_wrappers import fetch_channel, send_message
+from utils.discord_wrappers import fetch_channel
 from utils.validation import normalize_platform
 
 
@@ -188,7 +185,7 @@ class StaffCog(commands.Cog):
 
     @app_commands.command(
         name="player_pool_index",
-        description="Post/update a pinned Player Pool index in the recruit listing channel (staff only).",
+        description="Player pool listings now live in the web dashboard (staff only).",
     )
     async def player_pool_index(self, interaction: discord.Interaction) -> None:
         if not self._is_staff(interaction):
@@ -197,89 +194,8 @@ class StaffCog(commands.Cog):
                 ephemeral=True,
             )
             return
-        guild = interaction.guild
-        if guild is None:
-            await interaction.response.send_message(
-                "This command must be used in a guild.",
-                ephemeral=True,
-            )
-            return
-
-        settings = getattr(self.bot, "settings", None)
-        if settings is None:
-            await interaction.response.send_message(
-                "Bot configuration is not loaded.",
-                ephemeral=True,
-            )
-            return
-
-        test_mode = bool(getattr(self.bot, "test_mode", False))
-        listing_channel_id = resolve_channel_id(
-            settings,
-            guild_id=guild.id,
-            field="channel_recruit_listing_id",
-            test_mode=test_mode,
-        )
-        if not listing_channel_id:
-            await interaction.response.send_message(
-                "Recruit listing channel is not configured yet. Ensure the bot has `Manage Channels` and MongoDB is configured, then restart the bot.",
-                ephemeral=True,
-            )
-            return
-
-        channel = await fetch_channel(self.bot, listing_channel_id)
-        if channel is None or not hasattr(channel, "send"):
-            await interaction.response.send_message(
-                "Recruit listing channel not found.",
-                ephemeral=True,
-            )
-            return
-
-        results = search_recruit_profiles(guild.id, limit=200, offset=0)
-        updated_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
-        header = f"**Player Pool Index**\nLast updated: {updated_at}\n"
-        lines: list[str] = []
-        for profile in results:
-            line = _format_player_pool_line(guild.id, profile, include_link=True)
-            if not line:
-                continue
-            if len(header) + sum(len(existing_line) + 1 for existing_line in lines) + len(line) > 1900:
-                lines.append("…(truncated)")
-                break
-            lines.append(line)
-        content = header + ("\n".join(lines) if lines else "No profiles available.")
-
-        target_message: discord.Message | None = None
-        if hasattr(channel, "pins"):
-            try:
-                pins = await channel.pins()  # type: ignore[attr-defined]
-                for msg in pins:
-                    if msg.author and self.bot.user and msg.author.id == self.bot.user.id:
-                        if msg.content.startswith("**Player Pool Index**"):
-                            target_message = msg
-                            break
-            except discord.DiscordException:
-                target_message = None
-
-        if target_message is not None:
-            try:
-                await target_message.edit(content=content, allowed_mentions=discord.AllowedMentions.none())
-            except discord.DiscordException:
-                pass
-        else:
-            posted = await send_message(
-                channel,
-                content,
-                allowed_mentions=discord.AllowedMentions.none(),
-            )
-            if posted is not None and hasattr(posted, "pin"):
-                try:
-                    await posted.pin(reason="Player Pool index")
-                except discord.DiscordException:
-                    pass
-
         await interaction.response.send_message(
-            "Player Pool index posted/updated.",
+            "Player pool listings now live in the web dashboard. Use /player_pool for quick search.",
             ephemeral=True,
         )
 

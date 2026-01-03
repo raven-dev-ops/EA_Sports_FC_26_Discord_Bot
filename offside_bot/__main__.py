@@ -12,15 +12,9 @@ from discord.ext import commands
 from config import Settings, load_settings
 from config.settings import summarize_settings
 from database import close_client, get_collection, guild_db_context, set_current_guild_id
-from interactions.admin_portal import post_admin_portal
-from interactions.coach_portal import post_coach_portal
 from interactions.fc25_stats_modals import refresh_fc25_stats_for_user
-from interactions.listing_instructions import post_listing_channel_instructions
-from interactions.manager_portal import post_manager_portal
-from interactions.premium_coaches_report import post_premium_coaches_report
-from interactions.recruit_portal import post_recruit_portal
 from migrations import apply_migrations
-from services.channel_setup_service import cleanup_staff_monitor_channel, ensure_offside_channels
+from services.channel_setup_service import remove_offside_channels
 from services.error_reporting_service import capture_exception, init_error_reporting
 from services.fc25_stats_feature import fc25_stats_enabled
 from services.fc25_stats_service import list_links
@@ -210,41 +204,7 @@ class OffsideBot(commands.AutoShardedBot):
         self._auto_setup_lock = asyncio.Lock()
 
     async def post_portals(self, *, guilds: list[discord.Guild] | None = None) -> None:
-        try:
-            await post_admin_portal(self, guilds=guilds)
-            logging.info("Posted admin/staff portal embed.")
-        except Exception:
-            logging.exception("Failed to post admin portal.")
-        await asyncio.sleep(0.5)
-        try:
-            await post_manager_portal(self, guilds=guilds)
-            logging.info("Posted managers portal embed.")
-        except Exception:
-            logging.exception("Failed to post managers portal.")
-        await asyncio.sleep(0.5)
-        try:
-            await post_coach_portal(self, guilds=guilds)
-            logging.info("Posted coach portal embed.")
-        except Exception:
-            logging.exception("Failed to post coach portal.")
-        await asyncio.sleep(0.5)
-        try:
-            await post_recruit_portal(self, guilds=guilds)
-            logging.info("Posted recruit portal embed.")
-        except Exception:
-            logging.exception("Failed to post recruit portal.")
-        await asyncio.sleep(0.5)
-        try:
-            await post_premium_coaches_report(self, guilds=guilds)
-            logging.info("Posted pro coaches report embed.")
-        except Exception:
-            logging.exception("Failed to post pro coaches report.")
-        await asyncio.sleep(0.5)
-        try:
-            await post_listing_channel_instructions(self, guilds=guilds)
-            logging.info("Posted listing channel instruction embeds.")
-        except Exception:
-            logging.exception("Failed to post listing channel instruction embeds.")
+        logging.info("Discord portals are disabled; managed in the web dashboard.")
 
     async def _auto_setup_guild(self, guild: discord.Guild) -> None:
         settings = getattr(self, "settings", None)
@@ -266,7 +226,6 @@ class OffsideBot(commands.AutoShardedBot):
             logging.warning("Auto-setup skipped (guild=%s): bot member unavailable.", guild.id)
             return
 
-        test_mode = bool(getattr(self, "test_mode", False))
         actions: list[str] = []
 
         with guild_db_context(guild.id):
@@ -314,17 +273,15 @@ class OffsideBot(commands.AutoShardedBot):
 
         if me.guild_permissions.manage_channels:
             try:
-                updated, channel_actions = await ensure_offside_channels(
+                updated, channel_actions = await remove_offside_channels(
                     guild,
-                    settings=settings,
                     existing_config=updated,
-                    test_mode=test_mode,
                 )
                 actions.extend(channel_actions)
             except discord.DiscordException:
-                logging.exception("Auto-setup (guild=%s): channel setup failed.", guild.id)
+                logging.exception("Auto-setup (guild=%s): channel cleanup failed.", guild.id)
         else:
-            actions.append("Channel setup skipped (missing Manage Channels permission).")
+            actions.append("Channel cleanup skipped (missing Manage Channels permission).")
 
         if updated != existing:
             try:
@@ -334,11 +291,6 @@ class OffsideBot(commands.AutoShardedBot):
 
         for action in actions:
             logging.info("Auto-setup (guild=%s): %s", guild.id, action)
-
-        if test_mode:
-            staff_monitor = updated.get("channel_staff_monitor_id")
-            if isinstance(staff_monitor, int) and not getattr(self, "staff_monitor_channel_id", None):
-                self.staff_monitor_channel_id = staff_monitor
 
     async def _auto_setup_all_guilds(self) -> None:
         if getattr(self, "_auto_setup_done", False):
@@ -350,40 +302,6 @@ class OffsideBot(commands.AutoShardedBot):
                 await self._auto_setup_guild(guild)
                 await asyncio.sleep(0.25)
             self._auto_setup_done = True
-
-    async def _cleanup_test_mode_channels(self) -> None:
-        if getattr(self, "test_mode", False):
-            return
-        settings = getattr(self, "settings", None)
-        if settings is None or not settings.mongodb_uri:
-            return
-        for guild in self.guilds:
-            me = guild.me
-            if me is None or not me.guild_permissions.manage_channels:
-                continue
-
-            try:
-                collection = get_collection(settings, record_type="guild_settings", guild_id=guild.id)
-            except Exception:
-                continue
-            existing = {}
-            try:
-                existing = get_guild_config(guild.id, collection=collection)
-            except Exception:
-                continue
-            if not existing.get("channel_staff_monitor_id"):
-                continue
-            updated, actions = await cleanup_staff_monitor_channel(
-                guild,
-                existing_config=existing,
-            )
-            for action in actions:
-                logging.info("Test-mode cleanup (guild=%s): %s", guild.id, action)
-            if updated != existing:
-                try:
-                    set_guild_config(guild.id, updated, source="test_mode_cleanup", collection=collection)
-                except Exception:
-                    logging.exception("Failed to persist guild cleanup (guild=%s).", guild.id)
 
     async def setup_hook(self) -> None:
         try:
@@ -411,10 +329,6 @@ class OffsideBot(commands.AutoShardedBot):
                 logging.exception("Failed to record guild install (guild=%s).", guild.id)
         async with self._auto_setup_lock:
             await self._auto_setup_guild(guild)
-        try:
-            await self.post_portals(guilds=[guild])
-        except Exception:
-            logging.exception("Failed to post portals on guild join (guild=%s).", guild.id)
 
     async def on_guild_remove(self, guild: discord.Guild) -> None:
         settings = getattr(self, "settings", None)
@@ -433,10 +347,7 @@ class OffsideBot(commands.AutoShardedBot):
         try:
             await self.change_presence(
                 status=discord.Status.online,
-                activity=discord.Activity(
-                    type=discord.ActivityType.watching,
-                    name="Offside dashboards",
-                ),
+                activity=discord.Activity(type=discord.ActivityType.watching, name="Offside web app"),
             )
         except discord.DiscordException:
             pass
@@ -450,9 +361,6 @@ class OffsideBot(commands.AutoShardedBot):
             except Exception:
                 logging.exception("Failed to refresh guild install status.")
         await self._auto_setup_all_guilds()
-        if not getattr(self, "_test_mode_cleanup_done", False):
-            await self._cleanup_test_mode_channels()
-            self._test_mode_cleanup_done = True
         if not getattr(self, "_portals_posted", False):
             await self.post_portals()
             self._portals_posted = True
@@ -573,11 +481,7 @@ class OffsideBot(commands.AutoShardedBot):
                     await self._auto_setup_guild(guild)
                 result = {"message": "Auto-setup complete."}
             elif action == OPS_TASK_ACTION_REPOST_PORTALS:
-                guild = self.get_guild(guild_id)
-                if guild is None:
-                    raise RuntimeError("Bot is not in this guild.")
-                await self.post_portals(guilds=[guild])
-                result = {"message": "Portals reposted."}
+                result = {"message": "Portals are disabled; no Discord posts were sent."}
             elif action == OPS_TASK_ACTION_DELETE_GUILD_DATA:
                 from services.guild_data_service import delete_guild_data
 

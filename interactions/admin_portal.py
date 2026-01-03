@@ -10,7 +10,7 @@ from database import get_collection
 from interactions.premium_coaches_report import upsert_premium_coaches_report
 from interactions.views import SafeView
 from repositories.tournament_repo import ensure_cycle_by_name
-from services.channel_setup_service import ensure_offside_channels
+from services.channel_setup_service import remove_offside_channels
 from services.guild_config_service import get_guild_config, set_guild_config
 from services.role_setup_service import ensure_offside_roles
 from services.roster_service import (
@@ -444,17 +444,14 @@ class AdminPortalView(SafeView):
                 actions.append("Role setup failed (missing permissions).")
         if me.guild_permissions.manage_channels:
             try:
-                test_mode = bool(getattr(interaction.client, "test_mode", False))
-                updated, channel_actions = await ensure_offside_channels(
+                updated, channel_actions = await remove_offside_channels(
                     guild,
-                    settings=settings,
                     existing_config=updated,
-                    test_mode=test_mode,
                 )
                 actions.extend(channel_actions)
             except discord.DiscordException as exc:
-                logging.warning("Verify Setup: channel setup failed (guild=%s): %s", guild.id, exc)
-                actions.append("Channel setup failed (missing permissions).")
+                logging.warning("Verify Setup: channel cleanup failed (guild=%s): %s", guild.id, exc)
+                actions.append("Channel cleanup failed (missing permissions).")
 
         if updated != existing:
             try:

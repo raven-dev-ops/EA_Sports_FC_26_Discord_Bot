@@ -32,7 +32,7 @@
           <strong>Pro features locked</strong>
         </div>
         <p class="muted spacer-sm">
-          Coach+/Club Manager/Club Manager+ roles, Pro coaches report, and FC25 stats are available on the Pro plan.
+          Coach+/Club Manager/Club Manager+ roles and FC25 stats are available on the Pro plan.
         </p>
       </div>
       <div class="btn-group">
@@ -99,43 +99,6 @@
           <p class="muted">
             <span class="badge warn">LOCKED</span>
             Coach+/Club Manager/Club Manager+ roles require Pro. <a href="{{ upgrade_href }}">Upgrade</a>
-          </p>
-        {% endif %}
-
-        <h3 class="mt-14">Channels</h3>
-        {% for field in channel_fields %}
-          <label>{{ field.label }}{% if not channels_available %} ID{% endif %}</label><br/>
-          {% if channels_available %}
-            <select name="{{ field.name }}" class="w-full mt-6">
-              {% for opt in field.options %}
-                <option value="{{ opt.value }}" {% if opt.selected %}selected{% endif %} {% if opt.disabled %}disabled{% endif %}>
-                  {{ opt.label }}
-                </option>
-              {% endfor %}
-            </select>
-          {% else %}
-            <input name="{{ field.name }}" class="w-full mt-6" value="{{ field.value }}" />
-          {% endif %}
-        {% endfor %}
-
-        <h3 class="mt-14">Pro coaches {{ badge("PRO", premium_report_badge_class ~ " inline") }}</h3>
-        <label>
-          <input
-            type="checkbox"
-            name="{{ premium_pin_key }}"
-            value="1"
-            {% if premium_pin_enabled %}checked{% endif %}
-            {% if premium_pin_disabled %}disabled{% endif %}
-          />
-          Pin listing message
-        </label>
-        <p class="muted">
-          Pins the bot's Pro coaches listing message in the Pro coaches channel (requires Manage Messages).
-        </p>
-        {% if not premium_report_enabled %}
-          <p class="muted">
-            <span class="badge warn">LOCKED</span>
-            Pro coaches report controls require Pro. <a href="{{ upgrade_href }}">Upgrade</a>
           </p>
         {% endif %}
 

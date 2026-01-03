@@ -6,7 +6,6 @@ SCHEMA_VERSION = 1
 
 STAFF_ROLE_IDS_KEY = "staff_role_ids"
 FC25_STATS_ENABLED_KEY = "fc25_stats_enabled"
-PREMIUM_COACHES_PIN_ENABLED_KEY = "premium_coaches_pin_enabled"
 
 GUILD_COACH_ROLE_FIELDS: list[tuple[str, str]] = [
     ("role_team_coach_id", "Coach role"),
@@ -19,20 +18,11 @@ GUILD_COACH_ROLE_FIELDS: list[tuple[str, str]] = [
     ("role_pro_player_id", "Pro Player role"),
 ]
 
-GUILD_CHANNEL_FIELDS: list[tuple[str, str]] = [
-    ("channel_staff_portal_id", "Staff portal channel"),
-    ("channel_manager_portal_id", "Club managers portal channel"),
-    ("channel_coach_portal_id", "Coach portal channel"),
-    ("channel_recruit_portal_id", "Recruit portal channel"),
-    ("channel_staff_monitor_id", "Staff monitor channel"),
-    ("channel_recruit_listing_id", "Recruitment boards channel"),
-    ("channel_club_listing_id", "Club listings channel (rosters + clubs)"),
-    ("channel_premium_coaches_id", "Pro coaches channel"),
-]
+GUILD_CHANNEL_FIELDS: list[tuple[str, str]] = []
 
 INT_FIELDS: set[str] = {k for k, _label in (GUILD_COACH_ROLE_FIELDS + GUILD_CHANNEL_FIELDS)}
 INT_LIST_FIELDS: set[str] = {STAFF_ROLE_IDS_KEY}
-BOOL_FIELDS: set[str] = {PREMIUM_COACHES_PIN_ENABLED_KEY}
+BOOL_FIELDS: set[str] = set()
 TRI_BOOL_FIELDS: set[str] = {FC25_STATS_ENABLED_KEY}
 
 USER_EDITABLE_FIELDS: set[str] = INT_FIELDS | INT_LIST_FIELDS | BOOL_FIELDS | TRI_BOOL_FIELDS

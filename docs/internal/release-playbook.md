@@ -116,4 +116,4 @@ MongoDB changes are not always reversible automatically. Options:
 
 - Re-run the smoke test checklist (`docs/internal/qa-checklist.md`).
 - Confirm the dashboard works (login, select guild, open settings).
-- Confirm portals/listings are posting correctly in Discord.
+- Confirm roles sync and web dashboard flows for rosters/recruiting are healthy.
