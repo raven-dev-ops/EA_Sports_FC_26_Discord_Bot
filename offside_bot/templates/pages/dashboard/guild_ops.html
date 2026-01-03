@@ -1,6 +1,10 @@
 {% from "macros/ui.html" import notice %}
 
-<h1 class="mt-0">Ops</h1>
+<div class="card hero-card">
+  <div class="kicker">Operations</div>
+  <h1 class="mt-10 text-hero-sm">Ops</h1>
+  <p class="muted mt-8">Run setup, verify worker health, and manage queued maintenance tasks.</p>
+</div>
 {% if notices %}
   {% for item in notices %}
     {{ notice(item.title, item.text, item.kind) }}

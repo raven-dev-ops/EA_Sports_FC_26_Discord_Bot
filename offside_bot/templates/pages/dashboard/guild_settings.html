@@ -1,8 +1,12 @@
 {% from "macros/ui.html" import badge, button, copy_field, form_row %}
 
-<p><a href="/app">&larr; Back</a></p>
+<div class="card hero-card">
+  <a class="back-link" href="/app">&larr; Back</a>
+  <div class="kicker mt-12">Setup</div>
+  <h1 class="mt-10 text-hero-sm">{% if installed is false %}Settings{% else %}Guild settings{% endif %}</h1>
+  <p class="muted mt-8">Configure access controls, staff roles, and premium role bindings for this server.</p>
+</div>
 {% if installed is false %}
-  <h1>Settings</h1>
   <div class="card">
     <h2 class="mt-0">Invite bot to this server</h2>
     <p class="muted">This server is in your Discord list, but the bot is not installed yet.</p>
@@ -11,7 +15,6 @@
     {{ copy_field(invite_href, label="Direct invite URL") }}
   </div>
 {% else %}
-  <h1>Guild Settings</h1>
   <div class="row">
     <div class="card">
       <div><strong>Guild</strong></div>

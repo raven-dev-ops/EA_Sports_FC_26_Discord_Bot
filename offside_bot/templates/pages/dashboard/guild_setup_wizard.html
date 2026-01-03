@@ -1,6 +1,10 @@
 {% from "macros/ui.html" import badge %}
 
-<h1 class="mt-0">Setup Wizard</h1>
+<div class="card hero-card">
+  <div class="kicker">Setup</div>
+  <h1 class="mt-10 text-hero-sm">Setup wizard</h1>
+  <p class="muted mt-8">Sync roles and clean up legacy Discord channels in one click.</p>
+</div>
 {% if queued %}
   <div class="card"><strong>Setup queued.</strong> Refresh this page in a few seconds.</div>
 {% endif %}

@@ -1,7 +1,11 @@
 {% from "macros/ui.html" import badge, button %}
 
-<p><a href="/guild/{{ guild_id }}">&larr; Back</a></p>
-<h1>Permissions Check{% if is_admin %} {{ badge("ADMIN", "pro") }}{% endif %}</h1>
+<div class="card hero-card">
+  <a class="back-link" href="/guild/{{ guild_id }}">&larr; Back</a>
+  <div class="kicker mt-12">Setup</div>
+  <h1 class="mt-10 text-hero-sm">Permissions Check{% if is_admin %} {{ badge("ADMIN", "pro") }}{% endif %}</h1>
+  <p class="muted mt-8">Verify the bot can manage roles and (optionally) clean up legacy Offside channels.</p>
+</div>
 {% if blocked_message %}
   <div class="card">
     <p class="muted">{{ blocked_message }}</p>

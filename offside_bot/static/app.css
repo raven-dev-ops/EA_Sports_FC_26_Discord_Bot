@@ -1178,6 +1178,10 @@ select:focus {
     top: 12px;
   }
 
+  .topbar-links {
+    display: none;
+  }
+
   .hero-portrait-wrap {
     position: static;
     width: 100%;

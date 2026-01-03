@@ -1,7 +1,11 @@
 {% from "macros/ui.html" import badge %}
 
-<p><a href="/app">&larr; Back</a></p>
-<h1>Billing</h1>
+<div class="card hero-card">
+  <a class="back-link" href="/app">&larr; Back</a>
+  <div class="kicker mt-12">Billing</div>
+  <h1 class="mt-10 text-hero-sm">Billing</h1>
+  <p class="muted mt-8">Upgrade, manage subscription details, and view Stripe billing options.</p>
+</div>
 {% if not has_guild %}
   <p class="muted">No owned guilds found.</p>
 {% else %}
