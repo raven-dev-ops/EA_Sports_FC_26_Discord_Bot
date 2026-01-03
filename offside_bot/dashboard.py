@@ -1149,6 +1149,22 @@ def _extract_guild_id_from_request(request: web.Request) -> int | None:
     return None
 
 
+def _is_public_page_path(path: str) -> bool:
+    if path.startswith("/docs") or path.startswith("/help"):
+        return True
+    return path in {
+        "/",
+        "/commands",
+        "/enterprise",
+        "/features",
+        "/pricing",
+        "/privacy",
+        "/product",
+        "/support",
+        "/terms",
+    }
+
+
 @web.middleware
 async def security_headers_middleware(request: web.Request, handler):
     try:
@@ -1168,19 +1184,35 @@ async def security_headers_middleware(request: web.Request, handler):
     response.headers.setdefault("Referrer-Policy", "no-referrer")
     response.headers.setdefault("Permissions-Policy", "interest-cohort=()")
 
-    csp_parts = [
-        "default-src 'self'",
-        "base-uri 'self'",
-        "frame-ancestors 'none'",
-        "img-src 'self' data: https://cdn.discordapp.com https://cdn.discordapp.net",
-        "style-src 'self' https://fonts.googleapis.com",
-        "script-src 'self'",
-        "connect-src 'self' https://discord.com https://discordapp.com",
-        "font-src 'self' https://fonts.gstatic.com",
-        "form-action 'self'",
-        "frame-src https://checkout.stripe.com",
-        "object-src 'none'",
-    ]
+    path = request.path or ""
+    if _is_public_page_path(path):
+        csp_parts = [
+            "default-src 'self'",
+            "base-uri 'self'",
+            "frame-ancestors 'none'",
+            "img-src 'self' data: https://cdn.discordapp.com https://cdn.discordapp.net",
+            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+            "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.tailwindcss.com",
+            "connect-src 'self' https://discord.com https://discordapp.com",
+            "font-src 'self' https://fonts.gstatic.com",
+            "form-action 'self'",
+            "frame-src https://checkout.stripe.com",
+            "object-src 'none'",
+        ]
+    else:
+        csp_parts = [
+            "default-src 'self'",
+            "base-uri 'self'",
+            "frame-ancestors 'none'",
+            "img-src 'self' data: https://cdn.discordapp.com https://cdn.discordapp.net",
+            "style-src 'self' https://fonts.googleapis.com",
+            "script-src 'self'",
+            "connect-src 'self' https://discord.com https://discordapp.com",
+            "font-src 'self' https://fonts.gstatic.com",
+            "form-action 'self'",
+            "frame-src https://checkout.stripe.com",
+            "object-src 'none'",
+        ]
     response.headers.setdefault("Content-Security-Policy", "; ".join(csp_parts) + ";")
 
     if _is_https(request):
